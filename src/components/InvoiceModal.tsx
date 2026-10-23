@@ -26,19 +26,19 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
-        {/* Modal Top Actions Toolbar (Hidden during print) */}
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between print:hidden">
+        {/* Modal Top Actions Toolbar */}
+        <div className="p-4 bg-black text-white flex items-center justify-between print:hidden">
           <div className="flex items-center gap-2">
-            <span className="text-xs bg-indigo-600 px-2.5 py-1 rounded-md font-bold">
+            <span className="text-xs bg-[#ff5e00] px-2.5 py-1 rounded-md font-extrabold text-white">
               SURAT PERINTAH KERJA (SPK)
             </span>
-            <span className="text-xs text-slate-400">Siap Cetak / Simpan PDF</span>
+            <span className="text-xs text-slate-400">ZY Clothes Studio</span>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-4 py-2 bg-[#ff5e00] hover:bg-[#e05300] text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
               Cetak / Simpan PDF
@@ -57,19 +57,24 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
           {/* Header */}
           <div className="flex items-start justify-between border-b-2 border-slate-900 pb-6 mb-6">
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-950">
-                SERAGAMKU APPAREL STUDIO
-              </h1>
-              <p className="text-xs text-slate-600 font-medium">
+              <div className="flex items-center gap-2">
+                <span className="w-8 h-8 bg-black text-[#ff5e00] rounded-xl flex items-center justify-center font-black text-sm tracking-tighter">
+                  ZY
+                </span>
+                <h1 className="text-2xl font-black tracking-tight text-slate-950 font-display">
+                  ZY CLOTHES STUDIO
+                </h1>
+              </div>
+              <p className="text-xs text-slate-600 font-semibold mt-1">
                 Pabrik Konveksi, Bordir Komputer & Sablon Digital Berkualitas
               </p>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Kawasan Industri Kreatif No. 88, Bandung • WhatsApp: +62 812-3456-7890
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Kawasan Industri Kreatif Bandung • WhatsApp: +62 812-3456-7890
               </p>
             </div>
 
             <div className="text-right">
-              <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200">
+              <span className="text-xs font-black uppercase tracking-wider text-[#ff5e00] bg-orange-50 px-3 py-1 rounded-full border border-orange-200">
                 INVOICE & LEMBAR SPK
               </span>
               <p className="font-mono text-sm font-extrabold text-slate-900 mt-2">
@@ -101,7 +106,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                 Target Deadline: <b className="text-slate-900 font-bold">{summary.targetDate}</b>
               </p>
               <p className="text-slate-700 mt-0.5">
-                Jenis Seragam: <b className="text-slate-900">{summary.garmentName}</b>
+                Model Seragam: <b className="text-slate-900">{summary.garmentName}</b>
               </p>
               <p className="text-slate-700 mt-0.5">
                 Bahan Kain: <b className="text-slate-900">{summary.fabricName}</b>
@@ -151,7 +156,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
           {/* Size Breakdown Table */}
           <div className="rounded-xl border border-slate-200 overflow-hidden mb-6">
             <table className="w-full text-xs text-center">
-              <thead className="bg-slate-900 text-white font-bold uppercase text-[10px] tracking-wider">
+              <thead className="bg-black text-white font-bold uppercase text-[10px] tracking-wider">
                 <tr>
                   <th className="p-2.5">S</th>
                   <th className="p-2.5">M</th>
@@ -160,7 +165,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                   <th className="p-2.5">XXL</th>
                   <th className="p-2.5">3XL</th>
                   <th className="p-2.5">Custom</th>
-                  <th className="p-2.5 bg-indigo-700">TOTAL</th>
+                  <th className="p-2.5 bg-[#ff5e00]">TOTAL</th>
                 </tr>
               </thead>
               <tbody className="bg-slate-50 font-bold text-slate-800 text-sm">
@@ -172,7 +177,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                   <td className="p-3 border-r border-slate-200">{summary.sizes.XXL}</td>
                   <td className="p-3 border-r border-slate-200">{summary.sizes['3XL']}</td>
                   <td className="p-3 border-r border-slate-200">{summary.sizes.Custom}</td>
-                  <td className="p-3 bg-indigo-50 text-indigo-900 font-extrabold text-base">
+                  <td className="p-3 bg-orange-50 text-[#ff5e00] font-black text-base">
                     {summary.totalQuantity} pcs
                   </td>
                 </tr>
@@ -187,15 +192,15 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                 <span>Subtotal ({summary.totalQuantity} pcs):</span>
                 <span className="font-semibold">{formatRupiah(summary.subtotalBeforeDiscount)}</span>
               </div>
-              {summary.discountPercent > 0 && (
+              {summary.discountAmount > 0 && (
                 <div className="flex justify-between text-emerald-700 font-semibold">
-                  <span>Diskon Kuantiti ({summary.discountPercent}%):</span>
+                  <span>Diskon Grosir:</span>
                   <span>-{formatRupiah(summary.discountAmount)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-base font-extrabold border-t-2 border-slate-900 pt-2 text-slate-950">
+              <div className="flex justify-between text-base font-black border-t-2 border-slate-900 pt-2 text-slate-950">
                 <span>TOTAL AKHIR:</span>
-                <span className="text-indigo-700">{formatRupiah(summary.finalTotal)}</span>
+                <span className="text-[#ff5e00]">{formatRupiah(summary.finalTotal)}</span>
               </div>
               <div className="text-right text-[10px] text-slate-400">
                 DP Produksi 50%: {formatRupiah(Math.round(summary.finalTotal * 0.5))}
@@ -214,13 +219,13 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
             <div>
               <p className="text-slate-500 mb-16">Pihak Konveksi & Produksi,</p>
               <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-44">
-                ( SeragamKu Studio Production )
+                ( ZY Clothes Production )
               </p>
             </div>
           </div>
         </div>
 
-        {/* Modal Footer (Hidden during print) */}
+        {/* Modal Footer */}
         <div className="p-4 bg-slate-100 border-t border-slate-200 flex justify-between items-center print:hidden">
           <span className="text-xs text-slate-500 flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
@@ -228,7 +233,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
           </span>
           <button
             onClick={onClose}
-            className="px-5 py-2 bg-slate-900 text-white font-bold rounded-xl text-xs hover:bg-slate-800 transition-colors cursor-pointer"
+            className="px-5 py-2 bg-black text-white font-bold rounded-xl text-xs hover:bg-slate-800 transition-colors cursor-pointer"
           >
             Tutup
           </button>

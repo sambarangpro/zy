@@ -1,4 +1,4 @@
-export type GarmentType = 'kaos' | 'pdh' | 'kemeja' | 'rompi' | 'polo' | 'jaket'
+export type GarmentType = 'kaos' | 'pdh' | 'kemeja' | 'rompi' | 'polo' | 'jaket' | 'hoodie'
 
 export type ViewSide = 'front' | 'back'
 
@@ -9,6 +9,13 @@ export interface GarmentColorParts {
   pocket: string
   accent: string // buttons, scotlite, list, ribs
 }
+
+export type PrintSizeCategory =
+  | 'Logo Kecil (≤10×10cm)'
+  | 'Sablon A5 (15×21cm)'
+  | 'Sablon A4 (21×30cm)'
+  | 'Sablon A3 (30×42cm)'
+  | 'Sablon A3+ (32×48cm)'
 
 export interface CanvasGraphic {
   id: string
@@ -24,6 +31,15 @@ export interface CanvasGraphic {
   fontSize?: number
   technique: 'sablon' | 'bordir'
   label?: string
+  sizeCategory?: PrintSizeCategory
+  calculatedPrice?: number
+}
+
+export interface StudioLighting {
+  brightness: number // -50 to 50
+  contrast: number // -50 to 50
+  saturation: number // -50 to 50
+  shadowDepth: number // 0 to 100 (percentage)
 }
 
 export interface FabricOption {
