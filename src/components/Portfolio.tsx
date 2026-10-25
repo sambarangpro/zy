@@ -143,7 +143,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onLoadToCanvas }) => {
                         key={part}
                         title={part}
                         className="w-4 h-4 rounded-full border border-white shadow-xs"
-                        style={{ backgroundColor: hex }}
+                        style={{ backgroundColor: hex as string }}
                       />
                     ))}
                   </div>
@@ -160,7 +160,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onLoadToCanvas }) => {
 
               {/* Action Button: Load to Canvas Customizer */}
               <button
-                onClick={() => onLoadToCanvas(item.category, item.colors)}
+                onClick={() => onLoadToCanvas(item.category as GarmentType, item.colors)}
                 className="w-full py-2.5 px-3 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-indigo-200 hover:border-indigo-600 shadow-xs"
               >
                 <Palette className="w-3.5 h-3.5" />
@@ -219,7 +219,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onLoadToCanvas }) => {
                       <span
                         key={part}
                         className="w-3.5 h-3.5 rounded-full border border-slate-300"
-                        style={{ backgroundColor: hex }}
+                        style={{ backgroundColor: hex as string }}
                       />
                     ))}
                   </div>
@@ -237,7 +237,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onLoadToCanvas }) => {
                   onClick={() => {
                     const item = activeModalItem
                     setActiveModalItem(null)
-                    onLoadToCanvas(item.category, item.colors)
+                    onLoadToCanvas(item.category as GarmentType, item.colors)
                   }}
                   className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition-colors flex items-center justify-center gap-2 shadow-md cursor-pointer"
                 >

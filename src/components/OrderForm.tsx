@@ -4,6 +4,7 @@ import type {
   GarmentColorParts,
   GarmentType,
   SizeBreakdown,
+  MockupTemplate,
 } from '../types'
 import { FABRICS, GARMENTS, calculateGraphicPrice } from '../data/garments'
 import { MockupSVG } from './MockupSVG'
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react'
 
 interface OrderFormProps {
+  activeMockup?: MockupTemplate | null
   selectedGarment: GarmentType
   onSelectGarment: (type: GarmentType) => void
   colors: GarmentColorParts
@@ -33,6 +35,7 @@ interface OrderFormProps {
 }
 
 export const OrderForm: React.FC<OrderFormProps> = ({
+  activeMockup,
   selectedGarment,
   onSelectGarment,
   colors,
@@ -75,7 +78,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   // Calculations
   const totalQuantity =
     sizes.S + sizes.M + sizes.L + sizes.XL + sizes.XXL + sizes['3XL'] + sizes.Custom
-  const basePrice = selectedFabric.basePrice
+  const basePrice = activeMockup?.basePrice || selectedFabric.basePrice
 
   // Size surcharges (XXL +5k, 3XL +10k, Custom +15k)
   const sizeSurcharge = sizes.XXL * 5000 + sizes['3XL'] * 10000 + sizes.Custom * 15000
@@ -89,17 +92,21 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const subtotalBeforeDiscount = totalQuantity * basePrice + sizeSurcharge + totalLogoCost
 
   // ZY Clothes Tiered Wholesale Discount (Lusinan / Partai)
+  const d12 = activeMockup?.discount12 ?? 5000
+  const d50 = activeMockup?.discount50 ?? 10000
+  const d100 = activeMockup?.discount100 ?? 15000
+
   let discountPerPcs = 0
   let tierName = 'Satuan (1-11 pcs)'
 
   if (totalQuantity >= 100) {
-    discountPerPcs = 15000
+    discountPerPcs = d100
     tierName = 'Grosir Besar (≥100 pcs)'
   } else if (totalQuantity >= 50) {
-    discountPerPcs = 10000
+    discountPerPcs = d50
     tierName = 'Partai (50-99 pcs)'
   } else if (totalQuantity >= 12) {
-    discountPerPcs = 5000
+    discountPerPcs = d12
     tierName = 'Lusinan (12-49 pcs)'
   }
 
@@ -140,8 +147,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       customerPhone: customerPhone || '-',
       customerAddress: customerAddress || '-',
       targetDate: targetDate || '2-3 Minggu Standar',
-      garmentName: garmentDef?.name || selectedGarment,
+      garmentName: activeMockup?.name || garmentDef?.name || selectedGarment,
       garmentType: selectedGarment,
+      mockupImg: activeMockup?.frontImg || null,
       fabricName: selectedFabric.name,
       colors,
       technique:
@@ -606,15 +614,30 @@ _Pesanan dibuat via Aplikasi ZY Clothes Studio. Mohon diproses jadwal produksiny
       <div className="lg:col-span-4 flex flex-col gap-5 sticky top-6">
         {/* Mockup Preview Card */}
         <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200">
-          <h4 className="font-extrabold text-slate-900 text-sm mb-3 flex items-center gap-2">
-            <Layers className="w-4 h-4 text-[#ff5e00]" />
-            Pratinjau Seragam Dipesan
+          <h4 className="font-extrabold text-slate-900 text-sm mb-3 flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-[#ff5e00]" />
+              {activeMockup ? activeMockup.name : 'Pratinjau Seragam Dipesan'}
+            </span>
+            {activeMockup && (
+              <span className="text-[10px] bg-orange-100 text-[#ff5e00] font-bold px-2 py-0.5 rounded-full">
+                {activeMockup.category}
+              </span>
+            )}
           </h4>
 
           <div className="aspect-4/3 bg-slate-100 rounded-2xl overflow-hidden border border-slate-200 p-2 flex items-center justify-center relative">
-            <div className="w-48 h-48 relative pointer-events-none">
-              <MockupSVG type={selectedGarment} side="front" colors={colors} />
-            </div>
+            {activeMockup?.frontImg ? (
+              <img
+                src={activeMockup.frontImg}
+                alt={activeMockup.name}
+                className="max-h-full max-w-full object-contain drop-shadow"
+              />
+            ) : (
+              <div className="w-48 h-48 relative pointer-events-none">
+                <MockupSVG type={selectedGarment} side="front" colors={colors} />
+              </div>
+            )}
             <span className="absolute bottom-2 right-2 bg-black text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
               Tampak Depan
             </span>

@@ -3,15 +3,22 @@ import type {
   GarmentColorParts,
   GarmentType,
   CanvasGraphic,
+  MockupTemplate,
 } from './types'
 import { GARMENTS } from './data/garments'
 import { Navbar } from './components/Navbar'
 import type { ActiveTab } from './components/Navbar'
 import { CanvasCustomizer } from './components/CanvasCustomizer'
+import { MockupDashboard } from './components/MockupDashboard'
 import { OrderForm } from './components/OrderForm'
 import { Portfolio } from './components/Portfolio'
 import { SizeChartModal } from './components/SizeChartModal'
 import { InvoiceModal } from './components/InvoiceModal'
+import {
+  getMockupList,
+  getActiveMockupId,
+  setActiveMockupId,
+} from './services/mockupStorage'
 import {
   ShieldCheck,
   Truck,
@@ -19,10 +26,16 @@ import {
   Award,
   Clock,
   CheckCircle,
+  Layers,
 } from 'lucide-react'
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('canvas')
+  const [mockups, setMockups] = useState<MockupTemplate[]>(() => getMockupList())
+  const [activeMockupId, setActiveMockupIdState] = useState<string | null>(() => getActiveMockupId())
+
+  const activeMockup = mockups.find((m) => m.id === activeMockupId) || mockups[0] || null
+
   const [selectedGarment, setSelectedGarment] = useState<GarmentType>('kaos')
   const [colors, setColors] = useState<GarmentColorParts>(GARMENTS[1].defaultColors)
   const [graphics, setGraphics] = useState<CanvasGraphic[]>([
@@ -48,6 +61,23 @@ export function App() {
   const [isSizeChartOpen, setIsSizeChartOpen] = useState(false)
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false)
   const [invoiceSummary, setInvoiceSummary] = useState<any>(null)
+
+  // Handlers for Mockups
+  const handleSelectAndOpenCanvas = (id: string) => {
+    setActiveMockupId(id)
+    setActiveMockupIdState(id)
+    setActiveTab('canvas')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleMockupsChange = (updatedList: MockupTemplate[]) => {
+    setMockups(updatedList)
+    if (!updatedList.some((m) => m.id === activeMockupId)) {
+      const nextId = updatedList[0]?.id || null
+      if (nextId) setActiveMockupId(nextId)
+      setActiveMockupIdState(nextId)
+    }
+  }
 
   // When garment changes from selector
   const handleSelectGarment = (type: GarmentType) => {
@@ -126,13 +156,47 @@ export function App() {
 
             {/* Interactive Canvas Customizer */}
             <CanvasCustomizer
-              selectedGarment={selectedGarment}
-              onSelectGarment={handleSelectGarment}
-              colors={colors}
-              onColorsChange={setColors}
+              activeMockup={activeMockup}
               graphics={graphics}
               onGraphicsChange={setGraphics}
+              onOpenDashboard={() => setActiveTab('mockups')}
               onApplyToOrder={handleApplyToOrder}
+            />
+          </div>
+        )}
+
+        {/* Mockup Editor Dashboard */}
+        {activeTab === 'mockups' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
+              <div>
+                <div className="flex items-center gap-2 text-[#ff5e00] font-extrabold text-xs uppercase tracking-wider mb-1">
+                  <Layers className="w-4 h-4 text-[#ff5e00]" />
+                  DASHBOARD MOCKUP ZY CLOTHES
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-black text-black tracking-tight font-display">
+                  Kelola Mockup Foto Seragam
+                </h1>
+                <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl leading-relaxed">
+                  Buat dan unggah foto asli/realistis seragam Anda dari 4 sudut pandang (Depan, Belakang, Sisi Kiri, Sisi Kanan). Atur harga dasar dan diskon grosir per model.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 shrink-0">
+                <button
+                  onClick={() => setActiveTab('canvas')}
+                  className="px-5 py-2.5 bg-black hover:bg-slate-800 text-white font-extrabold rounded-2xl text-xs transition-all cursor-pointer flex items-center gap-2"
+                >
+                  ← Buka Kanvas Desain
+                </button>
+              </div>
+            </div>
+
+            <MockupDashboard
+              mockups={mockups}
+              activeMockupId={activeMockupId}
+              onMockupsChange={handleMockupsChange}
+              onSelectAndOpenCanvas={handleSelectAndOpenCanvas}
             />
           </div>
         )}
@@ -162,6 +226,7 @@ export function App() {
 
             {/* Order Form Component */}
             <OrderForm
+              activeMockup={activeMockup}
               selectedGarment={selectedGarment}
               onSelectGarment={handleSelectGarment}
               colors={colors}

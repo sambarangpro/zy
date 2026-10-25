@@ -120,9 +120,17 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
           {/* Visual Mockup & Color Specifications */}
           <div className="grid grid-cols-3 gap-4 mb-6 border border-slate-200 rounded-2xl p-4 items-center">
             <div className="col-span-1 aspect-square bg-slate-100 rounded-xl flex items-center justify-center p-2 relative overflow-hidden">
-              <div className="w-36 h-36 relative">
-                <MockupSVG type={summary.garmentType} side="front" colors={summary.colors} />
-              </div>
+              {summary.mockupImg ? (
+                <img
+                  src={summary.mockupImg}
+                  alt={summary.garmentName}
+                  className="max-h-full max-w-full object-contain drop-shadow"
+                />
+              ) : (
+                <div className="w-36 h-36 relative">
+                  <MockupSVG type={summary.garmentType} side="front" colors={summary.colors} />
+                </div>
+              )}
             </div>
 
             <div className="col-span-2 text-xs space-y-1.5">

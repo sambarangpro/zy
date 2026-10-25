@@ -1,14 +1,26 @@
-export type GarmentType = 'kaos' | 'pdh' | 'kemeja' | 'rompi' | 'polo' | 'jaket' | 'hoodie'
-
 // 4 Sudut Pandang (Depan, Belakang, Kiri, Kanan)
 export type ViewSide = 'front' | 'back' | 'left' | 'right'
+
+export type GarmentType = 'pdh' | 'kaos' | 'rompi' | 'kemeja' | 'polo' | 'jaket' | 'hoodie'
 
 export interface GarmentColorParts {
   body: string
   collar: string
   sleeves: string
   pocket: string
-  accent: string // buttons, scotlite, list, ribs
+  accent?: string
+  [key: string]: string | undefined
+}
+
+export interface FabricOption {
+  id: string
+  name: string
+  category: GarmentType
+  basePrice: number
+  description: string
+  tag?: string
+  recommendedFor?: string
+  badge?: string
 }
 
 export type PrintSizeCategory =
@@ -46,23 +58,21 @@ export interface StudioLighting {
   shadowDepth: number // 0 to 100 (percentage)
 }
 
-// Data gambar mockup custom milik pengguna untuk 4 sisi
-export interface CustomMockupImages {
-  front?: string // dataURL or URL
-  back?: string
-  left?: string
-  right?: string
-  blendMode?: 'multiply' | 'source-over' | 'overlay'
-}
-
-export interface FabricOption {
+// Model Mockup Seragam Custom yang dibuat oleh pengguna di Dashboard
+export interface MockupTemplate {
   id: string
   name: string
-  description: string
-  category: GarmentType
+  category: string // 'Kaos' | 'Kemeja' | 'PDH' | 'Rompi' | 'Polo' | 'Jaket' | dll
   basePrice: number
-  recommendedFor: string
-  badge?: string
+  description?: string
+  frontImg?: string // DataURL or Image URL
+  backImg?: string
+  leftImg?: string
+  rightImg?: string
+  discount12?: number // default: 5000
+  discount50?: number // default: 10000
+  discount100?: number // default: 15000
+  createdAt: number
 }
 
 export interface SizeBreakdown {
@@ -76,9 +86,8 @@ export interface SizeBreakdown {
 }
 
 export interface OrderData {
-  garmentType: GarmentType
-  fabricId: string
-  colors: GarmentColorParts
+  mockupId: string
+  mockupName: string
   sizes: SizeBreakdown
   technique: 'bordir' | 'sablon' | 'kombinasi'
   customerName: string
@@ -87,8 +96,6 @@ export interface OrderData {
   customerAddress: string
   targetDate: string
   notes: string
-  frontPreviewUrl?: string
-  backPreviewUrl?: string
   graphics: CanvasGraphic[]
 }
 
@@ -96,12 +103,12 @@ export interface PortfolioItem {
   id: string
   title: string
   client: string
-  category: GarmentType
+  category: GarmentType | string
   fabric: string
   technique: string
   quantity: number
   imageUrl: string
-  colors: GarmentColorParts
   rating: number
   description: string
+  colors: GarmentColorParts
 }
