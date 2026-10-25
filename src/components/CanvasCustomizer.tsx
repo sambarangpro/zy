@@ -566,15 +566,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   // JIKA BELUM ADA MOCKUP SAMA SEKALI (Empty State)
   if (!activeMockup) {
     return (
-      <div className="bg-[#18181b] text-white rounded-3xl p-12 text-center border border-slate-800 shadow-2xl flex flex-col items-center justify-center max-w-lg mx-auto space-y-4 my-8">
-        <div className="w-16 h-16 rounded-3xl bg-orange-500/10 text-[#ff5e00] flex items-center justify-center shadow-xs border border-orange-500/20">
+      <div className="bg-white text-slate-800 rounded-3xl p-12 text-center border border-slate-200 shadow-xl flex flex-col items-center justify-center max-w-lg mx-auto space-y-4 my-8">
+        <div className="w-16 h-16 rounded-3xl bg-orange-50 text-[#ff5e00] flex items-center justify-center shadow-xs border border-orange-200">
           <PlusCircle className="w-8 h-8" />
         </div>
         <div>
-          <h3 className="font-extrabold text-lg text-white">
+          <h3 className="font-extrabold text-lg text-slate-900">
             Belum Ada Mockup Seragam yang Dipilih
           </h3>
-          <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
             Silakan buka <b>Editor Mockup</b> untuk membuat dan meng-upload foto realistis seragam Anda sendiri (Depan, Belakang, Kiri, Kanan) atau gunakan template demo.
           </p>
         </div>
@@ -590,7 +590,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   }
 
   return (
-    <div className="bg-[#121214] border border-slate-800 rounded-3xl overflow-hidden shadow-2xl select-none flex flex-col min-h-[820px] text-slate-100">
+    <div className="bg-white border border-slate-200/90 rounded-3xl overflow-hidden shadow-xl select-none flex flex-col min-h-[820px] text-slate-800">
       {/* Hidden File Input */}
       <input
         ref={fileInputRef}
@@ -601,13 +601,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       />
 
       {/* ---------------------------------------------------- */}
-      {/* 1. TOP OPTIONS & CONTEXTUAL INSPECTOR BAR (Photoshop Style) */}
+      {/* 1. TOP OPTIONS & CONTEXTUAL INSPECTOR BAR (Light Photoshop Studio) */}
       {/* ---------------------------------------------------- */}
-      <div className="h-14 bg-[#18181b] border-b border-slate-800 px-4 flex items-center justify-between gap-3 text-xs z-30 shrink-0">
+      <div className="h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-between gap-3 text-xs z-30 shrink-0">
         {/* Left: View Angles Switcher & Mockup Pill */}
         <div className="flex items-center gap-2">
           {/* Angles Switcher */}
-          <div className="flex items-center bg-[#0d0d0f] p-1 rounded-xl border border-slate-800">
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80">
             {(
               [
                 { id: 'front', label: 'Depan' },
@@ -627,15 +627,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     isActive
-                      ? 'bg-[#ff5e00] text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                      ? 'bg-[#ff5e00] text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
                   }`}
                 >
                   {side.label}
                   {count > 0 && (
                     <span
                       className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                        isActive ? 'bg-black text-[#ff5e00]' : 'bg-slate-700 text-slate-300'
+                        isActive ? 'bg-black text-[#ff5e00]' : 'bg-slate-200 text-slate-700'
                       }`}
                     >
                       {count}
@@ -646,43 +646,43 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             })}
           </div>
 
-          <div className="h-5 w-px bg-slate-800 hidden md:block" />
+          <div className="h-5 w-px bg-slate-200 hidden md:block" />
 
           {/* Active Mockup Indicator & Switcher */}
           <button
             onClick={onOpenDashboard}
             title="Klik untuk ganti mockup seragam"
-            className="hidden sm:flex items-center gap-2 bg-[#0d0d0f] hover:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-800 text-slate-300 transition-colors cursor-pointer"
+            className="hidden sm:flex items-center gap-2 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 transition-colors cursor-pointer"
           >
-            <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-orange-500/10 text-[#ff5e00] border border-orange-500/20">
+            <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-orange-50 text-[#ff5e00] border border-orange-200">
               {activeMockup.category}
             </span>
-            <span className="font-bold text-xs truncate max-w-[130px] text-white">
+            <span className="font-bold text-xs truncate max-w-[130px] text-slate-900">
               {activeMockup.name}
             </span>
-            <span className="text-[10px] text-slate-400 hover:text-orange-400 underline underline-offset-2 ml-1">
+            <span className="text-[10px] text-slate-400 hover:text-orange-600 underline underline-offset-2 ml-1">
               Ganti
             </span>
           </button>
         </div>
 
         {/* Center: Dynamic Contextual Inspector */}
-        <div className="hidden lg:flex items-center gap-2.5 bg-[#0d0d0f] px-3.5 py-1.5 rounded-xl border border-slate-800/80">
+        <div className="hidden lg:flex items-center gap-2.5 bg-slate-50 px-3.5 py-1.5 rounded-xl border border-slate-200">
           {selectedGraphic ? (
             <>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-black uppercase tracking-wider text-[#ff5e00] bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20">
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#ff5e00] bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
                   {selectedGraphic.type === 'text' ? 'Teks' : 'Logo/Gambar'}
                 </span>
-                <span className="font-bold text-slate-200 text-xs truncate max-w-[100px]">
+                <span className="font-bold text-slate-800 text-xs truncate max-w-[100px]">
                   {selectedGraphic.label || 'Elemen'}
                 </span>
               </div>
 
-              <div className="h-4 w-px bg-slate-800" />
+              <div className="h-4 w-px bg-slate-200" />
 
               {/* Technique Switcher */}
-              <div className="flex items-center bg-[#18181b] p-0.5 rounded-lg border border-slate-800 text-[11px]">
+              <div className="flex items-center bg-slate-200/80 p-0.5 rounded-lg border border-slate-200 text-[11px]">
                 <button
                   onClick={() => {
                     onGraphicsChange(
@@ -693,8 +693,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   }}
                   className={`px-2 py-1 rounded-md font-bold cursor-pointer transition-colors ${
                     selectedGraphic.technique === 'bordir'
-                      ? 'bg-[#ff5e00] text-white'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-[#ff5e00] text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   Bordir
@@ -709,8 +709,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   }}
                   className={`px-2 py-1 rounded-md font-bold cursor-pointer transition-colors ${
                     selectedGraphic.technique === 'sablon'
-                      ? 'bg-[#ff5e00] text-white'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-[#ff5e00] text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   Sablon
@@ -720,7 +720,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
               {/* Text specific controls */}
               {selectedGraphic.type === 'text' && (
                 <>
-                  <div className="h-4 w-px bg-slate-800" />
+                  <div className="h-4 w-px bg-slate-200" />
                   <select
                     value={selectedGraphic.fontFamily || 'Montserrat, sans-serif'}
                     onChange={(e) => {
@@ -730,7 +730,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                         )
                       )
                     }}
-                    className="bg-[#18181b] border border-slate-700 text-slate-200 text-[11px] rounded-lg px-2 py-1 outline-hidden"
+                    className="bg-white border border-slate-200 text-slate-800 text-[11px] rounded-lg px-2 py-1 outline-hidden shadow-2xs"
                   >
                     <option value="Montserrat, sans-serif">Montserrat</option>
                     <option value="Oswald, sans-serif">Oswald</option>
@@ -743,7 +743,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   {/* Text Color Picker */}
                   <label
                     title="Ganti Warna Teks"
-                    className="w-6 h-6 rounded-lg border border-slate-700 cursor-pointer flex items-center justify-center overflow-hidden shrink-0 shadow-xs"
+                    className="w-6 h-6 rounded-lg border border-slate-300 cursor-pointer flex items-center justify-center overflow-hidden shrink-0 shadow-2xs"
                     style={{ backgroundColor: selectedGraphic.textColor || '#ffffff' }}
                   >
                     <input
@@ -762,57 +762,57 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 </>
               )}
 
-              <div className="h-4 w-px bg-slate-800" />
+              <div className="h-4 w-px bg-slate-200" />
 
               {/* Transform Quick Buttons */}
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => handleAlignCenter(selectedGraphic.id)}
                   title="Rata Tengah Horizontal"
-                  className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 hover:bg-slate-200/80 text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer"
                 >
                   <AlignCenter className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => handleFlipHorizontal(selectedGraphic.id)}
                   title="Balik Horizontal (Mirror)"
-                  className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 hover:bg-slate-200/80 text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer"
                 >
                   <FlipHorizontal className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => handleFlipVertical(selectedGraphic.id)}
                   title="Balik Vertikal"
-                  className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 hover:bg-slate-200/80 text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer"
                 >
                   <FlipVertical className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => handleDuplicateGraphic(selectedGraphic.id)}
                   title="Duplikat Elemen (Ctrl+D)"
-                  className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 hover:bg-slate-200/80 text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer"
                 >
                   <Copy className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => handleDeleteGraphic(selectedGraphic.id)}
                   title="Hapus Elemen (Delete)"
-                  className="p-1.5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg transition-colors cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              <div className="h-4 w-px bg-slate-800" />
+              <div className="h-4 w-px bg-slate-200" />
 
               {/* Pricing Pill */}
-              <div className="text-[11px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+              <div className="text-[11px] font-mono font-bold text-orange-700 bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
                 {selectedGraphic.sizeCategory?.split(' ')[0]} • Rp{' '}
                 {selectedGraphic.calculatedPrice?.toLocaleString('id-ID')}
               </div>
             </>
           ) : (
-            <div className="flex items-center gap-2 text-slate-400 text-xs">
+            <div className="flex items-center gap-2 text-slate-500 text-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>
                 Studio Aktif • Pilih elemen di kanvas untuk mengatur bordir/sablon, warna & ukuran
@@ -824,24 +824,24 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         {/* Right: Zoom, Grid, HD Export & Order Button */}
         <div className="flex items-center gap-2">
           {/* Zoom Controls */}
-          <div className="flex items-center bg-[#0d0d0f] rounded-xl border border-slate-800 p-0.5">
+          <div className="flex items-center bg-slate-100 rounded-xl border border-slate-200 p-0.5">
             <button
               onClick={() => setZoomLevel((z) => Math.max(0.7, parseFloat((z - 0.1).toFixed(1))))}
-              className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+              className="p-1.5 hover:bg-white text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer"
               title="Perkecil Kanvas"
             >
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setZoomLevel(1)}
-              className="px-2 py-1 text-[11px] font-mono text-slate-300 hover:text-white cursor-pointer"
+              className="px-2 py-1 text-[11px] font-mono font-bold text-slate-700 hover:text-slate-900 cursor-pointer"
               title="Reset Zoom ke 100%"
             >
               {Math.round(zoomLevel * 100)}%
             </button>
             <button
               onClick={() => setZoomLevel((z) => Math.min(1.6, parseFloat((z + 0.1).toFixed(1))))}
-              className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+              className="p-1.5 hover:bg-white text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer"
               title="Perbesar Kanvas"
             >
               <ZoomIn className="w-3.5 h-3.5" />
@@ -853,8 +853,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             onClick={() => setShowLayersPanel((prev) => !prev)}
             className={`p-2 rounded-xl border transition-all cursor-pointer ${
               showLayersPanel
-                ? 'bg-slate-800 border-slate-600 text-white'
-                : 'bg-[#0d0d0f] border-slate-800 text-slate-400 hover:text-white'
+                ? 'bg-slate-200/90 border-slate-300 text-slate-900 font-bold'
+                : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900'
             }`}
             title="Buka / Tutup Panel Layers"
           >
@@ -864,7 +864,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           {/* Export HD Button */}
           <button
             onClick={handleDownloadMockup}
-            className="flex items-center gap-1.5 px-3 py-2 bg-[#0d0d0f] hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
             title="Download Desain Gambar HD (PNG)"
           >
             <Download className="w-3.5 h-3.5 text-[#ff5e00]" />
@@ -884,11 +884,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       </div>
 
       {/* ---------------------------------------------------- */}
-      {/* 2. MAIN WORKSPACE (Photoshop Layout) */}
+      {/* 2. MAIN WORKSPACE (Light Layout) */}
       {/* ---------------------------------------------------- */}
-      <div className="flex-1 flex relative overflow-hidden bg-[#0d0d0f]">
+      <div className="flex-1 flex relative overflow-hidden bg-[#f8fafc]">
         {/* LEFT VERTICAL TOOLBAR (56px) */}
-        <div className="w-14 bg-[#18181b] border-r border-slate-800 flex flex-col items-center py-3 gap-2.5 z-20 shrink-0">
+        <div className="w-14 bg-white border-r border-slate-200 flex flex-col items-center py-3 gap-2.5 z-20 shrink-0">
           {/* Tool: Move / Select (V) */}
           <button
             onClick={() => {
@@ -898,7 +898,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
               activeFlyout === null
                 ? 'bg-[#ff5e00] text-white shadow-md shadow-[#ff5e00]/30'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
             <MousePointer className="w-5 h-5" />
@@ -911,10 +911,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
               fileInputRef.current?.click()
             }}
             title="Unggah Logo / Gambar Desain (U)"
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all cursor-pointer relative group"
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer relative group"
           >
             <Upload className="w-5 h-5" />
-            <span className="absolute left-14 bg-black text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-slate-800 shadow-xl">
+            <span className="absolute left-14 bg-slate-900 text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
               Unggah Gambar (U)
             </span>
           </button>
@@ -926,11 +926,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
               activeFlyout === 'text'
                 ? 'bg-[#ff5e00] text-white shadow-md shadow-[#ff5e00]/30'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
             <Type className="w-5 h-5" />
-            <span className="absolute left-14 bg-black text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-slate-800 shadow-xl">
+            <span className="absolute left-14 bg-slate-900 text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
               Teks Tulisan (T)
             </span>
           </button>
@@ -942,11 +942,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
               activeFlyout === 'presets'
                 ? 'bg-[#ff5e00] text-white shadow-md shadow-[#ff5e00]/30'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
             <Flag className="w-5 h-5" />
-            <span className="absolute left-14 bg-black text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-slate-800 shadow-xl">
+            <span className="absolute left-14 bg-slate-900 text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
               Preset Emblem & Posisi
             </span>
           </button>
@@ -958,16 +958,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
               activeFlyout === 'lighting'
                 ? 'bg-[#ff5e00] text-white shadow-md shadow-[#ff5e00]/30'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
             <Sun className="w-5 h-5" />
-            <span className="absolute left-14 bg-black text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-slate-800 shadow-xl">
+            <span className="absolute left-14 bg-slate-900 text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
               Studio Lighting
             </span>
           </button>
 
-          <div className="w-6 h-px bg-slate-800 my-1" />
+          <div className="w-6 h-px bg-slate-200 my-1" />
 
           {/* Tool: Safe Guidelines Toggle */}
           <button
@@ -975,12 +975,12 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             title="Garis Panduan / Safe Print Zones"
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
               showGuidelines
-                ? 'bg-slate-800 text-orange-400 border border-slate-700'
-                : 'text-slate-500 hover:text-white hover:bg-slate-800/80'
+                ? 'bg-orange-50 text-[#ff5e00] border border-orange-200'
+                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
             <Grid className="w-5 h-5" />
-            <span className="absolute left-14 bg-black text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-slate-800 shadow-xl">
+            <span className="absolute left-14 bg-slate-900 text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
               Garis Panduan Sablon
             </span>
           </button>
@@ -988,15 +988,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
         {/* FLOATING FLYOUT MENUS (Positioned right next to toolbar) */}
         {activeFlyout === 'text' && (
-          <div className="absolute left-16 top-3 z-40 w-80 bg-[#18181b] border border-slate-700 rounded-2xl shadow-2xl p-4 text-white animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="absolute left-16 top-3 z-40 w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 text-slate-800 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Type className="w-4 h-4 text-[#ff5e00]" />
-                <h4 className="font-extrabold text-xs tracking-wide">Alat Teks Sablon / Bordir</h4>
+                <h4 className="font-extrabold text-xs tracking-wide text-slate-900">Alat Teks Sablon / Bordir</h4>
               </div>
               <button
                 onClick={() => setActiveFlyout(null)}
-                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1004,7 +1004,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
             <div className="space-y-3 pt-3">
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">
                   Isi Tulisan
                 </label>
                 <input
@@ -1014,18 +1014,18 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   onKeyDown={(e) => e.key === 'Enter' && handleAddText()}
                   placeholder="Contoh: ZY APPAREL, LOGISTIK..."
                   autoFocus
-                  className="w-full bg-[#0d0d0f] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-hidden focus:border-[#ff5e00]"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:border-[#ff5e00] focus:bg-white transition-colors"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">
                   Jenis Font
                 </label>
                 <select
                   value={textFont}
                   onChange={(e) => setTextFont(e.target.value)}
-                  className="w-full bg-[#0d0d0f] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-hidden"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-hidden focus:border-[#ff5e00]"
                 >
                   <option value="Montserrat, sans-serif">Montserrat (Modern Clean)</option>
                   <option value="Oswald, sans-serif">Oswald (Tegas Bold)</option>
@@ -1037,7 +1037,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
               </div>
 
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">
                   Warna Tulisan
                 </label>
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -1056,7 +1056,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       onClick={() => setTextColor(color)}
                       style={{ backgroundColor: color }}
                       className={`w-6 h-6 rounded-lg border-2 cursor-pointer transition-transform hover:scale-110 ${
-                        textColor === color ? 'border-[#ff5e00] scale-110 shadow-sm' : 'border-slate-700'
+                        textColor === color ? 'border-[#ff5e00] scale-110 shadow-sm' : 'border-slate-300'
                       }`}
                     />
                   ))}
@@ -1064,14 +1064,14 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                     type="color"
                     value={textColor}
                     onChange={(e) => setTextColor(e.target.value)}
-                    className="w-6 h-6 rounded-lg border border-slate-700 cursor-pointer p-0 bg-transparent"
+                    className="w-6 h-6 rounded-lg border border-slate-300 cursor-pointer p-0 bg-transparent"
                     title="Pilih Warna Kustom"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">
                   Teknik Cetak
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -1079,8 +1079,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                     onClick={() => setTextTechnique('bordir')}
                     className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
                       textTechnique === 'bordir'
-                        ? 'bg-[#ff5e00] border-[#ff5e00] text-white shadow-sm'
-                        : 'bg-[#0d0d0f] border-slate-700 text-slate-400 hover:text-white'
+                        ? 'bg-[#ff5e00] border-[#ff5e00] text-white shadow-xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     🧵 Bordir Komputer
@@ -1089,8 +1089,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                     onClick={() => setTextTechnique('sablon')}
                     className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
                       textTechnique === 'sablon'
-                        ? 'bg-[#ff5e00] border-[#ff5e00] text-white shadow-sm'
-                        : 'bg-[#0d0d0f] border-slate-700 text-slate-400 hover:text-white'
+                        ? 'bg-[#ff5e00] border-[#ff5e00] text-white shadow-xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     🎨 Sablon DTF
@@ -1104,7 +1104,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   setActiveFlyout(null)
                 }}
                 disabled={!inputText.trim()}
-                className="w-full mt-2 py-2.5 bg-[#ff5e00] hover:bg-[#e05300] disabled:bg-slate-800 disabled:text-slate-600 text-white font-extrabold rounded-xl text-xs transition-all shadow-md shadow-[#ff5e00]/25 cursor-pointer flex items-center justify-center gap-1.5"
+                className="w-full mt-2 py-2.5 bg-[#ff5e00] hover:bg-[#e05300] disabled:bg-slate-100 disabled:text-slate-400 text-white font-extrabold rounded-xl text-xs transition-all shadow-md shadow-[#ff5e00]/25 cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <PlusCircle className="w-4 h-4" />
                 Pasang Teks ke Kanvas
@@ -1115,15 +1115,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
         {/* FLOATING PRESETS FLYOUT */}
         {activeFlyout === 'presets' && (
-          <div className="absolute left-16 top-16 z-40 w-80 bg-[#18181b] border border-slate-700 rounded-2xl shadow-2xl p-4 text-white animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="absolute left-16 top-16 z-40 w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 text-slate-800 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Flag className="w-4 h-4 text-[#ff5e00]" />
-                <h4 className="font-extrabold text-xs tracking-wide">Emblem Cepat & Posisi</h4>
+                <h4 className="font-extrabold text-xs tracking-wide text-slate-900">Emblem Cepat & Posisi</h4>
               </div>
               <button
                 onClick={() => setActiveFlyout(null)}
-                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1131,7 +1131,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
             <div className="space-y-4 pt-3">
               <div>
-                <p className="text-[10px] uppercase font-bold text-slate-400 mb-2">
+                <p className="text-[10px] uppercase font-bold text-slate-500 mb-2">
                   Emblem Standar Nasional
                 </p>
                 <div className="grid grid-cols-2 gap-2">
@@ -1140,17 +1140,17 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       handleAddPresetLogo('flag')
                       setActiveFlyout(null)
                     }}
-                    className="p-2.5 bg-[#0d0d0f] hover:bg-slate-800 border border-slate-700 rounded-xl flex items-center gap-2.5 transition-all cursor-pointer group text-left"
+                    className="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl flex items-center gap-2.5 transition-all cursor-pointer group text-left"
                   >
-                    <div className="w-7 h-5 rounded overflow-hidden shrink-0 border border-slate-700">
+                    <div className="w-7 h-5 rounded overflow-hidden shrink-0 border border-slate-200 shadow-2xs">
                       <div className="h-2.5 bg-red-600" />
                       <div className="h-2.5 bg-white" />
                     </div>
                     <div>
-                      <div className="font-bold text-xs text-slate-200 group-hover:text-white">
+                      <div className="font-bold text-xs text-slate-800 group-hover:text-black">
                         Bendera RI
                       </div>
-                      <div className="text-[9px] text-slate-400">Merah Putih</div>
+                      <div className="text-[9px] text-slate-500">Merah Putih</div>
                     </div>
                   </button>
 
@@ -1159,16 +1159,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       handleAddPresetLogo('k3')
                       setActiveFlyout(null)
                     }}
-                    className="p-2.5 bg-[#0d0d0f] hover:bg-slate-800 border border-slate-700 rounded-xl flex items-center gap-2.5 transition-all cursor-pointer group text-left"
+                    className="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl flex items-center gap-2.5 transition-all cursor-pointer group text-left"
                   >
-                    <div className="w-7 h-7 rounded-full bg-emerald-700 flex items-center justify-center shrink-0 border border-white/40">
+                    <div className="w-7 h-7 rounded-full bg-emerald-700 flex items-center justify-center shrink-0 border border-white/40 shadow-2xs">
                       <span className="text-white text-xs font-black">+</span>
                     </div>
                     <div>
-                      <div className="font-bold text-xs text-slate-200 group-hover:text-white">
+                      <div className="font-bold text-xs text-slate-800 group-hover:text-black">
                         Logo K3
                       </div>
-                      <div className="text-[9px] text-slate-400">Keselamatan</div>
+                      <div className="text-[9px] text-slate-500">Keselamatan</div>
                     </div>
                   </button>
                 </div>
@@ -1176,7 +1176,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
               {selectedGraphic && (
                 <div>
-                  <p className="text-[10px] uppercase font-bold text-slate-400 mb-2">
+                  <p className="text-[10px] uppercase font-bold text-slate-500 mb-2">
                     Pindahkan ke Posisi Presisi:
                   </p>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -1187,10 +1187,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           handleApplyPresetPosition(preset)
                           setActiveFlyout(null)
                         }}
-                        className="px-2.5 py-1.5 bg-[#0d0d0f] hover:bg-slate-800 border border-slate-800 rounded-lg text-left transition-colors cursor-pointer"
+                        className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-left transition-colors cursor-pointer"
                       >
-                        <div className="font-bold text-[11px] text-slate-300">{preset.label}</div>
-                        <div className="text-[9px] text-slate-500 capitalize">{preset.side}</div>
+                        <div className="font-bold text-[11px] text-slate-700">{preset.label}</div>
+                        <div className="text-[9px] text-slate-400 capitalize">{preset.side}</div>
                       </button>
                     ))}
                   </div>
@@ -1202,15 +1202,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
         {/* FLOATING LIGHTING FLYOUT */}
         {activeFlyout === 'lighting' && (
-          <div className="absolute left-16 top-28 z-40 w-80 bg-[#18181b] border border-slate-700 rounded-2xl shadow-2xl p-4 text-white animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="absolute left-16 top-28 z-40 w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 text-slate-800 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Sun className="w-4 h-4 text-[#ff5e00]" />
-                <h4 className="font-extrabold text-xs tracking-wide">Studio Lighting Seragam</h4>
+                <h4 className="font-extrabold text-xs tracking-wide text-slate-900">Studio Lighting Seragam</h4>
               </div>
               <button
                 onClick={() => setActiveFlyout(null)}
-                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1219,8 +1219,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             <div className="space-y-3 pt-3">
               <div>
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-400">Kecerahan (Brightness)</span>
-                  <span className="font-mono text-slate-200">{lighting.brightness}%</span>
+                  <span className="text-slate-600 font-medium">Kecerahan (Brightness)</span>
+                  <span className="font-mono text-slate-800 font-bold">{lighting.brightness}%</span>
                 </div>
                 <input
                   type="range"
@@ -1236,8 +1236,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
               <div>
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-400">Kontras (Contrast)</span>
-                  <span className="font-mono text-slate-200">{lighting.contrast}%</span>
+                  <span className="text-slate-600 font-medium">Kontras (Contrast)</span>
+                  <span className="font-mono text-slate-800 font-bold">{lighting.contrast}%</span>
                 </div>
                 <input
                   type="range"
@@ -1253,8 +1253,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
               <div>
                 <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-400">Saturasi Warna</span>
-                  <span className="font-mono text-slate-200">{lighting.saturation}%</span>
+                  <span className="text-slate-600 font-medium">Saturasi Warna</span>
+                  <span className="font-mono text-slate-800 font-bold">{lighting.saturation}%</span>
                 </div>
                 <input
                   type="range"
@@ -1272,7 +1272,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 onClick={() =>
                   setLighting({ brightness: 0, contrast: 0, saturation: 0, shadowDepth: 30 })
                 }
-                className="w-full py-2 bg-[#0d0d0f] hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-colors cursor-pointer mt-2"
+                className="w-full py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer mt-2"
               >
                 Reset Efek Cahaya
               </button>
@@ -1281,7 +1281,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         )}
 
         {/* ---------------------------------------------------- */}
-        {/* CENTER MASSIVE CANVASS VIEWPORT (Distraction-Free) */}
+        {/* CENTER MASSIVE CANVASS VIEWPORT (Light, Bright & Comfortable) */}
         {/* ---------------------------------------------------- */}
         <div
           ref={viewportRef}
@@ -1289,8 +1289,12 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           onClick={handleCanvasClick}
-          className="flex-1 relative flex items-center justify-center p-4 sm:p-6 overflow-hidden select-none bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:24px_24px] bg-[#101014] cursor-crosshair"
-          style={{ minHeight: '680px' }}
+          className="flex-1 relative flex items-center justify-center p-4 sm:p-6 overflow-hidden select-none bg-[#f8f9fc] cursor-crosshair"
+          style={{
+            minHeight: '680px',
+            backgroundImage: 'radial-gradient(circle, #cbd5e1 1.25px, transparent 1.25px)',
+            backgroundSize: '24px 24px',
+          }}
         >
           {/* Printable Safe Zones Overlay */}
           {showGuidelines && (
@@ -1309,9 +1313,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       height: `${zone.height}%`,
                       transform: 'translate(-50%, -50%)',
                     }}
-                    className="absolute border border-dashed border-orange-500/40 bg-orange-500/5 rounded-xl flex items-start justify-center p-1 pointer-events-none"
+                    className="absolute border border-dashed border-orange-400/60 bg-orange-500/5 rounded-xl flex items-start justify-center p-1 pointer-events-none"
                   >
-                    <span className="text-[9px] font-bold text-orange-400 bg-black/80 px-1.5 py-0.5 rounded shadow-xs">
+                    <span className="text-[9px] font-bold text-orange-600 bg-white/95 border border-orange-200 px-1.5 py-0.5 rounded shadow-2xs">
                       {zone.name}
                     </span>
                   </div>
@@ -1320,7 +1324,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             </div>
           )}
 
-          {/* User's Realistic Mockup Photo for Current Side (MASSIVE & CRISP) */}
+          {/* User's Realistic Mockup Photo for Current Side (MASSIVE, CRISP & COMFORTABLE) */}
           <div
             className="w-full h-full max-w-[680px] max-h-[760px] relative pointer-events-none flex items-center justify-center transition-transform"
             style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
@@ -1330,15 +1334,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 src={currentMockupImage}
                 alt={`${activeMockup.name} - ${currentSide}`}
                 style={filterStyle}
-                className="w-full h-full object-contain select-none drop-shadow-2xl"
+                className="w-full h-full object-contain select-none drop-shadow-[0_15px_30px_rgba(0,0,0,0.12)]"
               />
             ) : (
-              <div className="text-center p-8 border-2 border-dashed border-slate-700 rounded-3xl max-w-sm pointer-events-auto bg-[#18181b]/90 backdrop-blur-xs">
+              <div className="text-center p-8 border-2 border-dashed border-slate-300 rounded-3xl max-w-sm pointer-events-auto bg-white/95 backdrop-blur-xs shadow-md">
                 <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                <p className="text-xs font-extrabold text-white">
+                <p className="text-xs font-extrabold text-slate-900">
                   Foto {currentSide.toUpperCase()} Belum Di-upload
                 </p>
-                <p className="text-[11px] text-slate-400 mt-1 mb-3">
+                <p className="text-[11px] text-slate-500 mt-1 mb-3">
                   Anda belum meng-upload foto sisi ini untuk "{activeMockup.name}".
                 </p>
                 <button
@@ -1380,7 +1384,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                     {isSelected && (
                       <div
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="absolute -top-11 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black text-white px-2 py-1 rounded-xl text-[10px] shadow-2xl backdrop-blur-xs whitespace-nowrap z-50 border border-slate-700"
+                        className="absolute -top-11 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-slate-900 text-white px-2 py-1 rounded-xl text-[10px] shadow-xl whitespace-nowrap z-50 border border-slate-800"
                       >
                         <button
                           onClick={() => handleDuplicateGraphic(g.id)}
@@ -1395,6 +1399,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
                         >
                           <FlipHorizontal className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleFlipVertical(g.id)}
+                          title="Balik Vertikal"
+                          className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                        >
+                          <FlipVertical className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleAlignCenter(g.id)}
@@ -1416,7 +1427,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           title="Hapus (Delete)"
                           className="p-1 bg-red-600/80 hover:bg-red-600 rounded text-white ml-0.5 cursor-pointer"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     )}
@@ -1426,7 +1437,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       onMouseDown={(e) => handleStartMove(e, g.id)}
                       className={`relative p-1 transition-all ${
                         isSelected
-                          ? 'border-2 border-[#ff5e00] rounded-lg shadow-sm'
+                          ? 'border-2 border-[#ff5e00] rounded-lg shadow-sm bg-orange-500/5'
                           : 'hover:border hover:border-[#ff5e00]/60 rounded-lg'
                       }`}
                     >
@@ -1496,7 +1507,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           />
 
                           {/* Bottom Tag indicator */}
-                          <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 bg-black text-[#ff5e00] text-[9px] font-mono font-bold px-1.5 rounded-full shadow-xs whitespace-nowrap">
+                          <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 bg-slate-900 text-[#ff5e00] text-[9px] font-mono font-bold px-1.5 rounded-full shadow-xs whitespace-nowrap">
                             {calc.sizeCategory.split(' ')[0]} • Rp {calc.price.toLocaleString('id-ID')}
                           </span>
                         </>
@@ -1510,21 +1521,21 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         </div>
 
         {/* ---------------------------------------------------- */}
-        {/* RIGHT DOCKED LAYERS & PRICING PANEL */}
+        {/* RIGHT DOCKED LAYERS & PRICING PANEL (Light & Crisp) */}
         {/* ---------------------------------------------------- */}
         {showLayersPanel && (
-          <div className="w-76 xl:w-80 bg-[#18181b] border-l border-slate-800 flex flex-col justify-between shrink-0 z-20">
+          <div className="w-76 xl:w-80 bg-white border-l border-slate-200 flex flex-col justify-between shrink-0 z-20">
             {/* Panel Header */}
-            <div className="p-3.5 border-b border-slate-800 flex items-center justify-between">
+            <div className="p-3.5 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Layers className="w-4 h-4 text-[#ff5e00]" />
-                <h4 className="font-extrabold text-xs tracking-wide text-white">
+                <h4 className="font-extrabold text-xs tracking-wide text-slate-900">
                   Daftar Layers ({graphics.length})
                 </h4>
               </div>
               <button
                 onClick={() => setShowLayersPanel(false)}
-                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
                 title="Tutup Panel Layers"
               >
                 <X className="w-4 h-4" />
@@ -1534,11 +1545,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             {/* Layers List (Scrollable) */}
             <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[calc(100vh-320px)] min-h-[260px]">
               {graphics.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
-                  <Layers className="w-8 h-8 stroke-[1.5] mb-2 text-slate-600" />
-                  <p className="text-xs font-bold text-slate-400">Belum Ada Elemen Desain</p>
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Gunakan tool di sebelah kiri (Upload / Teks / Emblem) untuk memasang desain seragam.
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                  <Layers className="w-8 h-8 stroke-[1.5] mb-2 text-slate-300" />
+                  <p className="text-xs font-bold text-slate-700">Belum Ada Elemen Desain</p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Gunakan toolbar di sebelah kiri (Upload / Teks / Emblem) untuk memasang desain seragam.
                   </p>
                 </div>
               ) : (
@@ -1556,16 +1567,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       }}
                       className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-2.5 ${
                         isSelected
-                          ? 'bg-[#ff5e00]/10 border-[#ff5e00] shadow-xs'
-                          : 'bg-[#0d0d0f] border-slate-800/80 hover:border-slate-700'
+                          ? 'bg-orange-50/70 border-[#ff5e00] shadow-xs'
+                          : 'bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-slate-100/70'
                       }`}
                     >
                       {/* Thumbnail */}
-                      <div className="w-10 h-10 rounded-lg bg-black/60 border border-slate-800 flex items-center justify-center shrink-0 overflow-hidden">
+                      <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                         {g.type === 'image' ? (
                           <img src={g.content} alt="" className="w-full h-full object-contain p-1" />
                         ) : (
-                          <Type className="w-4 h-4 text-orange-400" />
+                          <Type className="w-4 h-4 text-[#ff5e00]" />
                         )}
                       </div>
 
@@ -1576,16 +1587,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded font-mono ${
                               isCurrentSide
                                 ? 'bg-[#ff5e00] text-white'
-                                : 'bg-slate-800 text-slate-400'
+                                : 'bg-slate-200 text-slate-700'
                             }`}
                           >
                             {g.side}
                           </span>
-                          <span className="text-[10px] text-slate-400 capitalize">
+                          <span className="text-[10px] text-slate-500 capitalize">
                             {g.technique}
                           </span>
                         </div>
-                        <h5 className="font-bold text-xs text-slate-200 truncate mt-0.5">
+                        <h5 className="font-bold text-xs text-slate-900 truncate mt-0.5">
                           {g.label || (g.type === 'text' ? g.content : 'Logo')}
                         </h5>
                         <div className="text-[10px] font-mono text-[#ff5e00] font-bold">
@@ -1599,7 +1610,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           onClick={() => handleBringToFront(g.id)}
                           disabled={idx === graphics.length - 1}
                           title="Naikkan Layer"
-                          className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 rounded cursor-pointer"
+                          className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 disabled:opacity-30 rounded cursor-pointer"
                         >
                           <ChevronUp className="w-3.5 h-3.5" />
                         </button>
@@ -1607,14 +1618,14 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           onClick={() => handleSendToBack(g.id)}
                           disabled={idx === 0}
                           title="Turunkan Layer"
-                          className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 rounded cursor-pointer"
+                          className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 disabled:opacity-30 rounded cursor-pointer"
                         >
                           <ChevronDown className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDeleteGraphic(g.id)}
                           title="Hapus Layer"
-                          className="p-1 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded cursor-pointer"
+                          className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1626,22 +1637,22 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             </div>
 
             {/* Bottom Summary & Order CTA */}
-            <div className="p-4 bg-[#121214] border-t border-slate-800 space-y-3">
+            <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-3">
               <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between text-slate-400">
+                <div className="flex justify-between text-slate-500">
                   <span>Harga Polos Seragam:</span>
-                  <span className="font-mono font-bold text-slate-200">
+                  <span className="font-mono font-bold text-slate-800">
                     Rp {activeMockup.basePrice.toLocaleString('id-ID')}
                   </span>
                 </div>
-                <div className="flex justify-between text-slate-400">
+                <div className="flex justify-between text-slate-500">
                   <span>Biaya Sablon/Bordir ({graphics.length}):</span>
-                  <span className="font-mono font-bold text-orange-400">
+                  <span className="font-mono font-bold text-[#ff5e00]">
                     Rp {totalPrintCost.toLocaleString('id-ID')}
                   </span>
                 </div>
-                <div className="pt-2 border-t border-slate-800 flex justify-between items-baseline">
-                  <span className="font-extrabold text-white">Estimasi Total / Pcs:</span>
+                <div className="pt-2 border-t border-slate-200 flex justify-between items-baseline">
+                  <span className="font-extrabold text-slate-900">Estimasi Total / Pcs:</span>
                   <span className="font-mono font-black text-base text-[#ff5e00]">
                     Rp {(activeMockup.basePrice + totalPrintCost).toLocaleString('id-ID')}
                   </span>
@@ -1661,24 +1672,24 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       </div>
 
       {/* ---------------------------------------------------- */}
-      {/* 3. BOTTOM STATUS BAR (Photoshop Pro Status) */}
+      {/* 3. BOTTOM STATUS BAR (Light Pro Status) */}
       {/* ---------------------------------------------------- */}
-      <div className="h-7 bg-[#0e0e10] border-t border-slate-800 px-4 flex items-center justify-between text-[11px] text-slate-400 font-mono select-none z-10 shrink-0">
+      <div className="h-7 bg-slate-100 border-t border-slate-200 px-4 flex items-center justify-between text-[11px] text-slate-500 font-mono select-none z-10 shrink-0">
         <div className="flex items-center gap-2 truncate">
           <span className="w-2 h-2 rounded-full bg-[#ff5e00]" />
-          <span className="font-bold text-slate-300">ZY STUDIO PRO</span>
-          <span className="text-slate-600">•</span>
-          <span className="truncate">
+          <span className="font-bold text-slate-800">ZY STUDIO PRO</span>
+          <span className="text-slate-400">•</span>
+          <span className="truncate text-slate-600">
             {activeMockup.name} ({activeMockup.category})
           </span>
         </div>
 
         <div className="hidden sm:flex items-center gap-3">
-          <span>Sudut: <strong className="text-white uppercase">{currentSide}</strong></span>
-          <span className="text-slate-600">•</span>
+          <span>Sudut: <strong className="text-slate-900 uppercase">{currentSide}</strong></span>
+          <span className="text-slate-400">•</span>
           <span>{currentSideGraphics.length} Layer di sudut ini</span>
-          <span className="text-slate-600">•</span>
-          <span>Zoom: <strong className="text-white">{Math.round(zoomLevel * 100)}%</strong></span>
+          <span className="text-slate-400">•</span>
+          <span>Zoom: <strong className="text-slate-900">{Math.round(zoomLevel * 100)}%</strong></span>
         </div>
 
         <div className="font-bold text-[#ff5e00]">
