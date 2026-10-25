@@ -94,7 +94,35 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const [penHoverPoint, setPenHoverPoint] = useState<{ x: number; y: number } | null>(null)
   const [isPenClosing, setIsPenClosing] = useState<boolean>(false)
 
+  // Natural image dimensions for 1:1 pixel accuracy without letterboxing offset
+  const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({
+    width: 1200,
+    height: 1400,
+  })
+
   const maskCanvasRef = useRef<HTMLCanvasElement>(null)
+
+  // Sync canvas dimensions with actual mockup photo aspect ratio
+  useEffect(() => {
+    const currentImg =
+      selectedSide === 'front'
+        ? editFormData.frontImg
+        : selectedSide === 'back'
+        ? editFormData.backImg
+        : selectedSide === 'left'
+        ? editFormData.leftImg
+        : editFormData.rightImg
+
+    if (!currentImg) return
+
+    const img = new Image()
+    img.onload = () => {
+      if (img.naturalWidth && img.naturalHeight) {
+        setCanvasSize({ width: img.naturalWidth, height: img.naturalHeight })
+      }
+    }
+    img.src = currentImg
+  }, [selectedSide, editFormData.frontImg, editFormData.backImg, editFormData.leftImg, editFormData.rightImg])
 
   const handleOpenCreateNew = () => {
     setEditFormData({
@@ -320,14 +348,17 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     }
   }, [drawingTool, penPoints, zoomScale])
 
-  // INTERACTIVE CANVAS ZONE MARKER METHODS
+  // INTERACTIVE CANVAS ZONE MARKER METHODS (100% ACCURATE 1:1 PIXEL COORDINATES)
   const getMarkerCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = maskCanvasRef.current
     if (!canvas) return { x: 0, y: 0 }
     const rect = canvas.getBoundingClientRect()
+    if (!rect.width || !rect.height) return { x: 0, y: 0 }
+    const rawX = ((e.clientX - rect.left) / rect.width) * canvas.width
+    const rawY = ((e.clientY - rect.top) / rect.height) * canvas.height
     return {
-      x: ((e.clientX - rect.left) / rect.width) * canvas.width,
-      y: ((e.clientY - rect.top) / rect.height) * canvas.height,
+      x: Math.max(0, Math.min(canvas.width, rawX)),
+      y: Math.max(0, Math.min(canvas.height, rawY)),
     }
   }
 
@@ -393,8 +424,11 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
         const dx = coords.x - penPoints[0].x
         const dy = coords.y - penPoints[0].y
         const dist = Math.sqrt(dx * dx + dy * dy)
-        const threshold = 35 / zoomScale
-        setIsPenClosing(dist < threshold)
+        const canvas = maskCanvasRef.current
+        const rect = canvas?.getBoundingClientRect()
+        const scaleToScreen = rect && rect.width > 0 ? canvas!.width / rect.width : 1
+        const snapRadius = 22 * scaleToScreen
+        setIsPenClosing(dist < snapRadius)
       } else {
         setIsPenClosing(false)
       }
@@ -958,130 +992,137 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
                         {/* TRANSFORMED INNER VIEWPORT CONTAINER */}
                         <div
-                          className="relative w-full h-full flex items-center justify-center"
+                          className="relative flex items-center justify-center"
                           style={{
                             transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
                             transformOrigin: 'center center',
                             transition: isPanning ? 'none' : 'transform 0.08s ease-out',
                           }}
                         >
-                          {/* Garment Photo Base */}
-                          <img
-                            src={currentImg}
-                            alt="Base Mockup Angle"
-                            className="max-w-full max-h-full object-contain pointer-events-none select-none z-0"
-                          />
+                          {/* EXACT BOUNDING WRAPPER - MATCHES GARMENT PHOTO 1:1 WITH ZERO LETTERBOXING */}
+                          <div className="relative inline-block select-none shadow-md rounded-2xl overflow-hidden bg-white/40">
+                            {/* Garment Photo Base */}
+                            <img
+                              src={currentImg}
+                              alt="Base Mockup Angle"
+                              className="block max-h-[500px] sm:max-h-[580px] w-auto max-w-[85vw] sm:max-w-[620px] object-contain pointer-events-none select-none z-0"
+                            />
 
-                          {/* Saved Color Parts Overlays with Multiply Blend Mode */}
-                          {currentParts.map((part) => {
-                            if (!part.maskImg) return null
-                            const isHighlighted = highlightedPartId === part.id
-                            return (
-                              <div
-                                key={part.id}
-                                className={`absolute inset-0 pointer-events-none transition-all duration-200 ${
-                                  isHighlighted ? 'ring-2 ring-[#ff5e00] ring-inset' : ''
-                                }`}
-                                style={{
-                                  mixBlendMode: 'multiply',
-                                  opacity: isHighlighted ? 1 : 0.85,
-                                  maskImage: `url(${part.maskImg})`,
-                                  WebkitMaskImage: `url(${part.maskImg})`,
-                                  maskSize: 'contain',
-                                  WebkitMaskSize: 'contain',
-                                  maskPosition: 'center',
-                                  WebkitMaskPosition: 'center',
-                                  maskRepeat: 'no-repeat',
-                                  WebkitMaskRepeat: 'no-repeat',
-                                  backgroundColor: part.defaultColor,
-                                }}
-                              />
-                            )
-                          })}
-
-                          {/* Interactive Drawing Canvas */}
-                          <canvas
-                            ref={maskCanvasRef}
-                            width={1200}
-                            height={1400}
-                            onMouseDown={handleStartDrawMask}
-                            onMouseMove={handleDrawMaskMove}
-                            onMouseUp={handleEndDrawMask}
-                            onMouseLeave={handleEndDrawMask}
-                            onDoubleClick={handleDoubleClickCanvas}
-                            className="absolute inset-0 w-full h-full object-contain touch-none z-10"
-                          />
-
-                          {/* PEN TOOL VECTOR LIVE PREVIEW SVG */}
-                          {drawingTool === 'pen' && penPoints.length > 0 && (
-                            <svg
-                              className="absolute inset-0 w-full h-full pointer-events-none z-15"
-                              viewBox="0 0 1200 1400"
-                            >
-                              {/* Filled polygon preview if 3 or more points */}
-                              {penPoints.length >= 3 && (
-                                <polygon
-                                  points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
-                                  fill="rgba(6, 182, 212, 0.35)"
-                                  stroke="#06b6d4"
-                                  strokeWidth={2 * (1 / Math.max(1, zoomScale * 0.5))}
-                                  strokeDasharray="6,4"
+                            {/* Saved Color Parts Overlays with Multiply Blend Mode */}
+                            {currentParts.map((part) => {
+                              if (!part.maskImg) return null
+                              const isHighlighted = highlightedPartId === part.id
+                              return (
+                                <div
+                                  key={part.id}
+                                  className={`absolute inset-0 pointer-events-none transition-all duration-200 ${
+                                    isHighlighted ? 'ring-2 ring-[#ff5e00] ring-inset' : ''
+                                  }`}
+                                  style={{
+                                    mixBlendMode: 'multiply',
+                                    opacity: isHighlighted ? 1 : 0.85,
+                                    maskImage: `url(${part.maskImg})`,
+                                    WebkitMaskImage: `url(${part.maskImg})`,
+                                    maskSize: '100% 100%',
+                                    WebkitMaskSize: '100% 100%',
+                                    backgroundColor: part.defaultColor,
+                                  }}
                                 />
-                              )}
+                              )
+                            })}
 
-                              {/* Connected line between points */}
-                              {penPoints.length > 1 && (
-                                <polyline
-                                  points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
-                                  fill="none"
-                                  stroke="#06b6d4"
-                                  strokeWidth={3 * (1 / Math.max(1, zoomScale * 0.5))}
-                                />
-                              )}
+                            {/* Interactive Drawing Canvas */}
+                            <canvas
+                              ref={maskCanvasRef}
+                              width={canvasSize.width}
+                              height={canvasSize.height}
+                              onMouseDown={handleStartDrawMask}
+                              onMouseMove={handleDrawMaskMove}
+                              onMouseUp={handleEndDrawMask}
+                              onMouseLeave={handleEndDrawMask}
+                              onDoubleClick={handleDoubleClickCanvas}
+                              className="absolute inset-0 w-full h-full touch-none z-10"
+                            />
 
-                              {/* Rubberband line to hover point */}
-                              {penHoverPoint && (
-                                <line
-                                  x1={penPoints[penPoints.length - 1].x}
-                                  y1={penPoints[penPoints.length - 1].y}
-                                  x2={penHoverPoint.x}
-                                  y2={penHoverPoint.y}
-                                  stroke={isPenClosing ? '#22c55e' : '#06b6d4'}
-                                  strokeWidth={2.5 * (1 / Math.max(1, zoomScale * 0.5))}
-                                  strokeDasharray="4,4"
-                                />
-                              )}
+                            {/* PEN TOOL VECTOR LIVE PREVIEW SVG */}
+                            {drawingTool === 'pen' && penPoints.length > 0 && (() => {
+                              const zoomFactor = Math.max(0.5, zoomScale)
+                              const baseScale = (canvasSize.width / 600) / zoomFactor
+                              const nodeRadius = Math.max(3, 5 * baseScale)
+                              const startNodeRadius = Math.max(5, 7.5 * baseScale)
+                              const strokeW = Math.max(1, 2 * baseScale)
 
-                              {/* Node circles */}
-                              {penPoints.map((p, idx) => {
-                                const isStart = idx === 0
-                                const nodeRadius = (isStart ? 8 : 5) * (1 / Math.max(1, zoomScale * 0.5))
-                                return (
-                                  <g key={idx}>
-                                    <circle
-                                      cx={p.x}
-                                      cy={p.y}
-                                      r={nodeRadius}
-                                      fill={isStart && isPenClosing ? '#22c55e' : '#ffffff'}
-                                      stroke={isStart && isPenClosing ? '#15803d' : '#0891b2'}
-                                      strokeWidth={2 * (1 / Math.max(1, zoomScale * 0.5))}
+                              return (
+                                <svg
+                                  className="absolute inset-0 w-full h-full pointer-events-none z-15"
+                                  viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
+                                >
+                                  {/* Filled polygon preview if 3 or more points */}
+                                  {penPoints.length >= 3 && (
+                                    <polygon
+                                      points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
+                                      fill="rgba(6, 182, 212, 0.35)"
+                                      stroke="#06b6d4"
+                                      strokeWidth={strokeW}
+                                      strokeDasharray="6,4"
                                     />
-                                    {isStart && isPenClosing && (
-                                      <circle
-                                        cx={p.x}
-                                        cy={p.y}
-                                        r={nodeRadius * 2.2}
-                                        fill="none"
-                                        stroke="#22c55e"
-                                        strokeWidth={2 * (1 / Math.max(1, zoomScale * 0.5))}
-                                        className="animate-ping"
-                                      />
-                                    )}
-                                  </g>
-                                )
-                              })}
-                            </svg>
-                          )}
+                                  )}
+
+                                  {/* Connected line between points */}
+                                  {penPoints.length > 1 && (
+                                    <polyline
+                                      points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
+                                      fill="none"
+                                      stroke="#06b6d4"
+                                      strokeWidth={strokeW * 1.3}
+                                    />
+                                  )}
+
+                                  {/* Rubberband line to hover point */}
+                                  {penHoverPoint && (
+                                    <line
+                                      x1={penPoints[penPoints.length - 1].x}
+                                      y1={penPoints[penPoints.length - 1].y}
+                                      x2={penHoverPoint.x}
+                                      y2={penHoverPoint.y}
+                                      stroke={isPenClosing ? '#22c55e' : '#06b6d4'}
+                                      strokeWidth={strokeW * 1.2}
+                                      strokeDasharray="4,4"
+                                    />
+                                  )}
+
+                                  {/* Node circles */}
+                                  {penPoints.map((p, idx) => {
+                                    const isStart = idx === 0
+                                    const r = isStart ? startNodeRadius : nodeRadius
+                                    return (
+                                      <g key={idx}>
+                                        <circle
+                                          cx={p.x}
+                                          cy={p.y}
+                                          r={r}
+                                          fill={isStart && isPenClosing ? '#22c55e' : '#ffffff'}
+                                          stroke={isStart && isPenClosing ? '#15803d' : '#0891b2'}
+                                          strokeWidth={strokeW}
+                                        />
+                                        {isStart && isPenClosing && (
+                                          <circle
+                                            cx={p.x}
+                                            cy={p.y}
+                                            r={r * 2}
+                                            fill="none"
+                                            stroke="#22c55e"
+                                            strokeWidth={strokeW}
+                                            className="animate-ping"
+                                          />
+                                        )}
+                                      </g>
+                                    )
+                                  })}
+                                </svg>
+                              )
+                            })()}
+                          </div>
                         </div>
 
                         {/* FLOATING TOOL BAR OVERLAY AT BOTTOM */}
