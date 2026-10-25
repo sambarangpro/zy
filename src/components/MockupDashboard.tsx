@@ -183,10 +183,13 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     onSelectAndOpenCanvas(demo.id)
   }
 
-  const handleAddColorPart = (name: string, side: ViewSide = 'front', defaultColor = '#1e3a8a') => {
+  const handleAddColorPart = (initialName?: string, side: ViewSide = 'front', defaultColor = '#1e3a8a') => {
+    const partName = prompt('Beri nama bagian seragam baru (misal: Kerah, Tutup Saku, Garis Kancing):', initialName || 'Bagian Baru')
+    if (!partName || !partName.trim()) return
+
     const newPart: ColorablePart = {
       id: 'part_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-      name,
+      name: partName.trim(),
       side,
       defaultColor,
     }
@@ -198,6 +201,76 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
         colorParts: [newPart, ...thisSideParts, ...otherParts],
       }
     })
+
+    // Immediately bind this new slot as active drawing target and switch to pen tool
+    setEditingExistingPartId(newPart.id)
+    setNewPartName(newPart.name)
+    setNewPartColor(newPart.defaultColor)
+    setDrawingTool('pen')
+    setPenPoints([])
+    setPenHoverPoint(null)
+    setIsPenClosing(false)
+  }
+
+  const handleStartDrawingForSlot = (partId: string) => {
+    const part = (editFormData.colorParts || []).find((p) => p.id === partId)
+    if (!part) return
+    setEditingExistingPartId(part.id)
+    setNewPartName(part.name)
+    setNewPartColor(part.defaultColor)
+    setDrawingTool('pen')
+    setPenPoints([])
+    setPenHoverPoint(null)
+    setIsPenClosing(false)
+  }
+
+  const handleDefringePartMask = (partId: string) => {
+    const part = (editFormData.colorParts || []).find((p) => p.id === partId)
+    if (!part || !part.maskImg) return
+
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const off = document.createElement('canvas')
+      off.width = img.naturalWidth || canvasSize.width
+      off.height = img.naturalHeight || canvasSize.height
+      const offCtx = off.getContext('2d')
+      if (!offCtx) return
+
+      offCtx.drawImage(img, 0, 0)
+      const imgData = offCtx.getImageData(0, 0, off.width, off.height)
+      const data = imgData.data
+      const w = off.width
+      const h = off.height
+      const copy = new Uint8ClampedArray(data)
+
+      // Erode 4 pixels to eliminate any baked-in stroke border
+      const radius = 4
+      for (let y = radius; y < h - radius; y++) {
+        for (let x = radius; x < w - radius; x++) {
+          const idx = (y * w + x) * 4 + 3
+          if (copy[idx] > 0) {
+            let minA = copy[idx]
+            for (let dy = -radius; dy <= radius; dy += radius) {
+              for (let dx = -radius; dx <= radius; dx += radius) {
+                const nIdx = ((y + dy) * w + (x + dx)) * 4 + 3
+                if (copy[nIdx] < minA) minA = copy[nIdx]
+              }
+            }
+            data[idx] = minA
+          }
+        }
+      }
+      offCtx.putImageData(imgData, 0, 0)
+      const cleaned = off.toDataURL('image/png')
+      setEditFormData((prev) => ({
+        ...prev,
+        colorParts: (prev.colorParts || []).map((p) =>
+          p.id === partId ? { ...p, maskImg: cleaned } : p
+        ),
+      }))
+    }
+    img.src = part.maskImg
   }
 
   // LAYER ORDERING & DRAG-AND-DROP HANDLERS
@@ -815,6 +888,15 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     if (!editFormData.frontImg) {
       alert('Mohon upload minimal foto Tampak Depan untuk mockup ini!')
       return
+    }
+
+    const unmasked = (editFormData.colorParts || []).filter((p) => !p.maskImg)
+    if (unmasked.length > 0) {
+      const names = unmasked.map((p) => `"${p.name}"`).join(', ')
+      const proceed = confirm(
+        `Perhatian:\nBagian ${names} belum memiliki masker gambar.\n\nJika disimpan sekarang, bagian tersebut tidak akan tampil di baju pada Studio Canvas sampai maskernya digambar menggunakan Pen Tool / Kuas.\n\nApakah Anda ingin tetap menyimpan sekarang?`
+      )
+      if (!proceed) return
     }
 
     const newMockup: MockupTemplate = {
@@ -1614,8 +1696,40 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                       </div>
                     </div>
 
-                    {/* Part Name & Color Inputs */}
+                    {/* Part Name, Target Slot & Color Inputs */}
                     <div className="space-y-2">
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-700 mb-1">
+                          Simpan Masker ke Layer:
+                        </label>
+                        <select
+                          value={editingExistingPartId || '__new__'}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            if (val === '__new__') {
+                              setEditingExistingPartId(null)
+                            } else {
+                              const targetPart = (editFormData.colorParts || []).find((p) => p.id === val)
+                              if (targetPart) {
+                                setEditingExistingPartId(targetPart.id)
+                                setNewPartName(targetPart.name)
+                                setNewPartColor(targetPart.defaultColor)
+                              }
+                            }
+                          }}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
+                        >
+                          <option value="__new__">+ Buat Bagian / Layer Baru</option>
+                          {(editFormData.colorParts || [])
+                            .filter((p) => p.side === selectedSide)
+                            .map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} {!p.maskImg ? '(⚠️ Belum Ada Masker)' : '(Perbarui Masker)'}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
                       <div>
                         <label className="block text-[10px] font-extrabold text-slate-700 mb-1">
                           Nama Bagian:
@@ -1894,6 +2008,16 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                     >
                                       <Upload className="w-3.5 h-3.5" />
                                     </button>
+                                    {part.maskImg && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDefringePartMask(part.id)}
+                                        className="p-1 text-amber-500 hover:text-amber-700 hover:bg-amber-50 rounded transition-colors cursor-pointer"
+                                        title="✨ Rapikan Tepi / Hilangkan Garis Stroke Tebal (Erode Outline)"
+                                      >
+                                        <Sparkles className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveColorPart(part.id)}
@@ -1904,6 +2028,41 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                     </button>
                                   </div>
                                 </div>
+
+                                {/* Mask status & Quick Draw button */}
+                                {!part.maskImg ? (
+                                  <div className="mt-2 pt-2 border-t border-amber-200/80 flex items-center justify-between gap-2 bg-amber-50/80 p-2 rounded-xl">
+                                    <div className="text-[10px] text-amber-900 font-semibold leading-tight flex items-center gap-1.5">
+                                      <span className="text-amber-500 text-xs">⚠️</span>
+                                      <span>Belum ada masker (tidak akan tampil di Studio Canvas)</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStartDrawingForSlot(part.id)}
+                                      className="px-2.5 py-1 bg-gradient-to-r from-[#ff5e00] to-orange-500 text-white rounded-lg text-[10px] font-black hover:opacity-95 shadow-2xs flex items-center gap-1 shrink-0 cursor-pointer"
+                                      title="Buka Pen Tool dan langsung simpan ke layer ini"
+                                    >
+                                      <PenTool className="w-3 h-3" />
+                                      <span>Gambar Masker</span>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="mt-1 flex items-center justify-between text-[9px] text-slate-400 px-1">
+                                    <span className="text-emerald-600 font-bold flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                                      Masker Aktif (Tampil di Studio Canvas)
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDefringePartMask(part.id)}
+                                      className="text-amber-600 hover:text-amber-700 hover:underline flex items-center gap-1 font-bold cursor-pointer"
+                                      title="Klik jika shape memiliki garis tepi tebal yang ingin dihilangkan"
+                                    >
+                                      <Sparkles className="w-2.5 h-2.5" />
+                                      <span>Rapikan Tepi (Buang Stroke)</span>
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             )
                           })}

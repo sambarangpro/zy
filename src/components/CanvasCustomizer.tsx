@@ -34,6 +34,8 @@ import {
   Paintbrush,
   Eraser,
   RotateCcw,
+  RotateCw,
+  Wand2,
   Scissors,
   Palette,
 } from 'lucide-react'
@@ -127,6 +129,103 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const [textFont, setTextFont] = useState('Montserrat, sans-serif')
   const [textColor, setTextColor] = useState('#ffffff')
   const [textTechnique, setTextTechnique] = useState<'bordir' | 'sablon'>('bordir')
+
+  // Canvas Graphic Undo/Redo History Stack (Tombol Batalkan / Kembalikan)
+  const [undoStack, setUndoStack] = useState<CanvasGraphic[][]>([])
+  const [redoStack, setRedoStack] = useState<CanvasGraphic[][]>([])
+  const [isRemovingBg, setIsRemovingBg] = useState<boolean>(false)
+
+  const updateGraphicsWithHistory = (newGraphics: CanvasGraphic[]) => {
+    setUndoStack((prev) => [...prev.slice(-30), graphics])
+    setRedoStack([])
+    onGraphicsChange(newGraphics)
+  }
+
+  const handleUndoGraphics = () => {
+    if (undoStack.length === 0) return
+    const prev = undoStack[undoStack.length - 1]
+    setUndoStack((s) => s.slice(0, -1))
+    setRedoStack((s) => [...s, graphics])
+    onGraphicsChange(prev)
+  }
+
+  const handleRedoGraphics = () => {
+    if (redoStack.length === 0) return
+    const next = redoStack[redoStack.length - 1]
+    setRedoStack((s) => s.slice(0, -1))
+    setUndoStack((s) => [...s, graphics])
+    onGraphicsChange(next)
+  }
+
+  // Quick Alignment standard for uniform embroidery & printing
+  const handleQuickAlign = (
+    presetId: 'left_chest' | 'right_chest' | 'center_back' | 'center_chest'
+  ) => {
+    if (!selectedGraphicId) return
+    const preset = POSITION_PRESETS.find((p) => p.id === presetId)
+    if (preset) {
+      handleApplyPresetPosition(preset)
+    }
+  }
+
+  // Magic Wand Tool: 1-click background remover for logos/images (JPG/PNG)
+  const handleRemoveWhiteBackground = (graphicId: string) => {
+    const g = graphics.find((item) => item.id === graphicId)
+    if (!g || g.type !== 'image') return
+
+    setIsRemovingBg(true)
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.naturalWidth || img.width
+        canvas.height = img.naturalHeight || img.height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          setIsRemovingBg(false)
+          return
+        }
+        ctx.drawImage(img, 0, 0)
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        const data = imgData.data
+
+        // Convert white and near-white pixels to transparent with anti-aliasing
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i]
+          const gVal = data[i + 1]
+          const b = data[i + 2]
+          const a = data[i + 3]
+
+          if (a === 0) continue
+
+          if (r > 230 && gVal > 230 && b > 230) {
+            data[i + 3] = 0 // completely transparent
+          } else if (r > 212 && gVal > 212 && b > 212) {
+            // Anti-aliasing soft edge feathering
+            const factor = (230 - Math.min(r, gVal, b)) / 18
+            data[i + 3] = Math.round(a * Math.max(0, Math.min(1, factor)))
+          }
+        }
+
+        ctx.putImageData(imgData, 0, 0)
+        const cleanDataUrl = canvas.toDataURL('image/png')
+        updateGraphicsWithHistory(
+          graphics.map((item) =>
+            item.id === graphicId ? { ...item, content: cleanDataUrl } : item
+          )
+        )
+      } catch (err) {
+        console.error('Error in handleRemoveWhiteBackground:', err)
+      } finally {
+        setIsRemovingBg(false)
+      }
+    }
+    img.onerror = () => {
+      setIsRemovingBg(false)
+    }
+    img.src = g.content
+  }
 
   // Brush drawing runtime state
   const [isDrawing, setIsDrawing] = useState<boolean>(false)
@@ -262,12 +361,20 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         setBrushSize((s) => Math.min(60, s + 2))
       }
 
-      // Ctrl + Z: Undo brush paint
+      // Ctrl + Z: Undo brush paint or graphics
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault()
         if (activeTool === 'brush' || activeTool === 'eraser') {
-          e.preventDefault()
           handleUndoPaint()
+        } else {
+          handleUndoGraphics()
         }
+      } else if (
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z')
+      ) {
+        e.preventDefault()
+        handleRedoGraphics()
       }
 
       if (selectedGraphicId) {
@@ -295,11 +402,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedGraphicId, graphics, activeTool, currentSide, paintHistory])
+  }, [selectedGraphicId, graphics, activeTool, currentSide, paintHistory, undoStack, redoStack])
 
   const nudgeGraphic = (dx: number, dy: number) => {
     if (!selectedGraphicId) return
-    onGraphicsChange(
+    updateGraphicsWithHistory(
       graphics.map((g) => {
         if (g.id === selectedGraphicId) {
           return {
@@ -487,7 +594,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       calculatedPrice: calc.price,
     }
 
-    onGraphicsChange([...graphics, newGraphic])
+    updateGraphicsWithHistory([...graphics, newGraphic])
     setSelectedGraphicId(newGraphic.id)
   }
 
@@ -511,12 +618,12 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         scaleX: 1,
         scaleY: 1,
         rotation: 0,
-        technique: 'sablon',
+        technique: 'bordir', // Default to Bordir texture per user preference
         label: file.name.slice(0, 18),
         sizeCategory: calc.sizeCategory,
         calculatedPrice: calc.price,
       }
-      onGraphicsChange([...graphics, newGraphic])
+      updateGraphicsWithHistory([...graphics, newGraphic])
       setSelectedGraphicId(newGraphic.id)
     }
     reader.readAsDataURL(file)
@@ -548,7 +655,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       calculatedPrice: calc.price,
     }
 
-    onGraphicsChange([...graphics, newGraphic])
+    updateGraphicsWithHistory([...graphics, newGraphic])
     setSelectedGraphicId(newGraphic.id)
     setInputText('')
   }
@@ -558,7 +665,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     if (!selectedGraphicId) return
 
     setCurrentSide(preset.side)
-    onGraphicsChange(
+    updateGraphicsWithHistory(
       graphics.map((g) => {
         if (g.id === selectedGraphicId) {
           const calc = calculateGraphicPrice(preset.scale)
@@ -579,7 +686,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
   // Delete selected graphic
   const handleDeleteGraphic = (id: string) => {
-    onGraphicsChange(graphics.filter((g) => g.id !== id))
+    updateGraphicsWithHistory(graphics.filter((g) => g.id !== id))
     if (selectedGraphicId === id) setSelectedGraphicId(null)
   }
 
@@ -595,13 +702,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       y: Math.min(85, item.y + 4),
       label: (item.label || 'Elemen') + ' (Copy)',
     }
-    onGraphicsChange([...graphics, duplicated])
+    updateGraphicsWithHistory([...graphics, duplicated])
     setSelectedGraphicId(duplicated.id)
   }
 
   // Flip Horizontal
   const handleFlipHorizontal = (id: string) => {
-    onGraphicsChange(
+    updateGraphicsWithHistory(
       graphics.map((g) => {
         if (g.id === id) {
           const currentScaleX = g.scaleX || 1
@@ -614,7 +721,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
   // Flip Vertical
   const handleFlipVertical = (id: string) => {
-    onGraphicsChange(
+    updateGraphicsWithHistory(
       graphics.map((g) => {
         if (g.id === id) {
           const currentScaleY = g.scaleY || 1
@@ -627,7 +734,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
   // Align Center (Horizontal)
   const handleAlignCenter = (id: string) => {
-    onGraphicsChange(
+    updateGraphicsWithHistory(
       graphics.map((g) => {
         if (g.id === id) return { ...g, x: 50 }
         return g
@@ -640,14 +747,14 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     const item = graphics.find((g) => g.id === id)
     if (!item) return
     const rest = graphics.filter((g) => g.id !== id)
-    onGraphicsChange([...rest, item])
+    updateGraphicsWithHistory([...rest, item])
   }
 
   const handleSendToBack = (id: string) => {
     const item = graphics.find((g) => g.id === id)
     if (!item) return
     const rest = graphics.filter((g) => g.id !== id)
-    onGraphicsChange([item, ...rest])
+    updateGraphicsWithHistory([item, ...rest])
   }
 
   // ----------------------------------------------------
@@ -659,6 +766,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     setSelectedGraphicId(gId)
     const g = graphics.find((item) => item.id === gId)
     if (!g) return
+
+    setUndoStack((prev) => [...prev.slice(-30), graphics])
+    setRedoStack([])
 
     setDragState({
       mode: 'move',
@@ -676,6 +786,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     const g = graphics.find((item) => item.id === gId)
     if (!g) return
 
+    setUndoStack((prev) => [...prev.slice(-30), graphics])
+    setRedoStack([])
+
     setDragState({
       mode: 'resize',
       handle: handleName,
@@ -692,6 +805,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     e.stopPropagation()
     const g = graphics.find((item) => item.id === gId)
     if (!g || !viewportRef.current) return
+
+    setUndoStack((prev) => [...prev.slice(-30), graphics])
+    setRedoStack([])
 
     setDragState({
       mode: 'rotate',
@@ -1176,41 +1292,59 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
               <div className="h-4 w-px bg-slate-200" />
 
-              {/* Technique Switcher */}
+              {/* Technique Switcher: Bordir vs Sablon */}
               <div className="flex items-center bg-slate-200/80 p-0.5 rounded-lg border border-slate-200 text-[11px]">
                 <button
                   onClick={() => {
-                    onGraphicsChange(
+                    updateGraphicsWithHistory(
                       graphics.map((g) =>
                         g.id === selectedGraphic.id ? { ...g, technique: 'bordir' } : g
                       )
                     )
                   }}
-                  className={`px-2 py-1 rounded-md font-bold cursor-pointer transition-colors ${
+                  className={`px-2 py-1 rounded-md font-bold cursor-pointer transition-colors flex items-center gap-1 ${
                     selectedGraphic.technique === 'bordir'
                       ? 'bg-[#ff5e00] text-white shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
+                  title="🧵 Tekstur Bordir Komputer 3D (Serat benang timbul, berarah & berkilau)"
                 >
-                  Bordir
+                  <span>🧵 Bordir</span>
                 </button>
                 <button
                   onClick={() => {
-                    onGraphicsChange(
+                    updateGraphicsWithHistory(
                       graphics.map((g) =>
                         g.id === selectedGraphic.id ? { ...g, technique: 'sablon' } : g
                       )
                     )
                   }}
-                  className={`px-2 py-1 rounded-md font-bold cursor-pointer transition-colors ${
+                  className={`px-2 py-1 rounded-md font-bold cursor-pointer transition-colors flex items-center gap-1 ${
                     selectedGraphic.technique === 'sablon'
                       ? 'bg-[#ff5e00] text-white shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
+                  title="🎨 Tekstur Sablon DTF / Plastisol (Cetakan rata halus merekat ke serat kain)"
                 >
-                  Sablon
+                  <span>🎨 Sablon</span>
                 </button>
               </div>
+
+              {/* Image Specific: Magic Wand Background Remover */}
+              {selectedGraphic.type === 'image' && (
+                <>
+                  <div className="h-4 w-px bg-slate-200" />
+                  <button
+                    onClick={() => handleRemoveWhiteBackground(selectedGraphic.id)}
+                    disabled={isRemovingBg}
+                    title="🪄 Hapus Latar Putih Otomatis (Magic Wand) agar logo transparan menyatu ke kain"
+                    className="px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer shadow-2xs transition-colors disabled:opacity-50"
+                  >
+                    <Wand2 className={`w-3 h-3 text-amber-600 ${isRemovingBg ? 'animate-spin' : ''}`} />
+                    <span>{isRemovingBg ? 'Memproses...' : 'Hapus Latar Putih'}</span>
+                  </button>
+                </>
+              )}
 
               {/* Text specific controls */}
               {selectedGraphic.type === 'text' && (
@@ -1219,7 +1353,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   <select
                     value={selectedGraphic.fontFamily || 'Montserrat, sans-serif'}
                     onChange={(e) => {
-                      onGraphicsChange(
+                      updateGraphicsWithHistory(
                         graphics.map((g) =>
                           g.id === selectedGraphic.id ? { ...g, fontFamily: e.target.value } : g
                         )
@@ -1245,7 +1379,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       type="color"
                       value={selectedGraphic.textColor || '#ffffff'}
                       onChange={(e) => {
-                        onGraphicsChange(
+                        updateGraphicsWithHistory(
                           graphics.map((g) =>
                             g.id === selectedGraphic.id ? { ...g, textColor: e.target.value } : g
                           )
@@ -1256,6 +1390,33 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   </label>
                 </>
               )}
+
+              <div className="h-4 w-px bg-slate-200" />
+
+              {/* Quick Alignment Presets (Illustrator Style) */}
+              <div className="flex items-center bg-slate-200/80 p-0.5 rounded-lg border border-slate-200 text-[10px]">
+                <button
+                  onClick={() => handleQuickAlign('left_chest')}
+                  className="px-1.5 py-0.5 text-slate-700 hover:text-slate-900 hover:bg-white rounded font-bold cursor-pointer transition-colors"
+                  title="Posisikan ke Dada Kiri (Standar Bordir Saku PDH)"
+                >
+                  Dada Kiri
+                </button>
+                <button
+                  onClick={() => handleQuickAlign('right_chest')}
+                  className="px-1.5 py-0.5 text-slate-700 hover:text-slate-900 hover:bg-white rounded font-bold cursor-pointer transition-colors"
+                  title="Posisikan ke Dada Kanan (Standar Bordir Nama)"
+                >
+                  Dada Kanan
+                </button>
+                <button
+                  onClick={() => handleQuickAlign('center_back')}
+                  className="px-1.5 py-0.5 text-slate-700 hover:text-slate-900 hover:bg-white rounded font-bold cursor-pointer transition-colors"
+                  title="Posisikan ke Punggung Belakang (Besar A3)"
+                >
+                  Punggung
+                </button>
+              </div>
 
               <div className="h-4 w-px bg-slate-200" />
 
@@ -1333,8 +1494,36 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           </button>
         </div>
 
-        {/* Right: Zoom, Grid, HD Export & Order Button */}
+        {/* Right: Undo/Redo, Zoom, Grid, HD Export & Order Button */}
         <div className="flex items-center gap-2">
+          {/* Global Undo & Redo (Batalkan / Kembalikan) */}
+          <div className="flex items-center bg-slate-100 rounded-xl border border-slate-200 p-0.5 shadow-2xs">
+            <button
+              onClick={handleUndoGraphics}
+              disabled={undoStack.length === 0}
+              className={`p-1.5 rounded-lg transition-colors ${
+                undoStack.length === 0
+                  ? 'text-slate-300 cursor-not-allowed'
+                  : 'hover:bg-white text-slate-700 hover:text-[#ff5e00] cursor-pointer'
+              }`}
+              title="Batalkan Perubahan / Undo (Ctrl+Z)"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleRedoGraphics}
+              disabled={redoStack.length === 0}
+              className={`p-1.5 rounded-lg transition-colors ${
+                redoStack.length === 0
+                  ? 'text-slate-300 cursor-not-allowed'
+                  : 'hover:bg-white text-slate-700 hover:text-[#ff5e00] cursor-pointer'
+              }`}
+              title="Kembalikan Perubahan / Redo (Ctrl+Y)"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           {/* Zoom Controls */}
           <div className="flex items-center bg-slate-100 rounded-xl border border-slate-200 p-0.5">
             <button
@@ -2471,27 +2660,90 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             className="pointer-events-none"
                           >
                             {g.type === 'image' ? (
-                              <div className="relative">
+                              <div className="relative inline-block select-none">
                                 <img
                                   src={g.content}
                                   alt="graphic"
-                                  className={`max-w-[140px] max-h-[140px] object-contain drop-shadow-md select-none ${
-                                    g.technique === 'bordir'
-                                      ? 'filter drop-shadow-[1px_2px_1px_rgba(0,0,0,0.5)]'
-                                      : ''
-                                  }`}
+                                  className="max-w-[140px] max-h-[140px] object-contain select-none pointer-events-none block"
+                                  style={{
+                                    filter:
+                                      g.technique === 'bordir'
+                                        ? 'drop-shadow(1px 2px 2px rgba(0,0,0,0.55)) drop-shadow(-0.5px -0.5px 0.5px rgba(255,255,255,0.7))'
+                                        : 'drop-shadow(0.5px 1.5px 1.5px rgba(0,0,0,0.3))',
+                                  }}
                                 />
+
+                                {/* Realistic 3D Computer Embroidery (Bordir Komputer) Thread Ridge Overlays */}
+                                {g.technique === 'bordir' && (
+                                  <>
+                                    {/* 45-degree satin/tatami thread grooves */}
+                                    <div
+                                      className="absolute inset-0 pointer-events-none"
+                                      style={{
+                                        WebkitMaskImage: `url("${g.content}")`,
+                                        maskImage: `url("${g.content}")`,
+                                        WebkitMaskSize: 'contain',
+                                        maskSize: 'contain',
+                                        WebkitMaskRepeat: 'no-repeat',
+                                        maskRepeat: 'no-repeat',
+                                        WebkitMaskPosition: 'center',
+                                        maskPosition: 'center',
+                                        backgroundImage:
+                                          'repeating-linear-gradient(45deg, rgba(255,255,255,0.32) 0px, rgba(255,255,255,0.32) 1.5px, transparent 1.5px, transparent 3px, rgba(0,0,0,0.32) 3px, rgba(0,0,0,0.32) 4.5px, transparent 4.5px, transparent 6px)',
+                                        mixBlendMode: 'overlay',
+                                      }}
+                                    />
+                                    {/* Subtle cross-thread sheen */}
+                                    <div
+                                      className="absolute inset-0 pointer-events-none opacity-45"
+                                      style={{
+                                        WebkitMaskImage: `url("${g.content}")`,
+                                        maskImage: `url("${g.content}")`,
+                                        WebkitMaskSize: 'contain',
+                                        maskSize: 'contain',
+                                        WebkitMaskRepeat: 'no-repeat',
+                                        maskRepeat: 'no-repeat',
+                                        WebkitMaskPosition: 'center',
+                                        maskPosition: 'center',
+                                        backgroundImage:
+                                          'repeating-linear-gradient(-45deg, rgba(255,255,255,0.2) 0px, rgba(255,255,255,0.2) 1px, transparent 1px, transparent 4px)',
+                                        mixBlendMode: 'soft-light',
+                                      }}
+                                    />
+                                  </>
+                                )}
                               </div>
                             ) : (
+                              /* Text Graphic with Bordir Embossed or Sablon Crisp Effect */
                               <div
                                 style={{
                                   color: g.textColor || '#ffffff',
                                   fontFamily: g.fontFamily || 'Montserrat',
                                   fontSize: `${g.fontSize || 22}px`,
+                                  textShadow:
+                                    g.technique === 'bordir'
+                                      ? '-1px -1px 0 rgba(255,255,255,0.65), 1px 1px 0 rgba(0,0,0,0.7), 2px 3px 3px rgba(0,0,0,0.6)'
+                                      : '0 1px 2px rgba(0,0,0,0.4)',
+                                  letterSpacing: g.technique === 'bordir' ? '0.04em' : 'normal',
                                 }}
-                                className="font-black whitespace-nowrap text-center drop-shadow-md px-2 py-0.5"
+                                className="font-black whitespace-nowrap text-center px-2 py-0.5 relative select-none"
                               >
-                                {g.content}
+                                <span>{g.content}</span>
+                                {g.technique === 'bordir' && (
+                                  <span
+                                    className="absolute inset-0 pointer-events-none opacity-35 px-2 py-0.5"
+                                    style={{
+                                      backgroundImage:
+                                        'repeating-linear-gradient(45deg, #ffffff 0px, #ffffff 1px, transparent 1px, transparent 3px, #000000 3px, #000000 4px, transparent 4px, transparent 6px)',
+                                      WebkitBackgroundClip: 'text',
+                                      backgroundClip: 'text',
+                                      color: 'transparent',
+                                      mixBlendMode: 'overlay',
+                                    }}
+                                  >
+                                    {g.content}
+                                  </span>
+                                )}
                               </div>
                             )}
                           </div>
