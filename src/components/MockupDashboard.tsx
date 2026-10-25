@@ -15,11 +15,16 @@ import {
   Palette,
   Layers,
   ArrowRight,
-  FolderPlus,
   Tag,
-  Percent,
-  Sparkles,
   Scissors,
+  Paintbrush,
+  Eraser,
+  Square,
+  RotateCcw,
+  CheckCircle2,
+  Percent,
+  FolderPlus,
+  Sparkles,
 } from 'lucide-react'
 
 interface MockupDashboardProps {
@@ -54,6 +59,26 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const partMaskInputRef = useRef<HTMLInputElement>(null)
   const [uploadTargetPartId, setUploadTargetPartId] = useState<string | null>(null)
 
+  // Active Tab in Form: 'marker' (Big Photo & Zone Marker) | 'details' (Info & Pricing)
+  const [activeEditorTab, setActiveEditorTab] = useState<'marker' | 'details'>('marker')
+
+  // Angle currently selected in the large interactive stage
+  const [selectedSide, setSelectedSide] = useState<ViewSide>('front')
+
+  // Interactive Zone Marker Drawing State
+  const [drawingTool, setDrawingTool] = useState<'brush' | 'rect' | 'eraser'>('brush')
+  const [markerBrushSize, setMarkerBrushSize] = useState<number>(20)
+  const [newPartName, setNewPartName] = useState<string>('Saku Dada')
+  const [newPartColor, setNewPartColor] = useState<string>('#1e3a8a')
+  const [isDrawingMask, setIsDrawingMask] = useState<boolean>(false)
+  const [lastPoint, setLastPoint] = useState<{ x: number; y: number } | null>(null)
+  const [rectStartPoint, setRectStartPoint] = useState<{ x: number; y: number } | null>(null)
+  const [hasDrawn, setHasDrawn] = useState<boolean>(false)
+  const [maskHistory, setMaskHistory] = useState<string[]>([])
+  const [highlightedPartId, setHighlightedPartId] = useState<string | null>(null)
+
+  const maskCanvasRef = useRef<HTMLCanvasElement>(null)
+
   const handleOpenCreateNew = () => {
     setEditFormData({
       id: 'mockup_' + Date.now(),
@@ -68,11 +93,17 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       discount100: 15000,
       createdAt: Date.now(),
     })
+    setSelectedSide('front')
+    setActiveEditorTab('marker')
+    handleClearMaskDraft()
     setIsEditing(true)
   }
 
   const handleOpenEdit = (item: MockupTemplate) => {
     setEditFormData({ ...item, colorParts: item.colorParts ? [...item.colorParts] : [] })
+    setSelectedSide('front')
+    setActiveEditorTab('marker')
+    handleClearMaskDraft()
     setIsEditing(true)
   }
 
@@ -90,7 +121,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     onSelectAndOpenCanvas(demo.id)
   }
 
-  const handleAddColorPart = (name: string, side: ViewSide = 'front', defaultColor = '#1e293b') => {
+  const handleAddColorPart = (name: string, side: ViewSide = 'front', defaultColor = '#1e3a8a') => {
     const newPart: ColorablePart = {
       id: 'part_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       name,
@@ -139,6 +170,187 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     }
     reader.readAsDataURL(file)
     e.target.value = ''
+  }
+
+  // INTERACTIVE CANVAS ZONE MARKER METHODS
+  const getMarkerCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = maskCanvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
+    const rect = canvas.getBoundingClientRect()
+    return {
+      x: ((e.clientX - rect.left) / rect.width) * canvas.width,
+      y: ((e.clientY - rect.top) / rect.height) * canvas.height,
+    }
+  }
+
+  const handleStartDrawMask = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = maskCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const coords = getMarkerCoords(e)
+    setIsDrawingMask(true)
+    setLastPoint(coords)
+
+    setMaskHistory((prev) => [...prev.slice(-15), canvas.toDataURL()])
+
+    if (drawingTool === 'rect') {
+      setRectStartPoint(coords)
+    } else {
+      ctx.save()
+      if (drawingTool === 'eraser') {
+        ctx.globalCompositeOperation = 'destination-out'
+      } else {
+        ctx.globalCompositeOperation = 'source-over'
+        ctx.fillStyle = 'rgba(6, 182, 212, 0.85)'
+      }
+      const scale = canvas.width / 500
+      ctx.beginPath()
+      ctx.arc(coords.x, coords.y, (markerBrushSize * scale) / 2, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.restore()
+      setHasDrawn(true)
+    }
+  }
+
+  const handleDrawMaskMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawingMask) return
+    const canvas = maskCanvasRef.current
+    if (!canvas || !lastPoint) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const coords = getMarkerCoords(e)
+
+    if (drawingTool === 'rect' && rectStartPoint) {
+      if (maskHistory.length > 0) {
+        const lastSnapshot = maskHistory[maskHistory.length - 1]
+        const img = new Image()
+        img.onload = () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height)
+          ctx.drawImage(img, 0, 0)
+          ctx.fillStyle = 'rgba(6, 182, 212, 0.75)'
+          ctx.fillRect(
+            rectStartPoint.x,
+            rectStartPoint.y,
+            coords.x - rectStartPoint.x,
+            coords.y - rectStartPoint.y
+          )
+        }
+        img.src = lastSnapshot
+      } else {
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        ctx.fillStyle = 'rgba(6, 182, 212, 0.75)'
+        ctx.fillRect(
+          rectStartPoint.x,
+          rectStartPoint.y,
+          coords.x - rectStartPoint.x,
+          coords.y - rectStartPoint.y
+        )
+      }
+      setHasDrawn(true)
+      return
+    }
+
+    ctx.save()
+    if (drawingTool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out'
+    } else {
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.strokeStyle = 'rgba(6, 182, 212, 0.85)'
+    }
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    const scale = canvas.width / 500
+    ctx.lineWidth = markerBrushSize * scale
+
+    ctx.beginPath()
+    ctx.moveTo(lastPoint.x, lastPoint.y)
+    ctx.lineTo(coords.x, coords.y)
+    ctx.stroke()
+    ctx.restore()
+
+    setLastPoint(coords)
+    setHasDrawn(true)
+  }
+
+  const handleEndDrawMask = () => {
+    setIsDrawingMask(false)
+    setLastPoint(null)
+    setRectStartPoint(null)
+  }
+
+  const handleUndoMask = () => {
+    const canvas = maskCanvasRef.current
+    if (!canvas || maskHistory.length === 0) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const prevHistory = [...maskHistory]
+    const lastData = prevHistory.pop()
+    setMaskHistory(prevHistory)
+
+    if (lastData) {
+      const img = new Image()
+      img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(img, 0, 0)
+      }
+      img.src = lastData
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      setHasDrawn(false)
+    }
+  }
+
+  const handleClearMaskDraft = () => {
+    const canvas = maskCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    ctx?.clearRect(0, 0, canvas.width, canvas.height)
+    setHasDrawn(false)
+    setMaskHistory([])
+  }
+
+  const handleSaveDrawnArea = () => {
+    const canvas = maskCanvasRef.current
+    if (!canvas || !hasDrawn) return
+
+    const off = document.createElement('canvas')
+    off.width = canvas.width
+    off.height = canvas.height
+    const offCtx = off.getContext('2d')
+    if (!offCtx) return
+
+    // Convert cyan marked pixels to solid black silhouette mask
+    offCtx.drawImage(canvas, 0, 0)
+    offCtx.globalCompositeOperation = 'source-in'
+    offCtx.fillStyle = '#000000'
+    offCtx.fillRect(0, 0, off.width, off.height)
+
+    const maskDataUrl = off.toDataURL('image/png')
+    const partName = newPartName.trim() || 'Bagian Seragam'
+
+    const newPart: ColorablePart = {
+      id: 'part_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      name: partName,
+      side: selectedSide,
+      defaultColor: newPartColor,
+      maskImg: maskDataUrl,
+    }
+
+    setEditFormData((prev) => ({
+      ...prev,
+      colorParts: [...(prev.colorParts || []), newPart],
+    }))
+
+    handleClearMaskDraft()
+  }
+
+  const handleSelectSide = (side: ViewSide) => {
+    handleClearMaskDraft()
+    setSelectedSide(side)
   }
 
   const handleSaveForm = (openCanvasAfter: boolean = false) => {
@@ -205,6 +417,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
           [sideKey]: dataUrl,
         }
       })
+      setSelectedSide(uploadTargetSide)
     }
     reader.readAsDataURL(file)
     e.target.value = ''
@@ -276,420 +489,788 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       {/* FORM EDITOR MODAL / VIEW (Jika sedang mode edit/tambah) */}
       {isEditing && (
         <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 animate-in fade-in duration-200 space-y-6">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+          {/* Header Modal */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
             <div>
-              <h3 className="font-extrabold text-slate-900 text-lg flex items-center gap-2">
-                <Edit3 className="w-5 h-5 text-[#ff5e00]" />
-                {editFormData.id && mockups.some((m) => m.id === editFormData.id)
-                  ? 'Edit Model Seragam'
-                  : 'Buat Model Seragam Baru'}
-              </h3>
-              <p className="text-xs text-slate-500">
-                Lengkapi rincian nama seragam, harga, dan foto realistis 4 sudut pandang.
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-orange-100 text-[#ff5e00] flex items-center justify-center">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <h3 className="font-extrabold text-slate-900 text-lg">
+                  {editFormData.id && mockups.some((m) => m.id === editFormData.id)
+                    ? 'Editor Model Mockup & Area Warna'
+                    : 'Buat Model Mockup Baru'}
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Tandai langsung area saku, kerah, dan kancing di tampilan foto besar agar pengguna bisa ganti warna instan di Studio.
               </p>
             </div>
-            <button
-              onClick={() => setIsEditing(false)}
-              className="text-xs font-bold text-slate-400 hover:text-black px-3 py-1.5 rounded-xl bg-slate-100"
-            >
-              Batal
-            </button>
+
+            {/* Main Tabs Switcher */}
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl">
+              <button
+                type="button"
+                onClick={() => setActiveEditorTab('marker')}
+                className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeEditorTab === 'marker'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Palette className="w-3.5 h-3.5 text-[#ff5e00]" />
+                <span>1. Editor Foto & Penanda Area (Tampilan Besar)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveEditorTab('details')}
+                className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeEditorTab === 'details'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Tag className="w-3.5 h-3.5 text-slate-500" />
+                <span>2. Informasi & Harga</span>
+              </button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Input Nama & Kategori */}
+          {/* TAB CONTENT */}
+          {activeEditorTab === 'marker' ? (
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-extrabold text-slate-800 mb-1.5">
-                  Nama Model Seragam *
-                </label>
-                <input
-                  type="text"
-                  placeholder="Contoh: Kemeja PDH Mahasiswa Bahan Drill"
-                  value={editFormData.name || ''}
-                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-800 mb-1.5">
-                    Kategori Seragam
-                  </label>
-                  <select
-                    value={editFormData.category || 'Kaos'}
-                    onChange={(e) =>
-                      setEditFormData({ ...editFormData, category: e.target.value })
-                    }
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
-                  >
-                    <option value="Kaos">Kaos (T-Shirt)</option>
-                    <option value="PDH / PDL">PDH / PDL</option>
-                    <option value="Kemeja">Kemeja Formal / Kantor</option>
-                    <option value="Rompi">Rompi Tactical / Safety</option>
-                    <option value="Polo">Polo Shirt</option>
-                    <option value="Jaket">Jaket Bomber / Parka</option>
-                    <option value="Hoodie">Hoodie / Streetwear</option>
-                    <option value="Custom">Seragam Khusus Lainnya</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-800 mb-1.5 flex items-center gap-1">
-                    <Tag className="w-3.5 h-3.5 text-[#ff5e00]" />
-                    Harga Dasar Polos (Rp) *
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1000"
-                    placeholder="85000"
-                    value={editFormData.basePrice || ''}
-                    onChange={(e) =>
-                      setEditFormData({
-                        ...editFormData,
-                        basePrice: parseInt(e.target.value) || 0,
-                      })
-                    }
-                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 text-xs text-slate-900 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
-                  />
-                </div>
-              </div>
-
-              {/* Diskon Lusinan ZY */}
-              <div className="p-4 bg-orange-50/60 rounded-2xl border border-orange-200/80 space-y-3">
-                <span className="text-xs font-extrabold text-orange-950 flex items-center gap-1.5">
-                  <Percent className="w-3.5 h-3.5 text-[#ff5e00]" />
-                  Diskon Grosir Bertingkat (Potongan per Pcs):
-                </span>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <span className="text-[10px] text-slate-600 block mb-0.5">≥12 pcs (Lusinan)</span>
-                    <input
-                      type="number"
-                      step="1000"
-                      value={editFormData.discount12 ?? 5000}
-                      onChange={(e) =>
-                        setEditFormData({
-                          ...editFormData,
-                          discount12: parseInt(e.target.value) || 0,
-                        })
-                      }
-                      className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold text-center"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-600 block mb-0.5">≥50 pcs (Partai)</span>
-                    <input
-                      type="number"
-                      step="1000"
-                      value={editFormData.discount50 ?? 10000}
-                      onChange={(e) =>
-                        setEditFormData({
-                          ...editFormData,
-                          discount50: parseInt(e.target.value) || 0,
-                        })
-                      }
-                      className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold text-center"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-600 block mb-0.5">≥100 pcs (Grosir)</span>
-                    <input
-                      type="number"
-                      step="1000"
-                      value={editFormData.discount100 ?? 15000}
-                      onChange={(e) =>
-                        setEditFormData({
-                          ...editFormData,
-                          discount100: parseInt(e.target.value) || 0,
-                        })
-                      }
-                      className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold text-center"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Setting Clipping Mask Otomatis */}
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-orange-100 text-[#ff5e00] flex items-center justify-center shrink-0">
-                      <Scissors className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <span className="text-xs font-extrabold text-slate-900 block">
-                        Metode Clipping Mask Otomatis
-                      </span>
-                      <span className="text-[11px] text-slate-500">
-                        Kunci desain & warna kuas di siluet baju (tidak tembus keluar)
-                      </span>
-                    </div>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={editFormData.enableClippingMask ?? true}
-                      onChange={(e) =>
-                        setEditFormData({ ...editFormData, enableClippingMask: e.target.checked })
-                      }
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#ff5e00]"></div>
-                  </label>
-                </div>
-                <p className="text-[10px] text-slate-500 bg-white p-2.5 rounded-xl border border-slate-200/80 leading-relaxed">
-                  💡 <b>Tips Pro:</b> Saat clipping mask aktif, gambar sablon/bordir dan goresan kuas pewarna akan otomatis dipotong rapi mengikuti bentuk luar baju (background transparan).
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-extrabold text-slate-800 mb-1.5">
-                  Keterangan / Deskripsi Bahan
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Contoh: Menggunakan kain Drill grade A, jahitan bartack, adem dan rapi."
-                  value={editFormData.description || ''}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, description: e.target.value })
-                  }
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00] resize-none"
-                />
-              </div>
-            </div>
-
-            {/* 4 Kotak Upload Foto Mockup Realistis */}
-            <div>
-              <label className="block text-xs font-extrabold text-slate-800 mb-1.5 flex items-center justify-between">
-                <span>Upload Foto Mockup Realistis Anda (4 Sisi):</span>
-                <span className="text-[10px] text-[#ff5e00] font-normal">PNG / JPG Transparan disarankan</span>
-              </label>
-
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { id: 'front' as ViewSide, label: 'Tampak Depan (Wajib)', key: 'frontImg' as const },
-                  { id: 'back' as ViewSide, label: 'Tampak Belakang', key: 'backImg' as const },
-                  { id: 'left' as ViewSide, label: 'Tampak Sisi Kiri', key: 'leftImg' as const },
-                  { id: 'right' as ViewSide, label: 'Tampak Sisi Kanan', key: 'rightImg' as const },
-                ].map((slot) => {
-                  const img = editFormData[slot.key]
-                  return (
-                    <div
-                      key={slot.id}
-                      className="p-3 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/70 flex flex-col items-center justify-between gap-2 text-center hover:border-slate-300 transition-colors"
-                    >
-                      <div className="flex items-center justify-between w-full px-1">
-                        <span className="text-[11px] font-extrabold text-slate-800 truncate">
-                          {slot.label}
-                        </span>
-                        {img && (
-                          <button
-                            type="button"
-                            onClick={() => removePhotoSide(slot.id)}
-                            className="text-red-500 hover:text-red-700"
-                            title="Hapus foto ini"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Photo preview container */}
-                      <div
-                        onClick={() => triggerUploadForSide(slot.id)}
-                        className="w-full aspect-square rounded-xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center cursor-pointer group relative shadow-2xs"
+              {/* Angle Switcher Header Bar */}
+              <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-2.5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-slate-500 mr-1">Pilih Sudut Foto:</span>
+                  {[
+                    { id: 'front' as ViewSide, label: 'Tampak Depan (Utama)', key: 'frontImg' as const },
+                    { id: 'back' as ViewSide, label: 'Tampak Belakang', key: 'backImg' as const },
+                    { id: 'left' as ViewSide, label: 'Tampak Kiri', key: 'leftImg' as const },
+                    { id: 'right' as ViewSide, label: 'Tampak Kanan', key: 'rightImg' as const },
+                  ].map((angle) => {
+                    const img = editFormData[angle.key]
+                    const count = (editFormData.colorParts || []).filter((p) => p.side === angle.id).length
+                    const isActive = selectedSide === angle.id
+                    return (
+                      <button
+                        key={angle.id}
+                        type="button"
+                        onClick={() => handleSelectSide(angle.id)}
+                        className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                          isActive
+                            ? 'bg-white text-slate-900 border border-[#ff5e00]/40 shadow-xs ring-2 ring-[#ff5e00]/20'
+                            : 'bg-white/60 text-slate-600 border border-slate-200 hover:bg-white hover:text-slate-900'
+                        }`}
                       >
                         {img ? (
-                          <>
-                            <img
-                              src={img}
-                              alt={slot.label}
-                              className="w-full h-full object-contain p-1"
-                            />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold">
-                              Klik untuk Ganti
-                            </div>
-                          </>
+                          <img src={img} alt={angle.label} className="w-5 h-5 object-contain rounded" />
                         ) : (
-                          <div className="flex flex-col items-center gap-1 text-slate-400 group-hover:text-[#ff5e00] transition-colors p-2">
-                            <Upload className="w-5 h-5" />
-                            <span className="text-[10px] font-bold">+ Upload Foto</span>
+                          <div className="w-5 h-5 rounded bg-slate-200 border border-slate-300 flex items-center justify-center text-[9px] text-slate-500 font-bold">
+                            ?
                           </div>
                         )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* AREA WARNA BAGIAN SERAGAM (COLORABLE PARTS) */}
-          <div className="p-5 bg-gradient-to-br from-slate-50 to-orange-50/30 rounded-3xl border border-slate-200 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-[#ff5e00] text-white flex items-center justify-center shrink-0 shadow-xs">
-                  <Palette className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
-                    Bagian Warna Seragam (Colorable Parts)
-                    <span className="text-[10px] bg-orange-100 text-[#ff5e00] font-black px-2 py-0.5 rounded-full">
-                      {(editFormData.colorParts || []).length} Bagian
-                    </span>
-                  </h4>
-                  <p className="text-[11px] text-slate-500">
-                    Tentukan bagian baju (Saku, Kerah, Kancing, dll) yang warnanya bisa diganti langsung oleh pembeli di Studio Kanvas tanpa harus mewarnai manual!
-                  </p>
-                </div>
-              </div>
-
-              {/* Quick Preset Buttons */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[11px] font-bold text-slate-500">Tambah Cepat:</span>
-                {[
-                  { name: 'Kerah', side: 'front' as ViewSide, color: '#0f172a' },
-                  { name: 'Saku Dada', side: 'front' as ViewSide, color: '#182232' },
-                  { name: 'Kancing', side: 'front' as ViewSide, color: '#94a3b8' },
-                  { name: 'Garis Kancing', side: 'front' as ViewSide, color: '#141e2d' },
-                  { name: 'Badan Utama', side: 'front' as ViewSide, color: '#1e293b' },
-                  { name: 'Lidah Pundak', side: 'front' as ViewSide, color: '#ff5e00' },
-                ].map((preset) => (
-                  <button
-                    key={preset.name}
-                    type="button"
-                    onClick={() => handleAddColorPart(preset.name, preset.side, preset.color)}
-                    className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-[10px] font-bold text-slate-700 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
-                  >
-                    <Plus className="w-3 h-3 text-[#ff5e00]" />
-                    {preset.name}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => handleAddColorPart('Bagian Baru', 'front', '#1e3a8a')}
-                  className="px-2.5 py-1 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded-lg text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
-                >
-                  <Plus className="w-3 h-3" />
-                  + Kustom
-                </button>
-              </div>
-            </div>
-
-            {/* List of Defined Color Parts */}
-            {(editFormData.colorParts || []).length === 0 ? (
-              <div className="text-center py-6 px-4 bg-white/70 rounded-2xl border border-dashed border-slate-300">
-                <p className="text-xs font-bold text-slate-700">
-                  Belum ada bagian warna seragam yang ditambahkan.
-                </p>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Klik tombol cepat di atas seperti <b>+ Kerah</b>, <b>+ Saku Dada</b>, atau <b>+ Kancing</b> agar pelanggan dapat mengganti warnanya secara instan dengan hasil meresap ke serat kain!
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {(editFormData.colorParts || []).map((part) => (
-                  <div
-                    key={part.id}
-                    className="p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs flex flex-col gap-2.5"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <input
-                        type="text"
-                        value={part.name}
-                        onChange={(e) => handleUpdateColorPart(part.id, { name: e.target.value })}
-                        placeholder="Nama Bagian (e.g. Kerah, Saku)"
-                        className="text-xs font-black text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-[#ff5e00] focus:outline-none px-1 py-0.5 rounded flex-1"
-                      />
-                      <select
-                        value={part.side}
-                        onChange={(e) =>
-                          handleUpdateColorPart(part.id, { side: e.target.value as ViewSide })
-                        }
-                        className="text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 cursor-pointer"
-                      >
-                        <option value="front">Sisi Depan</option>
-                        <option value="back">Sisi Belakang</option>
-                        <option value="left">Sisi Kiri</option>
-                        <option value="right">Sisi Kanan</option>
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveColorPart(part.id)}
-                        className="p-1 text-slate-400 hover:text-red-500 transition-colors"
-                        title="Hapus bagian ini"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>{angle.label}</span>
+                        {img ? (
+                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full">
+                            Foto Ada
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-full">
+                            Kosong
+                          </span>
+                        )}
+                        <span className="text-[10px] bg-orange-100 text-[#ff5e00] font-black px-1.5 py-0.5 rounded-full">
+                          {count} Area
+                        </span>
                       </button>
-                    </div>
+                    )
+                  })}
+                </div>
 
-                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 text-xs">
-                      {/* Color Picker */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-slate-500 font-bold">Warna Bawaan:</span>
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="color"
-                            value={part.defaultColor}
-                            onChange={(e) =>
-                              handleUpdateColorPart(part.id, { defaultColor: e.target.value })
-                            }
-                            className="w-6 h-6 rounded-lg border border-slate-300 cursor-pointer p-0 bg-transparent"
-                            title="Pilih Warna Bawaan"
-                          />
-                          <span className="font-mono text-[10px] font-bold text-slate-700">
-                            {part.defaultColor}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => triggerUploadForSide(selectedSide)}
+                    className="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-[#ff5e00]" />
+                    <span>Upload / Ganti Foto {selectedSide === 'front' ? 'Depan' : selectedSide === 'back' ? 'Belakang' : selectedSide === 'left' ? 'Kiri' : 'Kanan'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Main Stage & Control Panel */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                {/* LARGE CANVAS STAGE */}
+                <div className="lg:col-span-7 xl:col-span-8 bg-slate-100/80 rounded-3xl border border-slate-200 relative flex flex-col items-center justify-center p-3 select-none overflow-hidden min-h-[580px] sm:min-h-[660px]">
+                  {(() => {
+                    const currentImg =
+                      selectedSide === 'front'
+                        ? editFormData.frontImg
+                        : selectedSide === 'back'
+                        ? editFormData.backImg
+                        : selectedSide === 'left'
+                        ? editFormData.leftImg
+                        : editFormData.rightImg
+
+                    const currentParts = (editFormData.colorParts || []).filter(
+                      (p) => p.side === selectedSide
+                    )
+
+                    if (!currentImg) {
+                      return (
+                        <div className="flex flex-col items-center justify-center p-8 text-center max-w-sm space-y-4">
+                          <div className="w-16 h-16 rounded-3xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-xs">
+                            <Upload className="w-8 h-8 text-[#ff5e00]" />
+                          </div>
+                          <div>
+                            <h4 className="font-black text-sm text-slate-900">
+                              Foto Tampak {selectedSide === 'front' ? 'Depan' : selectedSide === 'back' ? 'Belakang' : selectedSide === 'left' ? 'Kiri' : 'Kanan'} Belum Ada
+                            </h4>
+                            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                              Upload foto realistis seragam Anda (disarankan foto berlatar transparan atau polos) untuk mulai menandai bagian-bagian warna di atasnya.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => triggerUploadForSide(selectedSide)}
+                            className="px-5 py-2.5 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded-xl text-xs font-extrabold shadow-md shadow-[#ff5e00]/25 flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Upload className="w-4 h-4" />
+                            + Upload Foto Sekarang
+                          </button>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <div className="relative w-full h-[540px] sm:h-[620px] flex items-center justify-center">
+                        {/* Garment Photo Base */}
+                        <img
+                          src={currentImg}
+                          alt="Base Mockup Angle"
+                          className="max-w-full max-h-full object-contain pointer-events-none select-none z-0"
+                        />
+
+                        {/* Saved Color Parts Overlays with Multiply Blend Mode */}
+                        {currentParts.map((part) => {
+                          if (!part.maskImg) return null
+                          const isHighlighted = highlightedPartId === part.id
+                          return (
+                            <div
+                              key={part.id}
+                              className={`absolute inset-0 pointer-events-none transition-all duration-200 ${
+                                isHighlighted ? 'ring-2 ring-[#ff5e00] ring-inset' : ''
+                              }`}
+                              style={{
+                                mixBlendMode: 'multiply',
+                                opacity: isHighlighted ? 1 : 0.85,
+                                maskImage: `url(${part.maskImg})`,
+                                WebkitMaskImage: `url(${part.maskImg})`,
+                                maskSize: 'contain',
+                                WebkitMaskSize: 'contain',
+                                maskPosition: 'center',
+                                WebkitMaskPosition: 'center',
+                                maskRepeat: 'no-repeat',
+                                WebkitMaskRepeat: 'no-repeat',
+                                backgroundColor: part.defaultColor,
+                              }}
+                            />
+                          )
+                        })}
+
+                        {/* Interactive Drawing Canvas */}
+                        <canvas
+                          ref={maskCanvasRef}
+                          width={1200}
+                          height={1400}
+                          onMouseDown={handleStartDrawMask}
+                          onMouseMove={handleDrawMaskMove}
+                          onMouseUp={handleEndDrawMask}
+                          onMouseLeave={handleEndDrawMask}
+                          className="absolute inset-0 w-full h-full object-contain cursor-crosshair touch-none z-10"
+                        />
+
+                        {/* Floating Tool Bar Overlay at Bottom */}
+                        <div className="absolute bottom-3 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl p-2 shadow-lg flex items-center gap-2 z-20 flex-wrap justify-center">
+                          {/* Tool Selector */}
+                          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl">
+                            <button
+                              type="button"
+                              onClick={() => setDrawingTool('brush')}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                drawingTool === 'brush'
+                                  ? 'bg-[#ff5e00] text-white shadow-xs'
+                                  : 'text-slate-600 hover:text-slate-900'
+                              }`}
+                              title="Kuas Penanda Area (Bebas)"
+                            >
+                              <Paintbrush className="w-3.5 h-3.5" />
+                              <span>Kuas</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDrawingTool('rect')}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                drawingTool === 'rect'
+                                  ? 'bg-[#ff5e00] text-white shadow-xs'
+                                  : 'text-slate-600 hover:text-slate-900'
+                              }`}
+                              title="Kotak Seleksi Cepat"
+                            >
+                              <Square className="w-3.5 h-3.5" />
+                              <span>Kotak</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDrawingTool('eraser')}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                drawingTool === 'eraser'
+                                  ? 'bg-slate-800 text-white shadow-xs'
+                                  : 'text-slate-600 hover:text-slate-900'
+                              }`}
+                              title="Penghapus Goresan"
+                            >
+                              <Eraser className="w-3.5 h-3.5" />
+                              <span>Hapus</span>
+                            </button>
+                          </div>
+
+                          {/* Brush Size Slider */}
+                          <div className="flex items-center gap-2 px-2 border-l border-slate-200">
+                            <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                              Ukuran:
+                            </span>
+                            <input
+                              type="range"
+                              min={3}
+                              max={65}
+                              value={markerBrushSize}
+                              onChange={(e) => setMarkerBrushSize(Number(e.target.value))}
+                              className="w-20 accent-[#ff5e00] cursor-pointer"
+                            />
+                            <span className="font-mono text-[10px] font-bold text-slate-700 w-5">
+                              {markerBrushSize}
+                            </span>
+                          </div>
+
+                          {/* Undo & Clear */}
+                          <div className="flex items-center gap-1 border-l border-slate-200 pl-1">
+                            <button
+                              type="button"
+                              onClick={handleUndoMask}
+                              disabled={maskHistory.length === 0}
+                              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                maskHistory.length > 0
+                                  ? 'text-slate-700 hover:bg-slate-100'
+                                  : 'text-slate-300 cursor-not-allowed'
+                              }`}
+                              title="Urungkan Coretan (Undo)"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleClearMaskDraft}
+                              disabled={!hasDrawn}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                                hasDrawn
+                                  ? 'text-red-600 hover:bg-red-50'
+                                  : 'text-slate-300 cursor-not-allowed'
+                              }`}
+                              title="Bersihkan Coretan Ini"
+                            >
+                              Reset
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Top Indicator */}
+                        <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-md border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs pointer-events-none flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+                          <span className="text-[11px] font-bold text-slate-700">
+                            Mode Gores Penanda Aktif (Warna Biru Cyan)
                           </span>
                         </div>
                       </div>
+                    )
+                  })()}
+                </div>
 
-                      {/* Mask Status & Upload */}
-                      <div className="flex items-center gap-1.5">
-                        {part.maskImg ? (
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-6 h-6 rounded border border-slate-300 bg-slate-100 p-0.5 overflow-hidden flex items-center justify-center">
-                              <img src={part.maskImg} alt="Mask" className="w-full h-full object-contain" />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => triggerPartMaskUpload(part.id)}
-                              className="text-[10px] font-bold text-slate-700 hover:text-[#ff5e00] underline cursor-pointer"
-                            >
-                              Ganti Mask
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateColorPart(part.id, { maskImg: undefined })}
-                              className="text-[10px] text-red-500 hover:underline cursor-pointer"
-                            >
-                              Hapus Mask
-                            </button>
-                          </div>
-                        ) : (
+                {/* RIGHT CONTROL PANEL: SAVE AREA & ACTIVE PARTS */}
+                <div className="lg:col-span-5 xl:col-span-4 space-y-4">
+                  {/* CARD 1: SAVE DRAWN AREA */}
+                  <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-3.5">
+                    <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                      <div className="w-7 h-7 rounded-xl bg-orange-100 text-[#ff5e00] flex items-center justify-center shrink-0">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-extrabold text-slate-900">
+                          1. Simpan Area yang Ditandai
+                        </h4>
+                        <p className="text-[10px] text-slate-500">
+                          Beri nama bagian yang baru saja Anda tandai dengan kuas/kotak di sebelah kiri.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Quick Preset Names */}
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-500 block mb-1">
+                        Pilih Cepat Nama Bagian:
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { name: 'Saku Dada', color: '#1e293b' },
+                          { name: 'Kerah Baju', color: '#0f172a' },
+                          { name: 'Kancing Baju', color: '#94a3b8' },
+                          { name: 'Garis Kancing', color: '#334155' },
+                          { name: 'Lidah Pundak', color: '#ea580c' },
+                          { name: 'Badan Utama', color: '#1e3a8a' },
+                          { name: 'Manset Lengan', color: '#0284c7' },
+                        ].map((preset) => (
                           <button
+                            key={preset.name}
                             type="button"
-                            onClick={() => triggerPartMaskUpload(part.id)}
-                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-[10px] font-bold text-slate-700 flex items-center gap-1 cursor-pointer transition-colors"
-                            title="Upload file PNG transparan untuk mengisolasi area bagian ini"
+                            onClick={() => {
+                              setNewPartName(preset.name)
+                              setNewPartColor(preset.color)
+                            }}
+                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[10px] font-bold transition-colors cursor-pointer border border-slate-200/80"
                           >
-                            <Upload className="w-3 h-3 text-[#ff5e00]" />
-                            Upload Mask PNG
+                            {preset.name}
                           </button>
-                        )}
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Part Name & Color Inputs */}
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-[10px] font-extrabold text-slate-700 mb-1">
+                          Nama Bagian:
+                        </label>
+                        <input
+                          type="text"
+                          value={newPartName}
+                          onChange={(e) => setNewPartName(e.target.value)}
+                          placeholder="Misal: Saku Dada Kanan"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                        <span className="text-[10px] font-extrabold text-slate-700">
+                          Warna Bawaan (Default):
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={newPartColor}
+                            onChange={(e) => setNewPartColor(e.target.value)}
+                            className="w-7 h-7 rounded-lg border border-slate-300 cursor-pointer p-0 bg-transparent"
+                            title="Pilih Warna Bawaan"
+                          />
+                          <span className="font-mono text-xs font-bold text-slate-800">
+                            {newPartColor}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Submit Part Button */}
+                    <button
+                      type="button"
+                      onClick={handleSaveDrawnArea}
+                      disabled={!hasDrawn}
+                      className={`w-full py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md ${
+                        hasDrawn
+                          ? 'bg-[#ff5e00] hover:bg-[#e05300] text-white shadow-[#ff5e00]/25'
+                          : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                      }`}
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>{hasDrawn ? '✓ Simpan Area Ini (Tambah Bagian)' : 'Goreskan Kuas Dulu di Mockup'}</span>
+                    </button>
+                  </div>
+
+                  {/* CARD 2: ACTIVE PARTS ON THIS SIDE */}
+                  <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center shrink-0">
+                          <Layers className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-extrabold text-slate-900">
+                            2. Bagian Aktif di Sisi {selectedSide === 'front' ? 'Depan' : selectedSide === 'back' ? 'Belakang' : selectedSide === 'left' ? 'Kiri' : 'Kanan'}
+                          </h4>
+                          <span className="text-[10px] text-slate-500">
+                            Bagian yang siap diwarnai oleh pembeli
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleAddColorPart('Bagian Baru', selectedSide)}
+                          className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                          title="Tambah slot bagian secara manual"
+                        >
+                          <Plus className="w-3 h-3 text-[#ff5e00]" />
+                          Slot Manual
+                        </button>
+                        <span className="text-[10px] bg-orange-100 text-[#ff5e00] font-black px-2 py-0.5 rounded-full">
+                          {(editFormData.colorParts || []).filter((p) => p.side === selectedSide).length} Bagian
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Part List */}
+                    {(() => {
+                      const currentSideParts = (editFormData.colorParts || []).filter(
+                        (p) => p.side === selectedSide
+                      )
+                      if (currentSideParts.length === 0) {
+                        return (
+                          <div className="py-6 px-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center">
+                            <p className="text-xs font-bold text-slate-600">
+                              Belum ada bagian yang ditandai di sisi ini.
+                            </p>
+                            <p className="text-[10px] text-slate-400 mt-1">
+                              Gunakan kuas atau kotak penanda di foto seragam untuk menandai saku, kerah, kancing, dll.
+                            </p>
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                          {currentSideParts.map((part) => (
+                            <div
+                              key={part.id}
+                              onMouseEnter={() => setHighlightedPartId(part.id)}
+                              onMouseLeave={() => setHighlightedPartId(null)}
+                              className={`p-2.5 rounded-2xl border transition-all ${
+                                highlightedPartId === part.id
+                                  ? 'bg-orange-50/70 border-[#ff5e00] shadow-xs'
+                                  : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <input
+                                  type="text"
+                                  value={part.name}
+                                  onChange={(e) =>
+                                    handleUpdateColorPart(part.id, { name: e.target.value })
+                                  }
+                                  className="text-xs font-extrabold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#ff5e00] focus:outline-none px-1 py-0.5 flex-1"
+                                />
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="color"
+                                    value={part.defaultColor}
+                                    onChange={(e) =>
+                                      handleUpdateColorPart(part.id, {
+                                        defaultColor: e.target.value,
+                                      })
+                                    }
+                                    className="w-5 h-5 rounded border border-slate-300 cursor-pointer p-0 bg-transparent"
+                                    title="Ganti Warna Bagian"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => triggerPartMaskUpload(part.id)}
+                                    className="p-1 text-slate-400 hover:text-[#ff5e00] transition-colors"
+                                    title={part.maskImg ? 'Ganti file Mask PNG' : 'Upload file Mask PNG'}
+                                  >
+                                    <Upload className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveColorPart(part.id)}
+                                    className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                                    title="Hapus bagian ini"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })()}
+                  </div>
+
+                  {/* CARD 3: REALISTIC TEXTURE NOTE */}
+                  <div className="p-3.5 bg-gradient-to-br from-orange-50/80 to-amber-50/60 rounded-2xl border border-orange-200/80 space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-orange-950 font-black text-[11px]">
+                      <Sparkles className="w-3.5 h-3.5 text-[#ff5e00]" />
+                      <span>Otomatis Meresap ke Tekstur Kain (Multiply)</span>
+                    </div>
+                    <p className="text-[10px] text-slate-600 leading-relaxed">
+                      Warna yang dipilih pembeli di studio canvas otomatis menyatu dengan serat, kerutan, dan bayangan kain asli seragam Anda tanpa menutupi detail aslinya!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* TAB 2: INFORMASI & HARGA */
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Input Nama & Kategori */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-extrabold text-slate-800 mb-1.5">
+                      Nama Model Seragam *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Kemeja PDH Mahasiswa Bahan Drill"
+                      value={editFormData.name || ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-extrabold text-slate-800 mb-1.5">
+                        Kategori Seragam
+                      </label>
+                      <select
+                        value={editFormData.category || 'Kaos'}
+                        onChange={(e) =>
+                          setEditFormData({ ...editFormData, category: e.target.value })
+                        }
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
+                      >
+                        <option value="Kaos">Kaos (T-Shirt)</option>
+                        <option value="PDH / PDL">PDH / PDL</option>
+                        <option value="Kemeja">Kemeja Formal / Kantor</option>
+                        <option value="Rompi">Rompi Tactical / Safety</option>
+                        <option value="Polo">Polo Shirt</option>
+                        <option value="Jaket">Jaket Bomber / Parka</option>
+                        <option value="Hoodie">Hoodie / Streetwear</option>
+                        <option value="Custom">Seragam Khusus Lainnya</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-extrabold text-slate-800 mb-1.5 flex items-center gap-1">
+                        <Tag className="w-3.5 h-3.5 text-[#ff5e00]" />
+                        Harga Dasar Polos (Rp) *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1000"
+                        placeholder="85000"
+                        value={editFormData.basePrice || ''}
+                        onChange={(e) =>
+                          setEditFormData({
+                            ...editFormData,
+                            basePrice: parseInt(e.target.value) || 0,
+                          })
+                        }
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 text-xs text-slate-900 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Diskon Lusinan ZY */}
+                  <div className="p-4 bg-orange-50/60 rounded-2xl border border-orange-200/80 space-y-3">
+                    <span className="text-xs font-extrabold text-orange-950 flex items-center gap-1.5">
+                      <Percent className="w-3.5 h-3.5 text-[#ff5e00]" />
+                      Diskon Grosir Bertingkat (Potongan per Pcs):
+                    </span>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <span className="text-[10px] text-slate-600 block mb-0.5">≥12 pcs (Lusinan)</span>
+                        <input
+                          type="number"
+                          step="1000"
+                          value={editFormData.discount12 ?? 5000}
+                          onChange={(e) =>
+                            setEditFormData({
+                              ...editFormData,
+                              discount12: parseInt(e.target.value) || 0,
+                            })
+                          }
+                          className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold text-center"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-600 block mb-0.5">≥50 pcs (Partai)</span>
+                        <input
+                          type="number"
+                          step="1000"
+                          value={editFormData.discount50 ?? 10000}
+                          onChange={(e) =>
+                            setEditFormData({
+                              ...editFormData,
+                              discount50: parseInt(e.target.value) || 0,
+                            })
+                          }
+                          className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold text-center"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-600 block mb-0.5">≥100 pcs (Grosir)</span>
+                        <input
+                          type="number"
+                          step="1000"
+                          value={editFormData.discount100 ?? 15000}
+                          onChange={(e) =>
+                            setEditFormData({
+                              ...editFormData,
+                              discount100: parseInt(e.target.value) || 0,
+                            })
+                          }
+                          className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold text-center"
+                        />
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
 
-            <p className="text-[10px] text-slate-500 bg-white p-2.5 rounded-xl border border-slate-200 leading-relaxed">
-              💡 <b>Tips Multiply Texture:</b> Pewarnaan bagian ini otomatis memakai metode <b>Multiply</b> sehingga bayangan kain, kerutan, dan jahitan foto asli seragam tetap tampak 100% nyata seperti dicelup pewarna tekstil asli!
-            </p>
-          </div>
+                  {/* Setting Clipping Mask Otomatis */}
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-orange-100 text-[#ff5e00] flex items-center justify-center shrink-0">
+                          <Scissors className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-extrabold text-slate-900 block">
+                            Metode Clipping Mask Otomatis
+                          </span>
+                          <span className="text-[11px] text-slate-500">
+                            Kunci desain & warna kuas di siluet baju (tidak tembus keluar)
+                          </span>
+                        </div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={editFormData.enableClippingMask ?? true}
+                          onChange={(e) =>
+                            setEditFormData({ ...editFormData, enableClippingMask: e.target.checked })
+                          }
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#ff5e00]"></div>
+                      </label>
+                    </div>
+                    <p className="text-[10px] text-slate-500 bg-white p-2.5 rounded-xl border border-slate-200/80 leading-relaxed">
+                      💡 <b>Tips Pro:</b> Saat clipping mask aktif, gambar sablon/bordir dan goresan kuas pewarna akan otomatis dipotong rapi mengikuti bentuk luar baju (background transparan).
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-extrabold text-slate-800 mb-1.5">
+                      Keterangan / Deskripsi Bahan
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="Contoh: Menggunakan kain Drill grade A, jahitan bartack, adem dan rapi."
+                      value={editFormData.description || ''}
+                      onChange={(e) =>
+                        setEditFormData({ ...editFormData, description: e.target.value })
+                      }
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00] resize-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Ringkasan 4 Sudut Foto & Tombol Akses Editor Besar */}
+                <div className="space-y-3">
+                  <label className="block text-xs font-extrabold text-slate-800 mb-1.5 flex items-center justify-between">
+                    <span>Foto Mockup Seragam (4 Sudut):</span>
+                    <span className="text-[10px] text-[#ff5e00] font-normal">Klik untuk Buka di Editor Besar</span>
+                  </label>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { id: 'front' as ViewSide, label: 'Tampak Depan (Wajib)', key: 'frontImg' as const },
+                      { id: 'back' as ViewSide, label: 'Tampak Belakang', key: 'backImg' as const },
+                      { id: 'left' as ViewSide, label: 'Tampak Sisi Kiri', key: 'leftImg' as const },
+                      { id: 'right' as ViewSide, label: 'Tampak Sisi Kanan', key: 'rightImg' as const },
+                    ].map((slot) => {
+                      const img = editFormData[slot.key]
+                      const partsCount = (editFormData.colorParts || []).filter((p) => p.side === slot.id).length
+                      return (
+                        <div
+                          key={slot.id}
+                          className="p-3 border border-slate-200 rounded-2xl bg-white shadow-2xs flex flex-col justify-between gap-2.5"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-extrabold text-slate-800 truncate">
+                              {slot.label}
+                            </span>
+                            {img && (
+                              <button
+                                type="button"
+                                onClick={() => removePhotoSide(slot.id)}
+                                className="text-red-500 hover:text-red-700"
+                                title="Hapus foto ini"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          <div
+                            onClick={() => {
+                              setSelectedSide(slot.id)
+                              setActiveEditorTab('marker')
+                            }}
+                            className="w-full h-32 rounded-xl bg-slate-50 border border-slate-200 overflow-hidden flex items-center justify-center cursor-pointer group relative"
+                          >
+                            {img ? (
+                              <>
+                                <img
+                                  src={img}
+                                  alt={slot.label}
+                                  className="w-full h-full object-contain p-1"
+                                />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold text-center px-2">
+                                  Buka di Editor Penanda Area ➔
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex flex-col items-center gap-1 text-slate-400 group-hover:text-[#ff5e00] transition-colors p-2 text-center">
+                                <Upload className="w-5 h-5" />
+                                <span className="text-[10px] font-bold">+ Upload Foto</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-slate-500 font-bold">{partsCount} Area Ditandai</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedSide(slot.id)
+                                setActiveEditorTab('marker')
+                              }}
+                              className="text-[#ff5e00] font-bold hover:underline cursor-pointer"
+                            >
+                              Tandai Area ➔
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Action buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4 border-t border-slate-100">
