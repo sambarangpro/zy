@@ -16,20 +16,21 @@ import {
   Trash2,
   Download,
   ArrowRight,
-  Sparkles,
   Layers,
   ZoomIn,
   ZoomOut,
   Flag,
   Sun,
-  Waves,
-  Tag,
   Copy,
   FlipHorizontal,
   FlipVertical,
   AlignCenter,
   Grid,
   PlusCircle,
+  MousePointer,
+  X,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react'
 
 interface CanvasCustomizerProps {
@@ -52,7 +53,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const [selectedGraphicId, setSelectedGraphicId] = useState<string | null>(null)
   const [showGuidelines, setShowGuidelines] = useState<boolean>(true)
   const [zoomLevel, setZoomLevel] = useState<number>(1)
-  const [activeControlTab, setActiveControlTab] = useState<'design' | 'lighting' | 'layers'>('design')
+  const [showLayersPanel, setShowLayersPanel] = useState<boolean>(true)
+  const [activeFlyout, setActiveFlyout] = useState<'text' | 'lighting' | 'presets' | null>(null)
 
   // Studio Lighting & 3D Shadow controls
   const [lighting, setLighting] = useState<StudioLighting>({
@@ -107,30 +109,40 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       : activeMockup.rightImg
     : undefined
 
-  // Keyboard navigation for selected graphic (Nudge & Delete)
+  // Keyboard navigation & Photoshop shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!selectedGraphicId) return
-      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) return
 
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        e.preventDefault()
-        handleDeleteGraphic(selectedGraphicId)
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        nudgeGraphic(0, e.shiftKey ? -5 : -1)
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        nudgeGraphic(0, e.shiftKey ? 5 : 1)
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault()
-        nudgeGraphic(e.shiftKey ? -5 : -1, 0)
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault()
-        nudgeGraphic(e.shiftKey ? 5 : 1, 0)
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
-        e.preventDefault()
-        handleDuplicateGraphic(selectedGraphicId)
+      if (selectedGraphicId) {
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault()
+          handleDeleteGraphic(selectedGraphicId)
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault()
+          nudgeGraphic(0, e.shiftKey ? -5 : -1)
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault()
+          nudgeGraphic(0, e.shiftKey ? 5 : 1)
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault()
+          nudgeGraphic(e.shiftKey ? -5 : -1, 0)
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault()
+          nudgeGraphic(e.shiftKey ? 5 : 1, 0)
+        } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+          e.preventDefault()
+          handleDuplicateGraphic(selectedGraphicId)
+        }
+      }
+
+      if (e.key === 'Escape') {
+        setSelectedGraphicId(null)
+        setActiveFlyout(null)
+      } else if (e.key.toLowerCase() === 'v' && !e.ctrlKey && !e.metaKey) {
+        setActiveFlyout(null)
+      } else if (e.key.toLowerCase() === 't' && !e.ctrlKey && !e.metaKey) {
+        setActiveFlyout('text')
       }
     }
 
@@ -554,16 +566,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   // JIKA BELUM ADA MOCKUP SAMA SEKALI (Empty State)
   if (!activeMockup) {
     return (
-      <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-sm flex flex-col items-center justify-center max-w-lg mx-auto space-y-4">
-        <div className="w-16 h-16 rounded-3xl bg-orange-50 text-[#ff5e00] flex items-center justify-center shadow-xs">
+      <div className="bg-[#18181b] text-white rounded-3xl p-12 text-center border border-slate-800 shadow-2xl flex flex-col items-center justify-center max-w-lg mx-auto space-y-4 my-8">
+        <div className="w-16 h-16 rounded-3xl bg-orange-500/10 text-[#ff5e00] flex items-center justify-center shadow-xs border border-orange-500/20">
           <PlusCircle className="w-8 h-8" />
         </div>
         <div>
-          <h3 className="font-extrabold text-lg text-slate-900">
+          <h3 className="font-extrabold text-lg text-white">
             Belum Ada Mockup Seragam yang Dipilih
           </h3>
-          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-            Sesuai permintaan Anda, seluruh mockup default bawaan telah dinonaktifkan. Silakan buka <b>Dashboard Editor Mockup</b> untuk membuat dan meng-upload foto realistis seragam Anda sendiri (Depan, Belakang, Kiri, Kanan).
+          <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+            Silakan buka <b>Editor Mockup</b> untuk membuat dan meng-upload foto realistis seragam Anda sendiri (Depan, Belakang, Kiri, Kanan) atau gunakan template demo.
           </p>
         </div>
         <button
@@ -571,427 +583,59 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           className="px-6 py-3.5 bg-[#ff5e00] hover:bg-[#e05300] text-white font-extrabold rounded-2xl text-xs transition-all shadow-md shadow-[#ff5e00]/25 flex items-center gap-2 cursor-pointer"
         >
           <Layers className="w-4 h-4" />
-          Buka Dashboard & Upload Mockup Anda
+          Buka Editor Mockup
         </button>
       </div>
     )
   }
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
-      {/* ----------------- LEFT PANEL: CONTROLS & TOOLS (4 cols) ----------------- */}
-      <div className="xl:col-span-4 flex flex-col gap-4 order-2 xl:order-1">
-        {/* Mockup Card (Sleek & Ringkas) */}
-        <div className="bg-white rounded-3xl p-4 shadow-xs border border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-3 truncate">
-            <div className="w-10 h-10 rounded-2xl bg-black text-[#ff5e00] flex items-center justify-center font-black text-sm shrink-0">
-              ZY
-            </div>
-            <div className="truncate">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#ff5e00] bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
-                  {activeMockup.category}
-                </span>
-                <span className="text-xs font-bold text-slate-800 font-mono">
-                  Rp {activeMockup.basePrice.toLocaleString('id-ID')}
-                </span>
-              </div>
-              <h4 className="font-extrabold text-sm text-slate-900 truncate mt-0.5">
-                {activeMockup.name}
-              </h4>
-            </div>
-          </div>
+    <div className="bg-[#121214] border border-slate-800 rounded-3xl overflow-hidden shadow-2xl select-none flex flex-col min-h-[820px] text-slate-100">
+      {/* Hidden File Input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleImageUpload}
+        className="hidden"
+      />
 
-          <button
-            onClick={onOpenDashboard}
-            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors shrink-0 cursor-pointer"
-          >
-            Ganti Mockup
-          </button>
-        </div>
-
-        {/* Tabbed Tools Panel */}
-        <div className="bg-white rounded-3xl p-5 shadow-xs border border-slate-200 flex flex-col gap-4">
-          {/* Tabs Switcher */}
-          <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-2xl">
-            <button
-              onClick={() => setActiveControlTab('design')}
-              className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeControlTab === 'design'
-                  ? 'bg-black text-white shadow-xs'
-                  : 'text-slate-600 hover:text-black'
-              }`}
-            >
-              <Upload className="w-3.5 h-3.5 text-[#ff5e00]" />
-              + Desain
-            </button>
-            <button
-              onClick={() => setActiveControlTab('lighting')}
-              className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeControlTab === 'lighting'
-                  ? 'bg-black text-white shadow-xs'
-                  : 'text-slate-600 hover:text-black'
-              }`}
-            >
-              <Sun className="w-3.5 h-3.5 text-[#ff5e00]" />
-              Studio
-            </button>
-            <button
-              onClick={() => setActiveControlTab('layers')}
-              className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeControlTab === 'layers'
-                  ? 'bg-black text-white shadow-xs'
-                  : 'text-slate-600 hover:text-black'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5 text-[#ff5e00]" />
-              Lapisan {graphics.length > 0 && `(${graphics.length})`}
-            </button>
-          </div>
-
-          {/* TAB 1: DESIGN (Logo, Presets, Teks) */}
-          {activeControlTab === 'design' && (
-            <div className="flex flex-col gap-4 animate-in fade-in duration-200">
-              {/* Upload image button */}
-              <div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full py-4 px-4 bg-orange-50/70 hover:bg-orange-100/80 text-[#ff5e00] font-bold rounded-2xl text-xs flex flex-col items-center justify-center gap-1.5 transition-all border-2 border-dashed border-orange-200 hover:border-[#ff5e00] cursor-pointer group"
-                >
-                  <Upload className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                  <span>Upload File Logo / Gambar Anda</span>
-                  <span className="text-[10px] text-slate-400 font-normal">PNG transparan / JPG</span>
-                </button>
-              </div>
-
-              {/* Quick Preset Badges */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleAddPresetLogo('flag')}
-                  className="flex-1 py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-slate-200 transition-colors cursor-pointer"
-                >
-                  <Flag className="w-3.5 h-3.5 text-red-500" />
-                  + Bendera RI
-                </button>
-                <button
-                  onClick={() => handleAddPresetLogo('k3')}
-                  className="flex-1 py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-slate-200 transition-colors cursor-pointer"
-                >
-                  <span className="w-2.5 h-2.5 bg-emerald-600 rounded-full inline-block" />
-                  + Logo K3
-                </button>
-              </div>
-
-              {/* Teks Kustom */}
-              <div className="border border-slate-200 rounded-2xl p-3.5 bg-slate-50/60 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <Type className="w-3.5 h-3.5 text-[#ff5e00]" />
-                    Tambah Tulisan / Teks
-                  </span>
-                  <div className="flex bg-slate-200 p-0.5 rounded-lg text-[10px]">
-                    <button
-                      onClick={() => setTextTechnique('bordir')}
-                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer ${
-                        textTechnique === 'bordir' ? 'bg-white text-black shadow-xs' : 'text-slate-600'
-                      }`}
-                    >
-                      Bordir
-                    </button>
-                    <button
-                      onClick={() => setTextTechnique('sablon')}
-                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer ${
-                        textTechnique === 'sablon' ? 'bg-white text-black shadow-xs' : 'text-slate-600'
-                      }`}
-                    >
-                      Sablon
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Contoh: NAMA / INSTANSI"
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddText()}
-                    className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
-                  />
-                  <input
-                    type="color"
-                    value={textColor}
-                    onChange={(e) => setTextColor(e.target.value)}
-                    title="Pilih warna teks"
-                    className="w-9 h-9 rounded-xl border border-slate-200 cursor-pointer p-0.5 bg-white shrink-0"
-                  />
-                  <button
-                    onClick={handleAddText}
-                    className="px-3.5 py-2 bg-black hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition-colors shrink-0 cursor-pointer"
-                  >
-                    Pasang
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <span className="text-slate-500 text-[11px]">Jenis Font:</span>
-                  <select
-                    value={textFont}
-                    onChange={(e) => setTextFont(e.target.value)}
-                    className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium"
-                  >
-                    <option value="Montserrat, sans-serif">Montserrat (Modern)</option>
-                    <option value="'Oswald', sans-serif">Oswald (Bold)</option>
-                    <option value="'Space Grotesk', sans-serif">Space Grotesk (Tech)</option>
-                    <option value="'Impact', sans-serif">Impact (Solid)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Preset Posisi Cepat (jika ada elemen yang dipilih) */}
-              {selectedGraphic && (
-                <div className="p-3 bg-orange-50/70 border border-orange-200 rounded-2xl animate-in fade-in">
-                  <p className="text-[11px] font-bold text-orange-950 mb-2 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-[#ff5e00]" />
-                      Posisi Cepat "{selectedGraphic.label || 'Elemen'}":
-                    </span>
-                    <span className="text-[10px] text-[#ff5e00] font-mono font-bold">
-                      {selectedGraphic.sizeCategory?.split(' ')[0]}
-                    </span>
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {POSITION_PRESETS.map((preset) => (
-                      <button
-                        key={preset.id}
-                        onClick={() => handleApplyPresetPosition(preset)}
-                        className="px-2.5 py-1 bg-white hover:bg-orange-100 text-orange-950 border border-orange-300/80 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 2: STUDIO LIGHTING */}
-          {activeControlTab === 'lighting' && (
-            <div className="flex flex-col gap-4 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800">Efek & Pencahayaan Mockup</span>
-                <button
-                  onClick={() =>
-                    setLighting({ brightness: 0, contrast: 0, saturation: 0, shadowDepth: 30 })
-                  }
-                  className="text-[11px] text-[#ff5e00] font-bold hover:underline cursor-pointer"
-                >
-                  Reset Default
-                </button>
-              </div>
-
-              <div className="space-y-3.5">
-                <div>
-                  <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
-                    <span>Kecerahan (Brightness)</span>
-                    <span className="font-mono text-black font-bold">{lighting.brightness}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="-50"
-                    max="50"
-                    value={lighting.brightness}
-                    onChange={(e) => setLighting({ ...lighting, brightness: parseInt(e.target.value) })}
-                    className="w-full accent-[#ff5e00] h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
-                    <span>Kontras (Contrast)</span>
-                    <span className="font-mono text-black font-bold">{lighting.contrast}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="-50"
-                    max="50"
-                    value={lighting.contrast}
-                    onChange={(e) => setLighting({ ...lighting, contrast: parseInt(e.target.value) })}
-                    className="w-full accent-[#ff5e00] h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
-                    <span>Saturasi Warna Kain</span>
-                    <span className="font-mono text-black font-bold">{lighting.saturation}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="-50"
-                    max="50"
-                    value={lighting.saturation}
-                    onChange={(e) => setLighting({ ...lighting, saturation: parseInt(e.target.value) })}
-                    className="w-full accent-[#ff5e00] h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
-                    <span className="flex items-center gap-1">
-                      <Waves className="w-3 h-3 text-[#ff5e00]" />
-                      Efek Bayangan Lipatan Kain
-                    </span>
-                    <span className="font-mono text-[#ff5e00] font-bold">{lighting.shadowDepth}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={lighting.shadowDepth}
-                    onChange={(e) =>
-                      setLighting({ ...lighting, shadowDepth: parseInt(e.target.value) })
-                    }
-                    className="w-full accent-[#ff5e00] h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: LAYERS (Lapisan Terpasang) */}
-          {activeControlTab === 'layers' && (
-            <div className="flex flex-col gap-3 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <span className="text-xs font-bold text-slate-800">
-                  Titik Terpasang ({graphics.length})
-                </span>
-                <span className="text-xs font-black text-[#ff5e00]">
-                  +Rp {totalPrintCost.toLocaleString('id-ID')}
-                </span>
-              </div>
-
-              {graphics.length === 0 ? (
-                <div className="py-8 text-center text-slate-400 text-xs">
-                  Belum ada logo atau teks yang dipasang di seragam.
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                  {graphics.map((g, idx) => {
-                    const isSelected = g.id === selectedGraphicId
-                    const calc = calculateGraphicPrice(g.scale)
-                    return (
-                      <div
-                        key={g.id}
-                        onClick={() => {
-                          setSelectedGraphicId(g.id)
-                          setCurrentSide(g.side)
-                        }}
-                        className={`p-2.5 rounded-2xl border flex items-center justify-between text-xs cursor-pointer transition-colors ${
-                          isSelected
-                            ? 'border-[#ff5e00] bg-orange-50/50 text-orange-950 font-bold shadow-2xs'
-                            : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          {g.type === 'image' ? (
-                            <img
-                              src={g.content}
-                              alt="preview"
-                              className="w-7 h-7 object-contain bg-slate-100 rounded-lg border border-slate-200"
-                            />
-                          ) : (
-                            <div className="w-7 h-7 bg-black text-[#ff5e00] font-black flex items-center justify-center rounded-lg text-xs">
-                              T
-                            </div>
-                          )}
-                          <div className="truncate">
-                            <p className="font-extrabold truncate text-black text-[11px]">
-                              {idx + 1}. {g.label || g.content}
-                            </p>
-                            <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5">
-                              <span className="font-mono text-[#ff5e00] font-bold">
-                                {calc.sizeCategory.split(' ')[0]}
-                              </span>
-                              <span>• {g.side.toUpperCase()}</span>
-                              <span>• Rp {calc.price.toLocaleString('id-ID')}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleBringToFront(g.id)
-                            }}
-                            title="Naikkan Lapisan"
-                            className="p-1 text-slate-400 hover:text-black rounded"
-                          >
-                            ↑
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDeleteGraphic(g.id)
-                            }}
-                            className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ----------------- RIGHT PANEL: MOCKUP CANVAS VIEWPORT (8 cols) ----------------- */}
-      <div className="xl:col-span-8 flex flex-col gap-3 order-1 xl:order-2">
-        {/* Top Viewport Header Toolbar - 4 Sudut Pandang & Tools */}
-        <div className="bg-white rounded-3xl p-3 sm:p-4 shadow-xs border border-slate-200 flex flex-wrap items-center justify-between gap-3">
-          {/* 4 View Angles Toggle */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-2xl gap-1">
-            {[
-              { id: 'front' as ViewSide, label: 'Depan' },
-              { id: 'back' as ViewSide, label: 'Belakang' },
-              { id: 'left' as ViewSide, label: 'Sisi Kiri' },
-              { id: 'right' as ViewSide, label: 'Sisi Kanan' },
-            ].map((side) => {
-              const isActive = currentSide === side.id
+      {/* ---------------------------------------------------- */}
+      {/* 1. TOP OPTIONS & CONTEXTUAL INSPECTOR BAR (Photoshop Style) */}
+      {/* ---------------------------------------------------- */}
+      <div className="h-14 bg-[#18181b] border-b border-slate-800 px-4 flex items-center justify-between gap-3 text-xs z-30 shrink-0">
+        {/* Left: View Angles Switcher & Mockup Pill */}
+        <div className="flex items-center gap-2">
+          {/* Angles Switcher */}
+          <div className="flex items-center bg-[#0d0d0f] p-1 rounded-xl border border-slate-800">
+            {(
+              [
+                { id: 'front', label: 'Depan' },
+                { id: 'back', label: 'Belakang' },
+                { id: 'left', label: 'Kiri' },
+                { id: 'right', label: 'Kanan' },
+              ] as const
+            ).map((side) => {
               const count = graphics.filter((g) => g.side === side.id).length
+              const isActive = currentSide === side.id
               return (
                 <button
                   key={side.id}
-                  onClick={() => setCurrentSide(side.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  onClick={() => {
+                    setCurrentSide(side.id)
+                    setSelectedGraphicId(null)
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     isActive
-                      ? 'bg-black text-white shadow-xs'
-                      : 'text-slate-600 hover:text-black hover:bg-slate-200/50'
+                      ? 'bg-[#ff5e00] text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
                   }`}
                 >
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      isActive ? 'bg-[#ff5e00]' : 'bg-slate-300'
-                    }`}
-                  />
                   {side.label}
                   {count > 0 && (
                     <span
-                      className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
-                        isActive ? 'bg-orange-500/20 text-[#ff5e00]' : 'bg-slate-200 text-slate-700'
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                        isActive ? 'bg-black text-[#ff5e00]' : 'bg-slate-700 text-slate-300'
                       }`}
                     >
                       {count}
@@ -1002,112 +646,683 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             })}
           </div>
 
-          {/* Quick Action buttons */}
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setShowGuidelines(!showGuidelines)}
-              title="Garis Batas Sablon Aman"
-              className={`p-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                showGuidelines
-                  ? 'bg-orange-50 text-[#ff5e00] border-orange-200'
-                  : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              <Grid className="w-4 h-4" />
-              <span className="hidden sm:inline">Garis Sablon</span>
-            </button>
+          <div className="h-5 w-px bg-slate-800 hidden md:block" />
 
-            <div className="flex items-center bg-slate-100 rounded-xl p-0.5 border border-slate-200">
-              <button
-                onClick={() => setZoomLevel((z) => Math.max(0.7, z - 0.1))}
-                className="p-1.5 hover:bg-white rounded-lg text-slate-700 transition-colors cursor-pointer"
-                title="Perkecil Kanvas"
-              >
-                <ZoomOut className="w-3.5 h-3.5" />
-              </button>
-              <span className="text-[11px] text-slate-700 font-mono w-10 text-center font-bold">
-                {Math.round(zoomLevel * 100)}%
+          {/* Active Mockup Indicator & Switcher */}
+          <button
+            onClick={onOpenDashboard}
+            title="Klik untuk ganti mockup seragam"
+            className="hidden sm:flex items-center gap-2 bg-[#0d0d0f] hover:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-800 text-slate-300 transition-colors cursor-pointer"
+          >
+            <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-orange-500/10 text-[#ff5e00] border border-orange-500/20">
+              {activeMockup.category}
+            </span>
+            <span className="font-bold text-xs truncate max-w-[130px] text-white">
+              {activeMockup.name}
+            </span>
+            <span className="text-[10px] text-slate-400 hover:text-orange-400 underline underline-offset-2 ml-1">
+              Ganti
+            </span>
+          </button>
+        </div>
+
+        {/* Center: Dynamic Contextual Inspector */}
+        <div className="hidden lg:flex items-center gap-2.5 bg-[#0d0d0f] px-3.5 py-1.5 rounded-xl border border-slate-800/80">
+          {selectedGraphic ? (
+            <>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#ff5e00] bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20">
+                  {selectedGraphic.type === 'text' ? 'Teks' : 'Logo/Gambar'}
+                </span>
+                <span className="font-bold text-slate-200 text-xs truncate max-w-[100px]">
+                  {selectedGraphic.label || 'Elemen'}
+                </span>
+              </div>
+
+              <div className="h-4 w-px bg-slate-800" />
+
+              {/* Technique Switcher */}
+              <div className="flex items-center bg-[#18181b] p-0.5 rounded-lg border border-slate-800 text-[11px]">
+                <button
+                  onClick={() => {
+                    onGraphicsChange(
+                      graphics.map((g) =>
+                        g.id === selectedGraphic.id ? { ...g, technique: 'bordir' } : g
+                      )
+                    )
+                  }}
+                  className={`px-2 py-1 rounded-md font-bold cursor-pointer transition-colors ${
+                    selectedGraphic.technique === 'bordir'
+                      ? 'bg-[#ff5e00] text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Bordir
+                </button>
+                <button
+                  onClick={() => {
+                    onGraphicsChange(
+                      graphics.map((g) =>
+                        g.id === selectedGraphic.id ? { ...g, technique: 'sablon' } : g
+                      )
+                    )
+                  }}
+                  className={`px-2 py-1 rounded-md font-bold cursor-pointer transition-colors ${
+                    selectedGraphic.technique === 'sablon'
+                      ? 'bg-[#ff5e00] text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Sablon
+                </button>
+              </div>
+
+              {/* Text specific controls */}
+              {selectedGraphic.type === 'text' && (
+                <>
+                  <div className="h-4 w-px bg-slate-800" />
+                  <select
+                    value={selectedGraphic.fontFamily || 'Montserrat, sans-serif'}
+                    onChange={(e) => {
+                      onGraphicsChange(
+                        graphics.map((g) =>
+                          g.id === selectedGraphic.id ? { ...g, fontFamily: e.target.value } : g
+                        )
+                      )
+                    }}
+                    className="bg-[#18181b] border border-slate-700 text-slate-200 text-[11px] rounded-lg px-2 py-1 outline-hidden"
+                  >
+                    <option value="Montserrat, sans-serif">Montserrat</option>
+                    <option value="Oswald, sans-serif">Oswald</option>
+                    <option value="'Bebas Neue', sans-serif">Bebas Neue</option>
+                    <option value="Impact, sans-serif">Impact</option>
+                    <option value="Roboto, sans-serif">Roboto</option>
+                    <option value="serif">Playfair</option>
+                  </select>
+
+                  {/* Text Color Picker */}
+                  <label
+                    title="Ganti Warna Teks"
+                    className="w-6 h-6 rounded-lg border border-slate-700 cursor-pointer flex items-center justify-center overflow-hidden shrink-0 shadow-xs"
+                    style={{ backgroundColor: selectedGraphic.textColor || '#ffffff' }}
+                  >
+                    <input
+                      type="color"
+                      value={selectedGraphic.textColor || '#ffffff'}
+                      onChange={(e) => {
+                        onGraphicsChange(
+                          graphics.map((g) =>
+                            g.id === selectedGraphic.id ? { ...g, textColor: e.target.value } : g
+                          )
+                        )
+                      }}
+                      className="opacity-0 w-0 h-0 cursor-pointer"
+                    />
+                  </label>
+                </>
+              )}
+
+              <div className="h-4 w-px bg-slate-800" />
+
+              {/* Transform Quick Buttons */}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => handleAlignCenter(selectedGraphic.id)}
+                  title="Rata Tengah Horizontal"
+                  className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                >
+                  <AlignCenter className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleFlipHorizontal(selectedGraphic.id)}
+                  title="Balik Horizontal (Mirror)"
+                  className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                >
+                  <FlipHorizontal className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleFlipVertical(selectedGraphic.id)}
+                  title="Balik Vertikal"
+                  className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                >
+                  <FlipVertical className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleDuplicateGraphic(selectedGraphic.id)}
+                  title="Duplikat Elemen (Ctrl+D)"
+                  className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleDeleteGraphic(selectedGraphic.id)}
+                  title="Hapus Elemen (Delete)"
+                  className="p-1.5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="h-4 w-px bg-slate-800" />
+
+              {/* Pricing Pill */}
+              <div className="text-[11px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                {selectedGraphic.sizeCategory?.split(' ')[0]} • Rp{' '}
+                {selectedGraphic.calculatedPrice?.toLocaleString('id-ID')}
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-2 text-slate-400 text-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>
+                Studio Aktif • Pilih elemen di kanvas untuk mengatur bordir/sablon, warna & ukuran
               </span>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Zoom, Grid, HD Export & Order Button */}
+        <div className="flex items-center gap-2">
+          {/* Zoom Controls */}
+          <div className="flex items-center bg-[#0d0d0f] rounded-xl border border-slate-800 p-0.5">
+            <button
+              onClick={() => setZoomLevel((z) => Math.max(0.7, parseFloat((z - 0.1).toFixed(1))))}
+              className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+              title="Perkecil Kanvas"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setZoomLevel(1)}
+              className="px-2 py-1 text-[11px] font-mono text-slate-300 hover:text-white cursor-pointer"
+              title="Reset Zoom ke 100%"
+            >
+              {Math.round(zoomLevel * 100)}%
+            </button>
+            <button
+              onClick={() => setZoomLevel((z) => Math.min(1.6, parseFloat((z + 0.1).toFixed(1))))}
+              className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+              title="Perbesar Kanvas"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Toggle Layers Panel Button */}
+          <button
+            onClick={() => setShowLayersPanel((prev) => !prev)}
+            className={`p-2 rounded-xl border transition-all cursor-pointer ${
+              showLayersPanel
+                ? 'bg-slate-800 border-slate-600 text-white'
+                : 'bg-[#0d0d0f] border-slate-800 text-slate-400 hover:text-white'
+            }`}
+            title="Buka / Tutup Panel Layers"
+          >
+            <Layers className="w-4 h-4" />
+          </button>
+
+          {/* Export HD Button */}
+          <button
+            onClick={handleDownloadMockup}
+            className="flex items-center gap-1.5 px-3 py-2 bg-[#0d0d0f] hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
+            title="Download Desain Gambar HD (PNG)"
+          >
+            <Download className="w-3.5 h-3.5 text-[#ff5e00]" />
+            <span className="hidden sm:inline">Export HD</span>
+          </button>
+
+          {/* Order CTA Button */}
+          <button
+            onClick={onApplyToOrder}
+            className="flex items-center gap-1.5 px-4 py-2 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-[#ff5e00]/25 cursor-pointer shrink-0"
+          >
+            <span className="hidden sm:inline">Pesan Seragam</span>
+            <span className="sm:hidden">Pesan</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* ---------------------------------------------------- */}
+      {/* 2. MAIN WORKSPACE (Photoshop Layout) */}
+      {/* ---------------------------------------------------- */}
+      <div className="flex-1 flex relative overflow-hidden bg-[#0d0d0f]">
+        {/* LEFT VERTICAL TOOLBAR (56px) */}
+        <div className="w-14 bg-[#18181b] border-r border-slate-800 flex flex-col items-center py-3 gap-2.5 z-20 shrink-0">
+          {/* Tool: Move / Select (V) */}
+          <button
+            onClick={() => {
+              setActiveFlyout(null)
+            }}
+            title="Alat Seleksi & Geser (V)"
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+              activeFlyout === null
+                ? 'bg-[#ff5e00] text-white shadow-md shadow-[#ff5e00]/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+            }`}
+          >
+            <MousePointer className="w-5 h-5" />
+          </button>
+
+          {/* Tool: Upload Image (U) */}
+          <button
+            onClick={() => {
+              setActiveFlyout(null)
+              fileInputRef.current?.click()
+            }}
+            title="Unggah Logo / Gambar Desain (U)"
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all cursor-pointer relative group"
+          >
+            <Upload className="w-5 h-5" />
+            <span className="absolute left-14 bg-black text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-slate-800 shadow-xl">
+              Unggah Gambar (U)
+            </span>
+          </button>
+
+          {/* Tool: Type Tool (T) */}
+          <button
+            onClick={() => setActiveFlyout((prev) => (prev === 'text' ? null : 'text'))}
+            title="Alat Teks Sablon / Bordir (T)"
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
+              activeFlyout === 'text'
+                ? 'bg-[#ff5e00] text-white shadow-md shadow-[#ff5e00]/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+            }`}
+          >
+            <Type className="w-5 h-5" />
+            <span className="absolute left-14 bg-black text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-slate-800 shadow-xl">
+              Teks Tulisan (T)
+            </span>
+          </button>
+
+          {/* Tool: Emblem Presets */}
+          <button
+            onClick={() => setActiveFlyout((prev) => (prev === 'presets' ? null : 'presets'))}
+            title="Emblem Cepat & Posisi Presets"
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
+              activeFlyout === 'presets'
+                ? 'bg-[#ff5e00] text-white shadow-md shadow-[#ff5e00]/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+            }`}
+          >
+            <Flag className="w-5 h-5" />
+            <span className="absolute left-14 bg-black text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-slate-800 shadow-xl">
+              Preset Emblem & Posisi
+            </span>
+          </button>
+
+          {/* Tool: Studio Lighting */}
+          <button
+            onClick={() => setActiveFlyout((prev) => (prev === 'lighting' ? null : 'lighting'))}
+            title="Pencahayaan Studio & Bayangan"
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
+              activeFlyout === 'lighting'
+                ? 'bg-[#ff5e00] text-white shadow-md shadow-[#ff5e00]/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+            }`}
+          >
+            <Sun className="w-5 h-5" />
+            <span className="absolute left-14 bg-black text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-slate-800 shadow-xl">
+              Studio Lighting
+            </span>
+          </button>
+
+          <div className="w-6 h-px bg-slate-800 my-1" />
+
+          {/* Tool: Safe Guidelines Toggle */}
+          <button
+            onClick={() => setShowGuidelines((prev) => !prev)}
+            title="Garis Panduan / Safe Print Zones"
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
+              showGuidelines
+                ? 'bg-slate-800 text-orange-400 border border-slate-700'
+                : 'text-slate-500 hover:text-white hover:bg-slate-800/80'
+            }`}
+          >
+            <Grid className="w-5 h-5" />
+            <span className="absolute left-14 bg-black text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-slate-800 shadow-xl">
+              Garis Panduan Sablon
+            </span>
+          </button>
+        </div>
+
+        {/* FLOATING FLYOUT MENUS (Positioned right next to toolbar) */}
+        {activeFlyout === 'text' && (
+          <div className="absolute left-16 top-3 z-40 w-80 bg-[#18181b] border border-slate-700 rounded-2xl shadow-2xl p-4 text-white animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Type className="w-4 h-4 text-[#ff5e00]" />
+                <h4 className="font-extrabold text-xs tracking-wide">Alat Teks Sablon / Bordir</h4>
+              </div>
               <button
-                onClick={() => setZoomLevel((z) => Math.min(1.5, z + 0.1))}
-                className="p-1.5 hover:bg-white rounded-lg text-slate-700 transition-colors cursor-pointer"
-                title="Perbesar Kanvas"
+                onClick={() => setActiveFlyout(null)}
+                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
               >
-                <ZoomIn className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <button
-              onClick={handleDownloadMockup}
-              className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-200 cursor-pointer"
-              title="Download gambar mockup HD"
-            >
-              <Download className="w-3.5 h-3.5 text-[#ff5e00]" />
-              <span className="hidden sm:inline">Export HD</span>
-            </button>
+            <div className="space-y-3 pt-3">
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                  Isi Tulisan
+                </label>
+                <input
+                  type="text"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddText()}
+                  placeholder="Contoh: ZY APPAREL, LOGISTIK..."
+                  autoFocus
+                  className="w-full bg-[#0d0d0f] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-hidden focus:border-[#ff5e00]"
+                />
+              </div>
 
-            <button
-              onClick={onApplyToOrder}
-              className="px-3.5 py-2 rounded-xl bg-[#ff5e00] hover:bg-[#e05300] text-white text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer ml-1"
-            >
-              Form Order
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                  Jenis Font
+                </label>
+                <select
+                  value={textFont}
+                  onChange={(e) => setTextFont(e.target.value)}
+                  className="w-full bg-[#0d0d0f] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-hidden"
+                >
+                  <option value="Montserrat, sans-serif">Montserrat (Modern Clean)</option>
+                  <option value="Oswald, sans-serif">Oswald (Tegas Bold)</option>
+                  <option value="'Bebas Neue', sans-serif">Bebas Neue (Display)</option>
+                  <option value="Impact, sans-serif">Impact (Solid Tebal)</option>
+                  <option value="Roboto, sans-serif">Roboto (Casual)</option>
+                  <option value="serif">Playfair (Elegan)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                  Warna Tulisan
+                </label>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[
+                    '#ffffff',
+                    '#000000',
+                    '#eab308',
+                    '#ef4444',
+                    '#3b82f6',
+                    '#22c55e',
+                    '#ff5e00',
+                    '#a855f7',
+                  ].map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => setTextColor(color)}
+                      style={{ backgroundColor: color }}
+                      className={`w-6 h-6 rounded-lg border-2 cursor-pointer transition-transform hover:scale-110 ${
+                        textColor === color ? 'border-[#ff5e00] scale-110 shadow-sm' : 'border-slate-700'
+                      }`}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    value={textColor}
+                    onChange={(e) => setTextColor(e.target.value)}
+                    className="w-6 h-6 rounded-lg border border-slate-700 cursor-pointer p-0 bg-transparent"
+                    title="Pilih Warna Kustom"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
+                  Teknik Cetak
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setTextTechnique('bordir')}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                      textTechnique === 'bordir'
+                        ? 'bg-[#ff5e00] border-[#ff5e00] text-white shadow-sm'
+                        : 'bg-[#0d0d0f] border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    🧵 Bordir Komputer
+                  </button>
+                  <button
+                    onClick={() => setTextTechnique('sablon')}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                      textTechnique === 'sablon'
+                        ? 'bg-[#ff5e00] border-[#ff5e00] text-white shadow-sm'
+                        : 'bg-[#0d0d0f] border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    🎨 Sablon DTF
+                  </button>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  handleAddText()
+                  setActiveFlyout(null)
+                }}
+                disabled={!inputText.trim()}
+                className="w-full mt-2 py-2.5 bg-[#ff5e00] hover:bg-[#e05300] disabled:bg-slate-800 disabled:text-slate-600 text-white font-extrabold rounded-xl text-xs transition-all shadow-md shadow-[#ff5e00]/25 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Pasang Teks ke Kanvas
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* The Expansive Interactive Mockup Viewport Canvas */}
+        {/* FLOATING PRESETS FLYOUT */}
+        {activeFlyout === 'presets' && (
+          <div className="absolute left-16 top-16 z-40 w-80 bg-[#18181b] border border-slate-700 rounded-2xl shadow-2xl p-4 text-white animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Flag className="w-4 h-4 text-[#ff5e00]" />
+                <h4 className="font-extrabold text-xs tracking-wide">Emblem Cepat & Posisi</h4>
+              </div>
+              <button
+                onClick={() => setActiveFlyout(null)}
+                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 pt-3">
+              <div>
+                <p className="text-[10px] uppercase font-bold text-slate-400 mb-2">
+                  Emblem Standar Nasional
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => {
+                      handleAddPresetLogo('flag')
+                      setActiveFlyout(null)
+                    }}
+                    className="p-2.5 bg-[#0d0d0f] hover:bg-slate-800 border border-slate-700 rounded-xl flex items-center gap-2.5 transition-all cursor-pointer group text-left"
+                  >
+                    <div className="w-7 h-5 rounded overflow-hidden shrink-0 border border-slate-700">
+                      <div className="h-2.5 bg-red-600" />
+                      <div className="h-2.5 bg-white" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-slate-200 group-hover:text-white">
+                        Bendera RI
+                      </div>
+                      <div className="text-[9px] text-slate-400">Merah Putih</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      handleAddPresetLogo('k3')
+                      setActiveFlyout(null)
+                    }}
+                    className="p-2.5 bg-[#0d0d0f] hover:bg-slate-800 border border-slate-700 rounded-xl flex items-center gap-2.5 transition-all cursor-pointer group text-left"
+                  >
+                    <div className="w-7 h-7 rounded-full bg-emerald-700 flex items-center justify-center shrink-0 border border-white/40">
+                      <span className="text-white text-xs font-black">+</span>
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-slate-200 group-hover:text-white">
+                        Logo K3
+                      </div>
+                      <div className="text-[9px] text-slate-400">Keselamatan</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {selectedGraphic && (
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-400 mb-2">
+                    Pindahkan ke Posisi Presisi:
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {POSITION_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        onClick={() => {
+                          handleApplyPresetPosition(preset)
+                          setActiveFlyout(null)
+                        }}
+                        className="px-2.5 py-1.5 bg-[#0d0d0f] hover:bg-slate-800 border border-slate-800 rounded-lg text-left transition-colors cursor-pointer"
+                      >
+                        <div className="font-bold text-[11px] text-slate-300">{preset.label}</div>
+                        <div className="text-[9px] text-slate-500 capitalize">{preset.side}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* FLOATING LIGHTING FLYOUT */}
+        {activeFlyout === 'lighting' && (
+          <div className="absolute left-16 top-28 z-40 w-80 bg-[#18181b] border border-slate-700 rounded-2xl shadow-2xl p-4 text-white animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Sun className="w-4 h-4 text-[#ff5e00]" />
+                <h4 className="font-extrabold text-xs tracking-wide">Studio Lighting Seragam</h4>
+              </div>
+              <button
+                onClick={() => setActiveFlyout(null)}
+                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 pt-3">
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-slate-400">Kecerahan (Brightness)</span>
+                  <span className="font-mono text-slate-200">{lighting.brightness}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="-40"
+                  max="40"
+                  value={lighting.brightness}
+                  onChange={(e) =>
+                    setLighting({ ...lighting, brightness: parseInt(e.target.value) })
+                  }
+                  className="w-full accent-[#ff5e00] cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-slate-400">Kontras (Contrast)</span>
+                  <span className="font-mono text-slate-200">{lighting.contrast}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="-40"
+                  max="40"
+                  value={lighting.contrast}
+                  onChange={(e) =>
+                    setLighting({ ...lighting, contrast: parseInt(e.target.value) })
+                  }
+                  className="w-full accent-[#ff5e00] cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-slate-400">Saturasi Warna</span>
+                  <span className="font-mono text-slate-200">{lighting.saturation}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="-40"
+                  max="40"
+                  value={lighting.saturation}
+                  onChange={(e) =>
+                    setLighting({ ...lighting, saturation: parseInt(e.target.value) })
+                  }
+                  className="w-full accent-[#ff5e00] cursor-pointer"
+                />
+              </div>
+
+              <button
+                onClick={() =>
+                  setLighting({ brightness: 0, contrast: 0, saturation: 0, shadowDepth: 30 })
+                }
+                className="w-full py-2 bg-[#0d0d0f] hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-colors cursor-pointer mt-2"
+              >
+                Reset Efek Cahaya
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ---------------------------------------------------- */}
+        {/* CENTER MASSIVE CANVASS VIEWPORT (Distraction-Free) */}
+        {/* ---------------------------------------------------- */}
         <div
           ref={viewportRef}
-          onClick={handleCanvasClick}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          className="relative w-full h-[620px] sm:h-[720px] md:h-[780px] xl:h-[840px] bg-gradient-to-b from-slate-100 via-slate-200/60 to-slate-300/50 rounded-3xl border border-slate-300/80 shadow-inner overflow-hidden select-none flex items-center justify-center p-4 sm:p-8"
+          onMouseLeave={handleMouseUp}
+          onClick={handleCanvasClick}
+          className="flex-1 relative flex items-center justify-center p-4 sm:p-6 overflow-hidden select-none bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:24px_24px] bg-[#101014] cursor-crosshair"
+          style={{ minHeight: '680px' }}
         >
-          {/* Subtle Grid backdrop */}
-          <div
-            className="absolute inset-0 opacity-15 pointer-events-none"
-            style={{
-              backgroundImage:
-                'radial-gradient(#475569 1px, transparent 1px), radial-gradient(#475569 1px, #f8fafc 1px)',
-              backgroundSize: '24px 24px',
-            }}
-          />
-
-          {/* Garment Title Tag */}
-          <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-sm px-3.5 py-1.5 rounded-2xl text-xs font-extrabold text-slate-900 shadow-sm border border-slate-200 flex items-center gap-2 pointer-events-none">
-            <span className="w-2 h-2 rounded-full bg-[#ff5e00] animate-pulse" />
-            <span>{activeMockup.name}</span>
-            <span className="text-slate-400 font-normal">•</span>
-            <span className="text-slate-600 font-bold uppercase">{currentSide}</span>
-          </div>
-
-          {/* Print Zone Safe Guidelines */}
+          {/* Printable Safe Zones Overlay */}
           {showGuidelines && (
-            <div className="absolute inset-0 pointer-events-none">
-              {currentPrintZones.map((zone) => (
-                <div
-                  key={zone.id}
-                  style={{
-                    left: `${zone.x}%`,
-                    top: `${zone.y}%`,
-                    width: `${zone.width}%`,
-                    height: `${zone.height}%`,
-                    transform: 'translate(-50%, -50%)',
-                  }}
-                  className="absolute border border-dashed border-[#ff5e00]/50 rounded-xl bg-[#ff5e00]/5 flex items-start justify-center p-1"
-                >
-                  <span className="text-[9px] font-mono font-bold text-[#ff5e00] bg-white/90 px-1 rounded shadow-2xs">
-                    {zone.name}
-                  </span>
-                </div>
-              ))}
+            <div
+              className="absolute inset-0 pointer-events-none transition-transform flex items-center justify-center"
+              style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
+            >
+              <div className="w-full h-full max-w-[680px] max-h-[760px] relative">
+                {currentPrintZones.map((zone) => (
+                  <div
+                    key={zone.id}
+                    style={{
+                      left: `${zone.x}%`,
+                      top: `${zone.y}%`,
+                      width: `${zone.width}%`,
+                      height: `${zone.height}%`,
+                      transform: 'translate(-50%, -50%)',
+                    }}
+                    className="absolute border border-dashed border-orange-500/40 bg-orange-500/5 rounded-xl flex items-start justify-center p-1 pointer-events-none"
+                  >
+                    <span className="text-[9px] font-bold text-orange-400 bg-black/80 px-1.5 py-0.5 rounded shadow-xs">
+                      {zone.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* User's Realistic Mockup Photo for Current Side (EXPANSIVE) */}
+          {/* User's Realistic Mockup Photo for Current Side (MASSIVE & CRISP) */}
           <div
-            className="w-full h-full max-w-[700px] max-h-[780px] relative pointer-events-none flex items-center justify-center transition-transform"
+            className="w-full h-full max-w-[680px] max-h-[760px] relative pointer-events-none flex items-center justify-center transition-transform"
             style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
           >
             {currentMockupImage ? (
@@ -1115,20 +1330,20 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 src={currentMockupImage}
                 alt={`${activeMockup.name} - ${currentSide}`}
                 style={filterStyle}
-                className="w-full h-full object-contain select-none drop-shadow-md"
+                className="w-full h-full object-contain select-none drop-shadow-2xl"
               />
             ) : (
-              <div className="text-center p-8 border-2 border-dashed border-slate-300 rounded-3xl max-w-sm pointer-events-auto bg-white/80 backdrop-blur-xs">
+              <div className="text-center p-8 border-2 border-dashed border-slate-700 rounded-3xl max-w-sm pointer-events-auto bg-[#18181b]/90 backdrop-blur-xs">
                 <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                <p className="text-xs font-extrabold text-slate-800">
+                <p className="text-xs font-extrabold text-white">
                   Foto {currentSide.toUpperCase()} Belum Di-upload
                 </p>
-                <p className="text-[11px] text-slate-500 mt-1 mb-3">
+                <p className="text-[11px] text-slate-400 mt-1 mb-3">
                   Anda belum meng-upload foto sisi ini untuk "{activeMockup.name}".
                 </p>
                 <button
                   onClick={onOpenDashboard}
-                  className="px-4 py-2 bg-black hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                  className="px-4 py-2 bg-[#ff5e00] hover:bg-[#e05300] text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
                 >
                   Upload Foto di Dashboard
                 </button>
@@ -1138,203 +1353,336 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
           {/* Graphic & Text Elements Layer */}
           <div
-            className="absolute inset-0 pointer-events-auto"
+            className="absolute inset-0 pointer-events-none flex items-center justify-center"
             style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
           >
-            {currentSideGraphics.map((g) => {
-              const isSelected = g.id === selectedGraphicId
-              const calc = calculateGraphicPrice(g.scale)
-              const scaleX = (g.scaleX || 1) * g.scale
-              const scaleY = (g.scaleY || 1) * g.scale
+            <div className="w-full h-full max-w-[680px] max-h-[760px] relative pointer-events-none">
+              {currentSideGraphics.map((g) => {
+                const isSelected = g.id === selectedGraphicId
+                const calc = calculateGraphicPrice(g.scale)
+                const scaleX = (g.scaleX || 1) * g.scale
+                const scaleY = (g.scaleY || 1) * g.scale
 
-              return (
-                <div
-                  key={g.id}
-                  style={{
-                    left: `${g.x}%`,
-                    top: `${g.y}%`,
-                    transform: `translate(-50%, -50%) rotate(${g.rotation}deg)`,
-                    transformOrigin: 'center center',
-                  }}
-                  className={`absolute select-none cursor-move ${
-                    isSelected ? 'z-30' : 'z-10'
-                  }`}
-                >
-                  {/* Floating Action Toolbar on Top of Selected Object */}
-                  {isSelected && (
-                    <div
-                      onMouseDown={(e) => e.stopPropagation()}
-                      className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black text-white px-2.5 py-1 rounded-2xl text-[10px] shadow-2xl backdrop-blur-xs whitespace-nowrap z-50 border border-slate-700"
-                    >
-                      <button
-                        onClick={() => handleDuplicateGraphic(g.id)}
-                        title="Duplikat (Ctrl+D)"
-                        className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleFlipHorizontal(g.id)}
-                        title="Balik Horizontal (Mirror)"
-                        className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white"
-                      >
-                        <FlipHorizontal className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleFlipVertical(g.id)}
-                        title="Balik Vertikal"
-                        className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white"
-                      >
-                        <FlipVertical className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleAlignCenter(g.id)}
-                        title="Rata Tengah Horizontal"
-                        className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white"
-                      >
-                        <AlignCenter className="w-3.5 h-3.5" />
-                      </button>
-                      <div className="w-px h-3 bg-slate-700 mx-0.5" />
-                      <button
-                        onClick={() => handleBringToFront(g.id)}
-                        title="Bawa ke Paling Depan"
-                        className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white"
-                      >
-                        <Layers className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleSendToBack(g.id)}
-                        title="Kirim ke Paling Belakang"
-                        className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white text-[9px] font-bold"
-                      >
-                        Back
-                      </button>
-                      <button
-                        onClick={() => handleDeleteGraphic(g.id)}
-                        title="Hapus (Delete)"
-                        className="p-1 bg-red-600/80 hover:bg-red-600 rounded text-white ml-0.5"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Main Bounding Box */}
+                return (
                   <div
-                    onMouseDown={(e) => handleStartMove(e, g.id)}
-                    className={`relative p-1 transition-all ${
-                      isSelected
-                        ? 'border-2 border-[#ff5e00] rounded-lg shadow-sm'
-                        : 'hover:border hover:border-[#ff5e00]/60 rounded-lg'
+                    key={g.id}
+                    style={{
+                      left: `${g.x}%`,
+                      top: `${g.y}%`,
+                      transform: `translate(-50%, -50%) rotate(${g.rotation}deg)`,
+                      transformOrigin: 'center center',
+                    }}
+                    className={`absolute select-none pointer-events-auto cursor-move ${
+                      isSelected ? 'z-30' : 'z-10'
                     }`}
                   >
-                    {/* Content Image / Text */}
-                    <div
-                      style={{
-                        transform: `scale(${scaleX}, ${scaleY})`,
-                        transformOrigin: 'center center',
-                      }}
-                      className="pointer-events-none"
-                    >
-                      {g.type === 'image' ? (
-                        <div className="relative">
-                          <img
-                            src={g.content}
-                            alt="graphic"
-                            className={`max-w-[140px] max-h-[140px] object-contain drop-shadow-md select-none ${
-                              g.technique === 'bordir'
-                                ? 'filter drop-shadow-[1px_2px_1px_rgba(0,0,0,0.5)]'
-                                : ''
-                            }`}
-                          />
-                        </div>
-                      ) : (
-                        <div
-                          style={{
-                            color: g.textColor || '#ffffff',
-                            fontFamily: g.fontFamily || 'Montserrat',
-                            fontSize: `${g.fontSize || 22}px`,
-                          }}
-                          className="font-black whitespace-nowrap text-center drop-shadow-md px-2 py-0.5"
+                    {/* Floating Action Quickbar on Top of Selected Object */}
+                    {isSelected && (
+                      <div
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="absolute -top-11 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black text-white px-2 py-1 rounded-xl text-[10px] shadow-2xl backdrop-blur-xs whitespace-nowrap z-50 border border-slate-700"
+                      >
+                        <button
+                          onClick={() => handleDuplicateGraphic(g.id)}
+                          title="Duplikat (Ctrl+D)"
+                          className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
                         >
-                          {g.content}
-                        </div>
+                          <Copy className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleFlipHorizontal(g.id)}
+                          title="Balik Horizontal (Mirror)"
+                          className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                        >
+                          <FlipHorizontal className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleAlignCenter(g.id)}
+                          title="Rata Tengah Horizontal"
+                          className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                        >
+                          <AlignCenter className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="w-px h-3 bg-slate-700 mx-0.5" />
+                        <button
+                          onClick={() => handleBringToFront(g.id)}
+                          title="Bawa ke Paling Depan"
+                          className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                        >
+                          <Layers className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteGraphic(g.id)}
+                          title="Hapus (Delete)"
+                          className="p-1 bg-red-600/80 hover:bg-red-600 rounded text-white ml-0.5 cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Main Bounding Box */}
+                    <div
+                      onMouseDown={(e) => handleStartMove(e, g.id)}
+                      className={`relative p-1 transition-all ${
+                        isSelected
+                          ? 'border-2 border-[#ff5e00] rounded-lg shadow-sm'
+                          : 'hover:border hover:border-[#ff5e00]/60 rounded-lg'
+                      }`}
+                    >
+                      {/* Content Image / Text */}
+                      <div
+                        style={{
+                          transform: `scale(${scaleX}, ${scaleY})`,
+                          transformOrigin: 'center center',
+                        }}
+                        className="pointer-events-none"
+                      >
+                        {g.type === 'image' ? (
+                          <div className="relative">
+                            <img
+                              src={g.content}
+                              alt="graphic"
+                              className={`max-w-[140px] max-h-[140px] object-contain drop-shadow-md select-none ${
+                                g.technique === 'bordir'
+                                  ? 'filter drop-shadow-[1px_2px_1px_rgba(0,0,0,0.5)]'
+                                  : ''
+                              }`}
+                            />
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              color: g.textColor || '#ffffff',
+                              fontFamily: g.fontFamily || 'Montserrat',
+                              fontSize: `${g.fontSize || 22}px`,
+                            }}
+                            className="font-black whitespace-nowrap text-center drop-shadow-md px-2 py-0.5"
+                          >
+                            {g.content}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Photoshop Bounding Box Handles when Selected */}
+                      {isSelected && (
+                        <>
+                          {/* Top Rotation Handle */}
+                          <div
+                            onMouseDown={(e) => handleStartRotate(e, g.id)}
+                            className="absolute -top-7 left-1/2 -translate-x-1/2 w-4 h-4 bg-[#ff5e00] border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing flex items-center justify-center hover:scale-125 transition-transform"
+                            title="Putar Objek Bebas"
+                          >
+                            <div className="w-1 h-1 bg-white rounded-full" />
+                          </div>
+                          <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-0.5 h-3 bg-[#ff5e00]" />
+
+                          {/* 4 Corner Resize Handles */}
+                          <div
+                            onMouseDown={(e) => handleStartResize(e, g.id, 'nw')}
+                            className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-xs cursor-nwse-resize shadow-xs hover:scale-125"
+                          />
+                          <div
+                            onMouseDown={(e) => handleStartResize(e, g.id, 'ne')}
+                            className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-xs cursor-nesw-resize shadow-xs hover:scale-125"
+                          />
+                          <div
+                            onMouseDown={(e) => handleStartResize(e, g.id, 'sw')}
+                            className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-xs cursor-nesw-resize shadow-xs hover:scale-125"
+                          />
+                          <div
+                            onMouseDown={(e) => handleStartResize(e, g.id, 'se')}
+                            className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-xs cursor-nwse-resize shadow-xs hover:scale-125"
+                          />
+
+                          {/* Bottom Tag indicator */}
+                          <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 bg-black text-[#ff5e00] text-[9px] font-mono font-bold px-1.5 rounded-full shadow-xs whitespace-nowrap">
+                            {calc.sizeCategory.split(' ')[0]} • Rp {calc.price.toLocaleString('id-ID')}
+                          </span>
+                        </>
                       )}
                     </div>
-
-                    {/* Pro Bounding Box Handles when Selected */}
-                    {isSelected && (
-                      <>
-                        {/* Top Rotation Handle */}
-                        <div
-                          onMouseDown={(e) => handleStartRotate(e, g.id)}
-                          className="absolute -top-7 left-1/2 -translate-x-1/2 w-4 h-4 bg-[#ff5e00] border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing flex items-center justify-center hover:scale-125 transition-transform"
-                          title="Putar Objek Bebas"
-                        >
-                          <div className="w-1 h-1 bg-white rounded-full" />
-                        </div>
-                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-0.5 h-3 bg-[#ff5e00]" />
-
-                        {/* 4 Corner Resize Handles */}
-                        <div
-                          onMouseDown={(e) => handleStartResize(e, g.id, 'nw')}
-                          className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-sm cursor-nwse-resize shadow-xs hover:scale-125"
-                        />
-                        <div
-                          onMouseDown={(e) => handleStartResize(e, g.id, 'ne')}
-                          className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-sm cursor-nesw-resize shadow-xs hover:scale-125"
-                        />
-                        <div
-                          onMouseDown={(e) => handleStartResize(e, g.id, 'sw')}
-                          className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-sm cursor-nesw-resize shadow-xs hover:scale-125"
-                        />
-                        <div
-                          onMouseDown={(e) => handleStartResize(e, g.id, 'se')}
-                          className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-sm cursor-nwse-resize shadow-xs hover:scale-125"
-                        />
-
-                        {/* Bottom Tag indicator */}
-                        <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 bg-black text-[#ff5e00] text-[9px] font-mono font-bold px-1.5 rounded-full shadow-xs whitespace-nowrap">
-                          {calc.sizeCategory.split(' ')[0]} • Rp {calc.price.toLocaleString('id-ID')}
-                        </span>
-                      </>
-                    )}
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </div>
 
-        {/* Bottom CTA Banner (Sleek & Compact) */}
-        <div className="bg-black rounded-3xl p-4 sm:p-5 text-white flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md border border-slate-900">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-slate-900 text-[#ff5e00] flex items-center justify-center shrink-0 border border-slate-800">
-              <Tag className="w-4 h-4" />
-            </div>
-            <div>
+        {/* ---------------------------------------------------- */}
+        {/* RIGHT DOCKED LAYERS & PRICING PANEL */}
+        {/* ---------------------------------------------------- */}
+        {showLayersPanel && (
+          <div className="w-76 xl:w-80 bg-[#18181b] border-l border-slate-800 flex flex-col justify-between shrink-0 z-20">
+            {/* Panel Header */}
+            <div className="p-3.5 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] uppercase font-bold text-slate-400">Total Harga / Pcs:</span>
-                <span className="text-base font-black text-[#ff5e00]">
-                  Rp {(activeMockup.basePrice + totalPrintCost).toLocaleString('id-ID')}
-                </span>
-                <span className="text-[10px] text-slate-400 font-normal">
-                  (Dasar Rp {activeMockup.basePrice.toLocaleString('id-ID')} + Sablon/Bordir Rp {totalPrintCost.toLocaleString('id-ID')})
-                </span>
+                <Layers className="w-4 h-4 text-[#ff5e00]" />
+                <h4 className="font-extrabold text-xs tracking-wide text-white">
+                  Daftar Layers ({graphics.length})
+                </h4>
               </div>
-              <p className="text-xs text-slate-300">
-                Model: <b>{activeMockup.name}</b> • {graphics.length} titik desain terpasang
-              </p>
+              <button
+                onClick={() => setShowLayersPanel(false)}
+                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+                title="Tutup Panel Layers"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Layers List (Scrollable) */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[calc(100vh-320px)] min-h-[260px]">
+              {graphics.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
+                  <Layers className="w-8 h-8 stroke-[1.5] mb-2 text-slate-600" />
+                  <p className="text-xs font-bold text-slate-400">Belum Ada Elemen Desain</p>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Gunakan tool di sebelah kiri (Upload / Teks / Emblem) untuk memasang desain seragam.
+                  </p>
+                </div>
+              ) : (
+                graphics.map((g, idx) => {
+                  const isSelected = g.id === selectedGraphicId
+                  const calc = calculateGraphicPrice(g.scale)
+                  const isCurrentSide = g.side === currentSide
+
+                  return (
+                    <div
+                      key={g.id}
+                      onClick={() => {
+                        setCurrentSide(g.side)
+                        setSelectedGraphicId(g.id)
+                      }}
+                      className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-2.5 ${
+                        isSelected
+                          ? 'bg-[#ff5e00]/10 border-[#ff5e00] shadow-xs'
+                          : 'bg-[#0d0d0f] border-slate-800/80 hover:border-slate-700'
+                      }`}
+                    >
+                      {/* Thumbnail */}
+                      <div className="w-10 h-10 rounded-lg bg-black/60 border border-slate-800 flex items-center justify-center shrink-0 overflow-hidden">
+                        {g.type === 'image' ? (
+                          <img src={g.content} alt="" className="w-full h-full object-contain p-1" />
+                        ) : (
+                          <Type className="w-4 h-4 text-orange-400" />
+                        )}
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded font-mono ${
+                              isCurrentSide
+                                ? 'bg-[#ff5e00] text-white'
+                                : 'bg-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {g.side}
+                          </span>
+                          <span className="text-[10px] text-slate-400 capitalize">
+                            {g.technique}
+                          </span>
+                        </div>
+                        <h5 className="font-bold text-xs text-slate-200 truncate mt-0.5">
+                          {g.label || (g.type === 'text' ? g.content : 'Logo')}
+                        </h5>
+                        <div className="text-[10px] font-mono text-[#ff5e00] font-bold">
+                          {calc.sizeCategory} • Rp {calc.price.toLocaleString('id-ID')}
+                        </div>
+                      </div>
+
+                      {/* Z-Order & Delete Controls */}
+                      <div className="flex flex-col gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => handleBringToFront(g.id)}
+                          disabled={idx === graphics.length - 1}
+                          title="Naikkan Layer"
+                          className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 rounded cursor-pointer"
+                        >
+                          <ChevronUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleSendToBack(g.id)}
+                          disabled={idx === 0}
+                          title="Turunkan Layer"
+                          className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 rounded cursor-pointer"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteGraphic(g.id)}
+                          title="Hapus Layer"
+                          className="p-1 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            {/* Bottom Summary & Order CTA */}
+            <div className="p-4 bg-[#121214] border-t border-slate-800 space-y-3">
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between text-slate-400">
+                  <span>Harga Polos Seragam:</span>
+                  <span className="font-mono font-bold text-slate-200">
+                    Rp {activeMockup.basePrice.toLocaleString('id-ID')}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Biaya Sablon/Bordir ({graphics.length}):</span>
+                  <span className="font-mono font-bold text-orange-400">
+                    Rp {totalPrintCost.toLocaleString('id-ID')}
+                  </span>
+                </div>
+                <div className="pt-2 border-t border-slate-800 flex justify-between items-baseline">
+                  <span className="font-extrabold text-white">Estimasi Total / Pcs:</span>
+                  <span className="font-mono font-black text-base text-[#ff5e00]">
+                    Rp {(activeMockup.basePrice + totalPrintCost).toLocaleString('id-ID')}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={onApplyToOrder}
+                className="w-full py-3 bg-[#ff5e00] hover:bg-[#e05300] text-white font-extrabold rounded-xl text-xs transition-all shadow-md shadow-[#ff5e00]/25 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>Lanjut ke Form Pemesanan</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
+        )}
+      </div>
 
-          <button
-            onClick={onApplyToOrder}
-            className="w-full sm:w-auto px-5 py-2.5 bg-[#ff5e00] hover:bg-[#e05300] text-white font-extrabold rounded-2xl text-xs transition-all shadow-md shadow-[#ff5e00]/25 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
-          >
-            Lanjut ke Form Pemesanan
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+      {/* ---------------------------------------------------- */}
+      {/* 3. BOTTOM STATUS BAR (Photoshop Pro Status) */}
+      {/* ---------------------------------------------------- */}
+      <div className="h-7 bg-[#0e0e10] border-t border-slate-800 px-4 flex items-center justify-between text-[11px] text-slate-400 font-mono select-none z-10 shrink-0">
+        <div className="flex items-center gap-2 truncate">
+          <span className="w-2 h-2 rounded-full bg-[#ff5e00]" />
+          <span className="font-bold text-slate-300">ZY STUDIO PRO</span>
+          <span className="text-slate-600">•</span>
+          <span className="truncate">
+            {activeMockup.name} ({activeMockup.category})
+          </span>
+        </div>
+
+        <div className="hidden sm:flex items-center gap-3">
+          <span>Sudut: <strong className="text-white uppercase">{currentSide}</strong></span>
+          <span className="text-slate-600">•</span>
+          <span>{currentSideGraphics.length} Layer di sudut ini</span>
+          <span className="text-slate-600">•</span>
+          <span>Zoom: <strong className="text-white">{Math.round(zoomLevel * 100)}%</strong></span>
+        </div>
+
+        <div className="font-bold text-[#ff5e00]">
+          Total: Rp {(activeMockup.basePrice + totalPrintCost).toLocaleString('id-ID')} / pcs
         </div>
       </div>
     </div>
