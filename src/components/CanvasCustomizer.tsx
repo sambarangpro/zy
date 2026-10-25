@@ -35,6 +35,7 @@ import {
   Eraser,
   RotateCcw,
   Scissors,
+  Palette,
 } from 'lucide-react'
 
 interface CanvasCustomizerProps {
@@ -58,10 +59,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const [showGuidelines, setShowGuidelines] = useState<boolean>(true)
   const [zoomLevel, setZoomLevel] = useState<number>(1)
   const [showLayersPanel, setShowLayersPanel] = useState<boolean>(true)
-  const [activeFlyout, setActiveFlyout] = useState<'text' | 'lighting' | 'presets' | 'brush' | null>(null)
+  const [activeFlyout, setActiveFlyout] = useState<
+    'text' | 'lighting' | 'presets' | 'brush' | 'colorParts' | null
+  >(null)
 
   // Active Tool: 'select' | 'brush' | 'eraser'
   const [activeTool, setActiveTool] = useState<'select' | 'brush' | 'eraser'>('select')
+
+  // Part Colors per defined part ID: { [partId: string]: hexColor }
+  const [partColors, setPartColors] = useState<Record<string, string>>({})
 
   // Clipping Mask: Kunci gambar & kuas agar tidak keluar dari siluet seragam
   const [isClippingMaskActive, setIsClippingMaskActive] = useState<boolean>(
@@ -141,6 +147,41 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       setIsClippingMaskActive(activeMockup.enableClippingMask)
     }
   }, [activeMockup?.id])
+
+  // Sync colorable parts colors when activeMockup changes
+  useEffect(() => {
+    if (activeMockup?.colorParts && activeMockup.colorParts.length > 0) {
+      const initial: Record<string, string> = {}
+      activeMockup.colorParts.forEach((p) => {
+        initial[p.id] = p.defaultColor
+      })
+      setPartColors(initial)
+    } else {
+      setPartColors({})
+    }
+  }, [activeMockup?.id])
+
+  const handlePartColorChange = (partId: string, color: string) => {
+    setPartColors((prev) => ({
+      ...prev,
+      [partId]: color,
+    }))
+  }
+
+  const handleResetPartColors = () => {
+    if (activeMockup?.colorParts) {
+      const resetObj: Record<string, string> = {}
+      activeMockup.colorParts.forEach((p) => {
+        resetObj[p.id] = p.defaultColor
+      })
+      setPartColors(resetObj)
+    }
+  }
+
+  // Filter color parts for currently selected angle
+  const currentSideColorParts = (activeMockup?.colorParts || []).filter(
+    (p) => p.side === currentSide
+  )
 
   // Get current active angle image from active mockup
   const currentMockupImage = activeMockup
@@ -842,16 +883,59 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       }
     }
 
+    const drawColorPartsAndContinue = () => {
+      const partsToDraw = currentSideColorParts.filter((p) => p.maskImg)
+      if (partsToDraw.length === 0) {
+        drawPaintLayerAndContinue()
+        return
+      }
+
+      let loadedParts = 0
+      partsToDraw.forEach((part) => {
+        const maskImg = new Image()
+        maskImg.crossOrigin = 'anonymous'
+        maskImg.onload = () => {
+          const offCanvas = document.createElement('canvas')
+          offCanvas.width = canvas.width
+          offCanvas.height = canvas.height
+          const offCtx = offCanvas.getContext('2d')
+          if (offCtx) {
+            const color = partColors[part.id] || part.defaultColor
+            offCtx.fillStyle = color
+            offCtx.fillRect(0, 0, offCanvas.width, offCanvas.height)
+            offCtx.globalCompositeOperation = 'destination-in'
+            offCtx.drawImage(maskImg, 0, 0, offCanvas.width, offCanvas.height)
+
+            ctx.save()
+            ctx.globalCompositeOperation = 'multiply'
+            ctx.drawImage(offCanvas, 0, 0)
+            ctx.restore()
+          }
+          loadedParts++
+          if (loadedParts === partsToDraw.length) {
+            drawPaintLayerAndContinue()
+          }
+        }
+        maskImg.onerror = () => {
+          loadedParts++
+          if (loadedParts === partsToDraw.length) {
+            drawPaintLayerAndContinue()
+          }
+        }
+        maskImg.src = part.maskImg!
+      })
+    }
+
     if (currentMockupImage) {
       const customImg = new Image()
       customImg.crossOrigin = 'anonymous'
       customImg.onload = () => {
         ctx.drawImage(customImg, 0, 0, canvas.width, canvas.height)
-        drawPaintLayerAndContinue()
+        drawColorPartsAndContinue()
       }
       customImg.src = currentMockupImage
     } else {
-      drawPaintLayerAndContinue()
+      drawColorPartsAndContinue()
     }
   }
 
@@ -1317,6 +1401,30 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             <MousePointer className="w-5 h-5" />
           </button>
 
+          {/* Tool: Palet Warna Bagian (Kerah, Saku, Kancing, dll) */}
+          <button
+            onClick={() => {
+              setActiveFlyout((prev) => (prev === 'colorParts' ? null : 'colorParts'))
+              setActiveTool('select')
+            }}
+            title="Palet Warna Bagian Pakaian (Kerah, Saku, Kancing, dll)"
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
+              activeFlyout === 'colorParts'
+                ? 'bg-[#ff5e00] text-white shadow-md shadow-[#ff5e00]/30'
+                : currentSideColorParts.length > 0
+                ? 'bg-orange-50 text-[#ff5e00] hover:bg-orange-100'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Palette className="w-5 h-5" />
+            {currentSideColorParts.length > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#ff5e00] ring-1.5 ring-white" />
+            )}
+            <span className="absolute left-14 bg-slate-900 text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
+              Warna Bagian Baju ({currentSideColorParts.length} Bagian)
+            </span>
+          </button>
+
           {/* Tool: Paint Brush (B) - Mewarnai Saku, Kancing, Kerah */}
           <button
             onClick={() => {
@@ -1465,6 +1573,133 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         </div>
 
         {/* FLOATING FLYOUT MENUS */}
+        {/* FLYOUT 0: COLORABLE PARTS PALETTE */}
+        {activeFlyout === 'colorParts' && (
+          <div className="absolute left-16 top-3 z-40 w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 text-slate-800 animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Palette className="w-4 h-4 text-[#ff5e00]" />
+                <h4 className="font-extrabold text-xs tracking-wide text-slate-900">
+                  Palet Warna Bagian Seragam
+                </h4>
+              </div>
+              <button
+                onClick={() => setActiveFlyout(null)}
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 pt-3">
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Pilih warna khusus untuk bagian baju sudut <b>{currentSide.toUpperCase()}</b>. Warna langsung <b>meresap ke serat kain (Multiply)</b> sehingga karakter kain & lipatan asli foto tetap terlihat!
+              </p>
+
+              {currentSideColorParts.length === 0 ? (
+                <div className="text-center py-6 px-3 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                  <Palette className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-700">
+                    Belum Ada Bagian Warna di Sisi Ini
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-1 mb-3">
+                    Buka Dashboard Mockup untuk menambahkan bagian (Saku, Kerah, Kancing) yang dapat diwarnai secara otomatis.
+                  </p>
+                  <button
+                    onClick={onOpenDashboard}
+                    className="px-3.5 py-2 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded-xl text-xs font-extrabold transition-colors cursor-pointer shadow-xs"
+                  >
+                    Atur Bagian di Dashboard
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {currentSideColorParts.map((part) => {
+                    const currentColor = partColors[part.id] || part.defaultColor
+                    return (
+                      <div
+                        key={part.id}
+                        className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 hover:border-slate-300 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-xs text-slate-900">
+                            {part.name}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              style={{ backgroundColor: currentColor }}
+                              className="w-4 h-4 rounded-full border border-slate-300 shadow-2xs inline-block"
+                            />
+                            <span className="font-mono text-[10px] text-slate-600 font-bold">
+                              {currentColor}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Quick Color Swatches */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {[
+                            { name: 'Navy', hex: '#1e293b' },
+                            { name: 'Hitam', hex: '#0a0a0c' },
+                            { name: 'Putih', hex: '#ffffff' },
+                            { name: 'Maroon', hex: '#7f1d1d' },
+                            { name: 'Merah', hex: '#ef4444' },
+                            { name: 'Kuning', hex: '#facc15' },
+                            { name: 'Hijau Army', hex: '#365314' },
+                            { name: 'Hijau Botol', hex: '#14532d' },
+                            { name: 'Biru Benhur', hex: '#1d4ed8' },
+                            { name: 'Krem Khaki', hex: '#bfa07a' },
+                            { name: 'Orange ZY', hex: '#ff5e00' },
+                            { name: 'Abu-abu', hex: '#64748b' },
+                          ].map((c) => (
+                            <button
+                              key={c.hex}
+                              type="button"
+                              onClick={() => handlePartColorChange(part.id, c.hex)}
+                              title={`${part.name}: ${c.name}`}
+                              style={{ backgroundColor: c.hex }}
+                              className={`w-5 h-5 rounded-md border cursor-pointer transition-transform hover:scale-115 ${
+                                currentColor.toLowerCase() === c.hex.toLowerCase()
+                                  ? 'border-[#ff5e00] ring-2 ring-orange-200 scale-110 shadow-2xs'
+                                  : 'border-slate-300'
+                              }`}
+                            />
+                          ))}
+
+                          {/* Custom Color Input */}
+                          <input
+                            type="color"
+                            value={currentColor}
+                            onChange={(e) => handlePartColorChange(part.id, e.target.value)}
+                            className="w-5 h-5 rounded-md border border-slate-300 cursor-pointer p-0 bg-transparent"
+                            title="Pilih Warna Kustom Lainnya"
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                    <button
+                      onClick={handleResetPartColors}
+                      className="text-[11px] font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Reset ke Warna Bawaan
+                    </button>
+                    <button
+                      onClick={onOpenDashboard}
+                      className="text-[11px] font-bold text-[#ff5e00] hover:underline cursor-pointer"
+                    >
+                      + Atur di Dashboard
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* FLYOUT 1: BRUSH TOOL CONTROLS */}
         {activeFlyout === 'brush' && (
           <div className="absolute left-16 top-3 z-40 w-84 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 text-slate-800 animate-in fade-in zoom-in-95 duration-150">
@@ -2001,27 +2236,63 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             </div>
           )}
 
-          {/* User's Realistic Mockup Stage with CLIPPING MASK CONTAINER */}
+          {/* FLOATING QUICK BAR FOR COLOR PARTS (if defined on this side) */}
+          {currentSideColorParts.length > 0 && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl shadow-lg px-3.5 py-1.5 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center gap-1.5 text-xs font-black text-slate-800">
+                <Palette className="w-3.5 h-3.5 text-[#ff5e00]" />
+                <span>Warna Bagian:</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {currentSideColorParts.slice(0, 4).map((part) => {
+                  const currentColor = partColors[part.id] || part.defaultColor
+                  return (
+                    <button
+                      key={part.id}
+                      onClick={() => setActiveFlyout('colorParts')}
+                      title={`Klik untuk ubah warna ${part.name}`}
+                      className="flex items-center gap-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg text-[10px] font-bold text-slate-700 cursor-pointer transition-colors"
+                    >
+                      <span
+                        style={{ backgroundColor: currentColor }}
+                        className="w-2.5 h-2.5 rounded-full border border-slate-300 inline-block shadow-2xs"
+                      />
+                      <span>{part.name}</span>
+                    </button>
+                  )
+                })}
+                {currentSideColorParts.length > 4 && (
+                  <button
+                    onClick={() => setActiveFlyout('colorParts')}
+                    className="text-[10px] font-extrabold text-[#ff5e00] hover:underline cursor-pointer"
+                  >
+                    +{currentSideColorParts.length - 4} lainnya
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setActiveFlyout('colorParts')}
+                className="text-[11px] font-extrabold text-[#ff5e00] hover:text-[#e05300] cursor-pointer ml-1"
+              >
+                Ubah
+              </button>
+            </div>
+          )}
+
+          {/* User's Realistic Mockup Stage with UNIFIED CLIPPING MASK CONTAINER */}
           <div
-            className="w-full h-full max-w-[680px] max-h-[760px] relative flex items-center justify-center transition-transform"
+            className="w-full h-full max-w-[680px] max-h-[760px] relative flex items-center justify-center transition-transform drop-shadow-[0_15px_30px_rgba(0,0,0,0.12)]"
             style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
           >
-            {/* The Base Shirt Mockup Photo */}
-            {currentMockupImage ? (
-              <img
-                src={currentMockupImage}
-                alt={`${activeMockup.name} - ${currentSide}`}
-                style={filterStyle}
-                className="w-full h-full object-contain select-none drop-shadow-[0_15px_30px_rgba(0,0,0,0.12)] pointer-events-none"
-              />
-            ) : (
+            {/* If photo not uploaded */}
+            {!currentMockupImage ? (
               <div className="text-center p-8 border-2 border-dashed border-slate-300 rounded-3xl max-w-sm pointer-events-auto bg-white/95 backdrop-blur-xs shadow-md">
                 <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
                 <p className="text-xs font-extrabold text-slate-900">
                   Foto {currentSide.toUpperCase()} Belum Di-upload
                 </p>
                 <p className="text-[11px] text-slate-500 mt-1 mb-3">
-                  Anda belum meng-upload foto sisi ini untuk "{activeMockup.name}".
+                  Anda belum meng-upload foto sisi ini untuk "{activeMockup?.name || 'Mockup'}".
                 </p>
                 <button
                   onClick={onOpenDashboard}
@@ -2030,15 +2301,45 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   Upload Foto di Dashboard
                 </button>
               </div>
-            )}
+            ) : (
+              /* UNIFIED CLIPPING MASK CONTAINER: Base Image, Multiply Color Parts, and Multiply Brush Canvas in same compositing stack! */
+              <div
+                style={clippingMaskStyle}
+                className="w-full h-full relative flex items-center justify-center overflow-hidden"
+              >
+                {/* 1. The Base Shirt Mockup Photo */}
+                <img
+                  src={currentMockupImage}
+                  alt={`${activeMockup?.name || 'Mockup'} - ${currentSide}`}
+                  style={filterStyle}
+                  className="w-full h-full object-contain select-none pointer-events-none"
+                />
 
-            {/* CLIPPING MASK WRAPPER: Both Brush Painting and Graphic Elements live here */}
-            <div
-              style={clippingMaskStyle}
-              className="absolute inset-0 w-full h-full overflow-hidden flex items-center justify-center"
-            >
-              <div className="w-full h-full relative">
-                {/* 1. INTERACTIVE PAINT CANVAS (Kuas Pewarna Saku/Kancing/Kerah) */}
+                {/* 2. AUTOMATIC COLORABLE PARTS (Kerah, Saku, Kancing, Garis Kancing - Multiply Blending absorbs directly into fabric!) */}
+                {currentSideColorParts.map((part) => {
+                  const color = partColors[part.id] || part.defaultColor
+                  if (!part.maskImg || !color) return null
+                  return (
+                    <div
+                      key={part.id}
+                      style={{
+                        WebkitMaskImage: `url("${part.maskImg}")`,
+                        maskImage: `url("${part.maskImg}")`,
+                        WebkitMaskSize: 'contain',
+                        maskSize: 'contain',
+                        WebkitMaskRepeat: 'no-repeat',
+                        maskRepeat: 'no-repeat',
+                        WebkitMaskPosition: 'center',
+                        maskPosition: 'center',
+                        backgroundColor: color,
+                        mixBlendMode: 'multiply',
+                      }}
+                      className="absolute inset-0 w-full h-full pointer-events-none select-none z-10 transition-colors duration-150"
+                    />
+                  )
+                })}
+
+                {/* 3. INTERACTIVE PAINT CANVAS (Kuas Pewarna Saku/Kancing/Kerah - Multiply Blending preserves fabric folds & texture!) */}
                 <canvas
                   ref={paintCanvasRef}
                   width={1200}
@@ -2049,6 +2350,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   onMouseLeave={handlePaintMouseUp}
                   style={{
                     mixBlendMode: brushBlendMode === 'multiply' ? 'multiply' : 'normal',
+                    opacity: brushOpacity / 100,
                   }}
                   className={`absolute inset-0 w-full h-full object-contain ${
                     activeTool === 'brush' || activeTool === 'eraser'
@@ -2057,7 +2359,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   }`}
                 />
 
-                {/* 2. GRAPHIC & TEXT ELEMENTS LAYER (Logos, Badges, Text) */}
+                {/* 4. GRAPHIC & TEXT ELEMENTS LAYER (Logos, Badges, Text) */}
                 <div
                   className={`absolute inset-0 w-full h-full ${
                     activeTool === 'select' ? 'pointer-events-auto' : 'pointer-events-none'
@@ -2220,7 +2522,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   })}
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 

@@ -58,6 +58,14 @@ export interface StudioLighting {
   shadowDepth: number // 0 to 100 (percentage)
 }
 
+export interface ColorablePart {
+  id: string
+  name: string // e.g. "Kerah", "Saku Dada", "Kancing", "Garis Kancing", "Badan Utama", "Lengan"
+  side: ViewSide // 'front' | 'back' | 'left' | 'right'
+  defaultColor: string // Hex code e.g. '#1e293b'
+  maskImg?: string // DataURL or image URL of isolated transparent PNG / SVG mask
+}
+
 // Model Mockup Seragam Custom yang dibuat oleh pengguna di Dashboard
 export interface MockupTemplate {
   id: string
@@ -70,6 +78,7 @@ export interface MockupTemplate {
   leftImg?: string
   rightImg?: string
   enableClippingMask?: boolean // metode clipping mask otomatis
+  colorParts?: ColorablePart[] // Area / bagian baju yang bisa diganti warnanya secara instan
   discount12?: number // default: 5000
   discount50?: number // default: 10000
   discount100?: number // default: 15000

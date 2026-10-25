@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react'
-import type { MockupTemplate, ViewSide } from '../types'
+import type { MockupTemplate, ViewSide, ColorablePart } from '../types'
 import {
   saveMockup,
   deleteMockup,
@@ -50,6 +50,10 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadTargetSide, setUploadTargetSide] = useState<ViewSide>('front')
 
+  // File input ref for uploading transparent PNG masks for color parts
+  const partMaskInputRef = useRef<HTMLInputElement>(null)
+  const [uploadTargetPartId, setUploadTargetPartId] = useState<string | null>(null)
+
   const handleOpenCreateNew = () => {
     setEditFormData({
       id: 'mockup_' + Date.now(),
@@ -58,6 +62,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       basePrice: 85000,
       description: '',
       enableClippingMask: true,
+      colorParts: [],
       discount12: 5000,
       discount50: 10000,
       discount100: 15000,
@@ -67,7 +72,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   const handleOpenEdit = (item: MockupTemplate) => {
-    setEditFormData({ ...item })
+    setEditFormData({ ...item, colorParts: item.colorParts ? [...item.colorParts] : [] })
     setIsEditing(true)
   }
 
@@ -83,6 +88,57 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     const updated = saveMockup(demo)
     onMockupsChange(updated)
     onSelectAndOpenCanvas(demo.id)
+  }
+
+  const handleAddColorPart = (name: string, side: ViewSide = 'front', defaultColor = '#1e293b') => {
+    const newPart: ColorablePart = {
+      id: 'part_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      name,
+      side,
+      defaultColor,
+    }
+    setEditFormData((prev) => ({
+      ...prev,
+      colorParts: [...(prev.colorParts || []), newPart],
+    }))
+  }
+
+  const handleUpdateColorPart = (id: string, updates: Partial<ColorablePart>) => {
+    setEditFormData((prev) => ({
+      ...prev,
+      colorParts: (prev.colorParts || []).map((p) => (p.id === id ? { ...p, ...updates } : p)),
+    }))
+  }
+
+  const handleRemoveColorPart = (id: string) => {
+    setEditFormData((prev) => ({
+      ...prev,
+      colorParts: (prev.colorParts || []).filter((p) => p.id !== id),
+    }))
+  }
+
+  const triggerPartMaskUpload = (partId: string) => {
+    setUploadTargetPartId(partId)
+    partMaskInputRef.current?.click()
+  }
+
+  const handlePartMaskUploaded = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !uploadTargetPartId) return
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string
+      setEditFormData((prev) => ({
+        ...prev,
+        colorParts: (prev.colorParts || []).map((p) =>
+          p.id === uploadTargetPartId ? { ...p, maskImg: dataUrl } : p
+        ),
+      }))
+      setUploadTargetPartId(null)
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
   }
 
   const handleSaveForm = (openCanvasAfter: boolean = false) => {
@@ -107,6 +163,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       leftImg: editFormData.leftImg,
       rightImg: editFormData.rightImg,
       enableClippingMask: editFormData.enableClippingMask ?? true,
+      colorParts: editFormData.colorParts || [],
       discount12: Number(editFormData.discount12) || 5000,
       discount50: Number(editFormData.discount50) || 10000,
       discount100: Number(editFormData.discount100) || 15000,
@@ -174,12 +231,21 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Hidden File Input */}
+      {/* Hidden File Input for Mockup Photo */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
         onChange={handleFileUploaded}
+        className="hidden"
+      />
+
+      {/* Hidden File Input for Part PNG Mask */}
+      <input
+        ref={partMaskInputRef}
+        type="file"
+        accept="image/png,image/svg+xml,image/*"
+        onChange={handlePartMaskUploaded}
         className="hidden"
       />
 
@@ -461,6 +527,170 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
             </div>
           </div>
 
+          {/* AREA WARNA BAGIAN SERAGAM (COLORABLE PARTS) */}
+          <div className="p-5 bg-gradient-to-br from-slate-50 to-orange-50/30 rounded-3xl border border-slate-200 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-[#ff5e00] text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Palette className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                    Bagian Warna Seragam (Colorable Parts)
+                    <span className="text-[10px] bg-orange-100 text-[#ff5e00] font-black px-2 py-0.5 rounded-full">
+                      {(editFormData.colorParts || []).length} Bagian
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Tentukan bagian baju (Saku, Kerah, Kancing, dll) yang warnanya bisa diganti langsung oleh pembeli di Studio Kanvas tanpa harus mewarnai manual!
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-bold text-slate-500">Tambah Cepat:</span>
+                {[
+                  { name: 'Kerah', side: 'front' as ViewSide, color: '#0f172a' },
+                  { name: 'Saku Dada', side: 'front' as ViewSide, color: '#182232' },
+                  { name: 'Kancing', side: 'front' as ViewSide, color: '#94a3b8' },
+                  { name: 'Garis Kancing', side: 'front' as ViewSide, color: '#141e2d' },
+                  { name: 'Badan Utama', side: 'front' as ViewSide, color: '#1e293b' },
+                  { name: 'Lidah Pundak', side: 'front' as ViewSide, color: '#ff5e00' },
+                ].map((preset) => (
+                  <button
+                    key={preset.name}
+                    type="button"
+                    onClick={() => handleAddColorPart(preset.name, preset.side, preset.color)}
+                    className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-[10px] font-bold text-slate-700 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                  >
+                    <Plus className="w-3 h-3 text-[#ff5e00]" />
+                    {preset.name}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => handleAddColorPart('Bagian Baru', 'front', '#1e3a8a')}
+                  className="px-2.5 py-1 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded-lg text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                >
+                  <Plus className="w-3 h-3" />
+                  + Kustom
+                </button>
+              </div>
+            </div>
+
+            {/* List of Defined Color Parts */}
+            {(editFormData.colorParts || []).length === 0 ? (
+              <div className="text-center py-6 px-4 bg-white/70 rounded-2xl border border-dashed border-slate-300">
+                <p className="text-xs font-bold text-slate-700">
+                  Belum ada bagian warna seragam yang ditambahkan.
+                </p>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Klik tombol cepat di atas seperti <b>+ Kerah</b>, <b>+ Saku Dada</b>, atau <b>+ Kancing</b> agar pelanggan dapat mengganti warnanya secara instan dengan hasil meresap ke serat kain!
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(editFormData.colorParts || []).map((part) => (
+                  <div
+                    key={part.id}
+                    className="p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs flex flex-col gap-2.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <input
+                        type="text"
+                        value={part.name}
+                        onChange={(e) => handleUpdateColorPart(part.id, { name: e.target.value })}
+                        placeholder="Nama Bagian (e.g. Kerah, Saku)"
+                        className="text-xs font-black text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-[#ff5e00] focus:outline-none px-1 py-0.5 rounded flex-1"
+                      />
+                      <select
+                        value={part.side}
+                        onChange={(e) =>
+                          handleUpdateColorPart(part.id, { side: e.target.value as ViewSide })
+                        }
+                        className="text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 cursor-pointer"
+                      >
+                        <option value="front">Sisi Depan</option>
+                        <option value="back">Sisi Belakang</option>
+                        <option value="left">Sisi Kiri</option>
+                        <option value="right">Sisi Kanan</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveColorPart(part.id)}
+                        className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                        title="Hapus bagian ini"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 text-xs">
+                      {/* Color Picker */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-slate-500 font-bold">Warna Bawaan:</span>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="color"
+                            value={part.defaultColor}
+                            onChange={(e) =>
+                              handleUpdateColorPart(part.id, { defaultColor: e.target.value })
+                            }
+                            className="w-6 h-6 rounded-lg border border-slate-300 cursor-pointer p-0 bg-transparent"
+                            title="Pilih Warna Bawaan"
+                          />
+                          <span className="font-mono text-[10px] font-bold text-slate-700">
+                            {part.defaultColor}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Mask Status & Upload */}
+                      <div className="flex items-center gap-1.5">
+                        {part.maskImg ? (
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-6 h-6 rounded border border-slate-300 bg-slate-100 p-0.5 overflow-hidden flex items-center justify-center">
+                              <img src={part.maskImg} alt="Mask" className="w-full h-full object-contain" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => triggerPartMaskUpload(part.id)}
+                              className="text-[10px] font-bold text-slate-700 hover:text-[#ff5e00] underline cursor-pointer"
+                            >
+                              Ganti Mask
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateColorPart(part.id, { maskImg: undefined })}
+                              className="text-[10px] text-red-500 hover:underline cursor-pointer"
+                            >
+                              Hapus Mask
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => triggerPartMaskUpload(part.id)}
+                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-[10px] font-bold text-slate-700 flex items-center gap-1 cursor-pointer transition-colors"
+                            title="Upload file PNG transparan untuk mengisolasi area bagian ini"
+                          >
+                            <Upload className="w-3 h-3 text-[#ff5e00]" />
+                            Upload Mask PNG
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <p className="text-[10px] text-slate-500 bg-white p-2.5 rounded-xl border border-slate-200 leading-relaxed">
+              💡 <b>Tips Multiply Texture:</b> Pewarnaan bagian ini otomatis memakai metode <b>Multiply</b> sehingga bayangan kain, kerutan, dan jahitan foto asli seragam tetap tampak 100% nyata seperti dicelup pewarna tekstil asli!
+            </p>
+          </div>
+
           {/* Action buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4 border-t border-slate-100">
             <button
@@ -589,9 +819,17 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                     </div>
 
                     <div className="space-y-1">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#ff5e00] bg-orange-50 px-2 py-0.5 rounded">
-                        {item.category}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#ff5e00] bg-orange-50 px-2 py-0.5 rounded">
+                          {item.category}
+                        </span>
+                        {item.colorParts && item.colorParts.length > 0 && (
+                          <span className="text-[10px] font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded flex items-center gap-1">
+                            <Palette className="w-2.5 h-2.5" />
+                            {item.colorParts.length} Bagian Warna
+                          </span>
+                        )}
+                      </div>
                       <h4 className="font-extrabold text-sm text-slate-900 line-clamp-1">
                         {item.name}
                       </h4>

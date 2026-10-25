@@ -79,12 +79,20 @@ export function createDemoSampleMockup(): MockupTemplate {
 
   const rightSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 550" width="100%" height="100%"><defs><linearGradient id="bgR" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1e293b"/><stop offset="50%" stop-color="#283953"/><stop offset="100%" stop-color="#141e2d"/></linearGradient></defs><g><path d="M 210 90 Q 250 110 290 90 L 320 220 L 310 490 L 190 490 L 180 220 Z" fill="#141e2d" stroke="#0f172a" stroke-width="2"/><path d="M 190 120 Q 250 100 310 120 L 325 320 L 175 320 Z" fill="url(#bgR)" stroke="#0f172a" stroke-width="3"/><rect x="175" y="315" width="150" height="24" rx="4" fill="#0f172a" stroke="#334155" stroke-width="1.5"/><path d="M 230 105 L 270 105 L 265 145 L 235 145 Z" fill="#0f172a" stroke="#ff5e00" stroke-width="1.5"/><circle cx="250" cy="140" r="3" fill="#94a3b8"/><rect x="230" y="190" width="40" height="50" rx="3" fill="#2d3748" stroke="#ff5e00" stroke-width="1.2" stroke-dasharray="3 2"/></g></svg>`
 
+  // Part masks for default demo PDH
+  const collarMaskSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 550"><path d="M 175 75 Q 250 115 325 75 L 305 135 L 250 148 L 195 135 Z" fill="#000"/></svg>`
+  const pocketMaskSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 550"><rect x="160" y="225" width="60" height="70" rx="4" fill="#000"/><path d="M 158 225 L 190 238 L 222 225 L 222 215 L 158 215 Z" fill="#000"/><rect x="280" y="225" width="60" height="70" rx="4" fill="#000"/><path d="M 278 225 L 310 238 L 342 225 L 342 215 L 278 215 Z" fill="#000"/></svg>`
+  const placketMaskSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 550"><rect x="238" y="148" width="24" height="342" fill="#000"/></svg>`
+  const buttonsMaskSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 550"><circle cx="250" cy="180" r="5" fill="#000"/><circle cx="250" cy="240" r="5" fill="#000"/><circle cx="250" cy="300" r="5" fill="#000"/><circle cx="250" cy="360" r="5" fill="#000"/><circle cx="250" cy="420" r="5" fill="#000"/><circle cx="190" cy="230" r="3.5" fill="#000"/><circle cx="310" cy="230" r="3.5" fill="#000"/></svg>`
+  const shoulderMaskSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 550"><path d="M 175 75 L 115 130 L 125 142 L 180 87 Z" fill="#000"/><path d="M 325 75 L 385 130 L 375 142 L 320 87 Z" fill="#000"/></svg>`
+
   return {
     id: 'demo_pdh_sample',
     name: 'Kemeja PDH Komando (Contoh 4 Sisi)',
     category: 'PDH',
     basePrice: 145000,
-    description: 'Contoh seragam PDH resmi ZY Clothes dengan 4 sudut pandang lengkap (Depan, Belakang, Sisi Kiri ber-saku pena, Sisi Kanan ber-velcro patch).',
+    description: 'Contoh seragam PDH resmi ZY Clothes dengan 4 sudut pandang lengkap (Depan, Belakang, Sisi Kiri ber-saku pena, Sisi Kanan ber-velcro patch). Dilengkapi area warna Kerah, Saku, Kancing, Garis Kancing, dan Pangkat Pundak.',
+    enableClippingMask: true,
     discount12: 5000,
     discount50: 10000,
     discount100: 15000,
@@ -92,6 +100,43 @@ export function createDemoSampleMockup(): MockupTemplate {
     backImg: `data:image/svg+xml;utf8,${encodeURIComponent(backSvg)}`,
     leftImg: `data:image/svg+xml;utf8,${encodeURIComponent(leftSvg)}`,
     rightImg: `data:image/svg+xml;utf8,${encodeURIComponent(rightSvg)}`,
+    colorParts: [
+      {
+        id: 'part_collar',
+        name: 'Kerah Baju',
+        side: 'front',
+        defaultColor: '#0f172a',
+        maskImg: `data:image/svg+xml;utf8,${encodeURIComponent(collarMaskSvg)}`,
+      },
+      {
+        id: 'part_pockets',
+        name: 'Saku Dada (Kanan & Kiri)',
+        side: 'front',
+        defaultColor: '#182232',
+        maskImg: `data:image/svg+xml;utf8,${encodeURIComponent(pocketMaskSvg)}`,
+      },
+      {
+        id: 'part_placket',
+        name: 'Garis Kancing (Placket)',
+        side: 'front',
+        defaultColor: '#141e2d',
+        maskImg: `data:image/svg+xml;utf8,${encodeURIComponent(placketMaskSvg)}`,
+      },
+      {
+        id: 'part_buttons',
+        name: 'Kancing Baju',
+        side: 'front',
+        defaultColor: '#94a3b8',
+        maskImg: `data:image/svg+xml;utf8,${encodeURIComponent(buttonsMaskSvg)}`,
+      },
+      {
+        id: 'part_shoulder',
+        name: 'Pangkat / Lidah Pundak',
+        side: 'front',
+        defaultColor: '#ff5e00',
+        maskImg: `data:image/svg+xml;utf8,${encodeURIComponent(shoulderMaskSvg)}`,
+      },
+    ],
     createdAt: Date.now(),
   }
 }
