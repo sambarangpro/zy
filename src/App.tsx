@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type {
   GarmentColorParts,
   GarmentType,
@@ -18,6 +18,7 @@ import {
   getMockupList,
   getActiveMockupId,
   setActiveMockupId,
+  syncMockupsWithDisk,
 } from './services/mockupStorage'
 import {
   ShieldCheck,
@@ -60,6 +61,15 @@ export function App() {
   const [isSizeChartOpen, setIsSizeChartOpen] = useState(false)
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false)
   const [invoiceSummary, setInvoiceSummary] = useState<any>(null)
+
+  // Auto-sync mockups with permanent local disk storage
+  useEffect(() => {
+    syncMockupsWithDisk().then((synced) => {
+      if (synced && synced.length > 0) {
+        setMockups(synced)
+      }
+    })
+  }, [])
 
   // Handlers for Mockups
   const handleSelectAndOpenCanvas = (id: string) => {

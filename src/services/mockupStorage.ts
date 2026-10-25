@@ -14,6 +14,55 @@ export function getMockupList(): MockupTemplate[] {
   }
 }
 
+// ASYNC PERSISTENCE TO DISK (Vite dev server middleware writes to mockups-db.json)
+async function saveToDiskAsync(mockups: MockupTemplate[]): Promise<void> {
+  try {
+    await fetch('/api/mockups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mockups),
+    })
+  } catch (e) {
+    console.warn('Could not sync mockups to disk API', e)
+  }
+}
+
+export async function syncMockupsWithDisk(): Promise<MockupTemplate[]> {
+  const localList = getMockupList()
+  try {
+    const res = await fetch('/api/mockups')
+    if (res.ok) {
+      const diskList: MockupTemplate[] = await res.json()
+      if (Array.isArray(diskList)) {
+        // Merge diskList and localList so no mockup is ever lost
+        const map = new Map<string, MockupTemplate>()
+        diskList.forEach((m) => {
+          if (m && m.id) map.set(m.id, m)
+        })
+        localList.forEach((m) => {
+          if (m && m.id) {
+            const existing = map.get(m.id)
+            if (!existing || (m.createdAt || 0) >= (existing.createdAt || 0)) {
+              map.set(m.id, m)
+            }
+          }
+        })
+        const merged = Array.from(map.values())
+        if (merged.length > 0) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+          if (merged.length !== diskList.length) {
+            saveToDiskAsync(merged)
+          }
+          return merged
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Could not sync with disk mockups API', e)
+  }
+  return localList
+}
+
 export function saveMockup(mockup: MockupTemplate): MockupTemplate[] {
   const current = getMockupList()
   const existingIdx = current.findIndex((m) => m.id === mockup.id)
@@ -31,6 +80,9 @@ export function saveMockup(mockup: MockupTemplate): MockupTemplate[] {
   } catch (e) {
     console.error('Failed to save mockup to localStorage', e)
   }
+
+  // Persist directly to hard drive file mockups-db.json
+  saveToDiskAsync(updated)
 
   return updated
 }
@@ -53,7 +105,83 @@ export function deleteMockup(id: string): MockupTemplate[] {
     console.error('Failed to delete mockup', e)
   }
 
+  // Update hard drive file mockups-db.json
+  saveToDiskAsync(updated)
+
   return updated
+}
+
+export function exportMockupDatabase(): void {
+  const list = getMockupList()
+  if (list.length === 0) {
+    alert('Belum ada mockup yang tersimpan untuk di-backup.')
+    return
+  }
+
+  const exportData = {
+    app: 'ZY Uniform Customizer',
+    version: '2.0',
+    exportedAt: new Date().toISOString(),
+    totalMockups: list.length,
+    mockups: list,
+  }
+
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+    type: 'application/json',
+  })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  const dateStr = new Date().toISOString().split('T')[0]
+  a.href = url
+  a.download = `zy_backup_mockup_seragam_${dateStr}.json`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+export async function importMockupDatabase(file: File): Promise<MockupTemplate[]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string
+        const parsed = JSON.parse(text)
+        let incoming: MockupTemplate[] = []
+        if (Array.isArray(parsed)) {
+          incoming = parsed
+        } else if (parsed && Array.isArray(parsed.mockups)) {
+          incoming = parsed.mockups
+        } else {
+          throw new Error('Format file backup tidak valid. Harus berisi array data mockup.')
+        }
+
+        const validIncoming = incoming.filter((m) => m && m.name && (m.frontImg || m.id))
+        if (validIncoming.length === 0) {
+          throw new Error('Tidak ditemukan data mockup seragam yang valid dalam file ini.')
+        }
+
+        const current = getMockupList()
+        const map = new Map<string, MockupTemplate>()
+        current.forEach((m) => map.set(m.id, m))
+        validIncoming.forEach((m) => map.set(m.id, m))
+
+        const merged = Array.from(map.values())
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+        saveToDiskAsync(merged)
+
+        if (merged.length > 0 && !getActiveMockupId()) {
+          setActiveMockupId(merged[0].id)
+        }
+
+        resolve(merged)
+      } catch (err) {
+        reject(err)
+      }
+    }
+    reader.onerror = () => reject(new Error('Gagal membaca file backup.'))
+    reader.readAsText(file)
+  })
 }
 
 export function getActiveMockupId(): string | null {

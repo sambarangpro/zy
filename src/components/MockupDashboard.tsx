@@ -5,6 +5,8 @@ import {
   deleteMockup,
   setActiveMockupId,
   createDemoSampleMockup,
+  exportMockupDatabase,
+  importMockupDatabase,
 } from '../services/mockupStorage'
 import {
   Plus,
@@ -30,6 +32,8 @@ import {
   ZoomOut,
   Maximize2,
   Hand,
+  Download,
+  ShieldCheck,
 } from 'lucide-react'
 
 interface MockupDashboardProps {
@@ -63,6 +67,10 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   // File input ref for uploading transparent PNG masks for color parts
   const partMaskInputRef = useRef<HTMLInputElement>(null)
   const [uploadTargetPartId, setUploadTargetPartId] = useState<string | null>(null)
+
+  // File input ref for importing database backup JSON
+  const backupFileInputRef = useRef<HTMLInputElement>(null)
+  const [backupStatusMessage, setBackupStatusMessage] = useState<string | null>(null)
 
   // Active Tab in Form: 'marker' (Big Photo & Zone Marker) | 'details' (Info & Pricing)
   const [activeEditorTab, setActiveEditorTab] = useState<'marker' | 'details'>('marker')
@@ -215,6 +223,33 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     }
     reader.readAsDataURL(file)
     e.target.value = ''
+  }
+
+  // DATABASE BACKUP & RESTORE HANDLERS
+  const handleExportBackup = () => {
+    exportMockupDatabase()
+    setBackupStatusMessage('File backup database mockup berhasil di-download!')
+    setTimeout(() => setBackupStatusMessage(null), 4000)
+  }
+
+  const handleTriggerImportBackup = () => {
+    backupFileInputRef.current?.click()
+  }
+
+  const handleBackupFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      const updated = await importMockupDatabase(file)
+      onMockupsChange(updated)
+      setBackupStatusMessage(`Berhasil memulihkan ${updated.length} model mockup seragam ke database!`)
+      setTimeout(() => setBackupStatusMessage(null), 5000)
+    } catch (err: any) {
+      alert(err.message || 'Gagal memulihkan database dari file backup.')
+    } finally {
+      e.target.value = ''
+    }
   }
 
   // ZOOM & PAN CONTROLS (UP TO 1000% FOR MAXIMUM PRECISION)
@@ -1808,7 +1843,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
       {/* KATALOG MOCKUP SAYA */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200">
-        <div className="flex items-center justify-between mb-6 pb-3 border-b border-slate-100">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 pb-3 border-b border-slate-100 gap-3">
           <div className="flex items-center gap-2.5">
             <h3 className="font-extrabold text-slate-900 text-lg">
               Koleksi Model Mockup Seragam
@@ -1818,14 +1853,74 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
             </span>
           </div>
 
-          {mockups.length > 0 && !isEditing && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Hidden file input for backup restore */}
+            <input
+              type="file"
+              ref={backupFileInputRef}
+              onChange={handleBackupFileSelected}
+              accept=".json"
+              className="hidden"
+            />
+
+            {/* Backup & Restore Buttons */}
             <button
-              onClick={handleOpenCreateNew}
-              className="text-xs font-extrabold text-[#ff5e00] hover:underline flex items-center gap-1 cursor-pointer"
+              type="button"
+              onClick={handleExportBackup}
+              className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs hover:border-slate-300"
+              title="Download cadangan data semua mockup ke komputer Anda"
             >
-              <Plus className="w-4 h-4" />
-              Tambah Model Lain
+              <Download className="w-3.5 h-3.5 text-blue-600" />
+              <span>Backup Database</span>
             </button>
+
+            <button
+              type="button"
+              onClick={handleTriggerImportBackup}
+              className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs hover:border-slate-300"
+              title="Pulihkan mockup dari file cadangan JSON"
+            >
+              <Upload className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Pulihkan Database</span>
+            </button>
+
+            {mockups.length > 0 && !isEditing && (
+              <button
+                onClick={handleOpenCreateNew}
+                className="px-4 py-2 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded-xl text-xs font-black transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ml-1"
+              >
+                <Plus className="w-4 h-4" />
+                Tambah Model Lain
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Security / Reassurance Notice Banner */}
+        <div className="mb-6 p-4 bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-orange-50/60 rounded-2xl border border-blue-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 shadow-2xs">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-slate-900 text-xs">
+                  Penyimpanan Database Aman & Permanen
+                </span>
+                <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full">
+                  Auto-Sync ke Disk & Browser
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                Mockup yang Anda buat otomatis tersimpan ganda di file disk (<code className="bg-white/80 px-1 py-0.5 rounded text-blue-800 font-mono text-[10px] font-bold">mockups-db.json</code>) dan memori browser. Klik <b>Backup Database</b> untuk mengunduh arsip cadangan kapan saja agar 100% aman saat pembaruan aplikasi!
+              </p>
+            </div>
+          </div>
+          {backupStatusMessage && (
+            <div className="px-3.5 py-2 bg-emerald-100 border border-emerald-200 text-emerald-950 rounded-xl font-bold text-xs animate-fade-in flex items-center gap-2 shrink-0 shadow-2xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>{backupStatusMessage}</span>
+            </div>
           )}
         </div>
 
