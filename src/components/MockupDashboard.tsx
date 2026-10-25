@@ -1261,9 +1261,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                               return (
                                 <div
                                   key={part.id}
-                                  className={`absolute inset-0 pointer-events-none transition-all duration-200 ${
-                                    isHighlighted ? 'ring-2 ring-[#ff5e00] ring-inset' : ''
-                                  }`}
+                                  className="absolute inset-0 pointer-events-none transition-all duration-200"
                                   style={{
                                     zIndex: 1 + (currentParts.length - pIdx),
                                     mixBlendMode: 'multiply',
@@ -1291,42 +1289,40 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                               className="absolute inset-0 w-full h-full touch-none z-10"
                             />
 
-                            {/* PEN TOOL VECTOR LIVE PREVIEW SVG (CRISP HAIRLINE STROKES, ZERO THICK BLUR) */}
+                            {/* PEN TOOL VECTOR LIVE PREVIEW SVG (ZERO STROKE ON SHAPE, HAIRLINE GUIDES ONLY) */}
                             {drawingTool === 'pen' && penPoints.length > 0 && (() => {
-                              const zoomFactor = Math.max(0.5, zoomScale)
-                              const baseScale = (canvasSize.width / 600) / zoomFactor
-                              const nodeRadius = Math.max(3, 4.5 * baseScale)
-                              const startNodeRadius = Math.max(4.5, 6.5 * baseScale)
+                              const effectiveZoom = Math.max(0.5, zoomScale)
+                              const hairlineWidth = Math.max(0.4, 1 / effectiveZoom)
+                              const baseScale = (canvasSize.width / 600) / effectiveZoom
+                              const nodeRadius = Math.max(2, 3.5 * baseScale)
+                              const startNodeRadius = Math.max(3, 5 * baseScale)
 
                               return (
                                 <svg
                                   className="absolute inset-0 w-full h-full pointer-events-none z-15"
                                   viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
                                 >
-                                  {/* Filled polygon preview if 3 or more points - hairline outline */}
+                                  {/* Filled polygon preview if 3 or more points - ABSOLUTELY ZERO STROKE BORDER */}
                                   {penPoints.length >= 3 && (
                                     <polygon
                                       points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
-                                      fill="rgba(6, 182, 212, 0.25)"
-                                      stroke="#06b6d4"
-                                      strokeWidth="1"
-                                      strokeDasharray="4,4"
-                                      vectorEffect="non-scaling-stroke"
+                                      fill="rgba(6, 182, 212, 0.35)"
+                                      stroke="none"
                                     />
                                   )}
 
-                                  {/* Connected line between points */}
+                                  {/* Hairline connecting line between unclosed points */}
                                   {penPoints.length > 1 && (
                                     <polyline
                                       points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
                                       fill="none"
                                       stroke="#06b6d4"
-                                      strokeWidth="1.5"
+                                      strokeWidth={hairlineWidth}
                                       vectorEffect="non-scaling-stroke"
                                     />
                                   )}
 
-                                  {/* Rubberband line to hover point */}
+                                  {/* Hairline rubberband line to hover point */}
                                   {penHoverPoint && (
                                     <line
                                       x1={penPoints[penPoints.length - 1].x}
@@ -1334,13 +1330,13 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                       x2={penHoverPoint.x}
                                       y2={penHoverPoint.y}
                                       stroke={isPenClosing ? '#22c55e' : '#06b6d4'}
-                                      strokeWidth="1.5"
+                                      strokeWidth={hairlineWidth}
                                       strokeDasharray="3,3"
                                       vectorEffect="non-scaling-stroke"
                                     />
                                   )}
 
-                                  {/* Node circles */}
+                                  {/* Small crisp node dots */}
                                   {penPoints.map((p, idx) => {
                                     const isStart = idx === 0
                                     const r = isStart ? startNodeRadius : nodeRadius
@@ -1352,21 +1348,9 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                           r={r}
                                           fill={isStart && isPenClosing ? '#22c55e' : '#ffffff'}
                                           stroke={isStart && isPenClosing ? '#15803d' : '#0891b2'}
-                                          strokeWidth="1.5"
+                                          strokeWidth={hairlineWidth}
                                           vectorEffect="non-scaling-stroke"
                                         />
-                                        {isStart && isPenClosing && (
-                                          <circle
-                                            cx={p.x}
-                                            cy={p.y}
-                                            r={r * 1.8}
-                                            fill="none"
-                                            stroke="#22c55e"
-                                            strokeWidth="1.5"
-                                            vectorEffect="non-scaling-stroke"
-                                            className="animate-ping"
-                                          />
-                                        )}
                                       </g>
                                     )
                                   })}
