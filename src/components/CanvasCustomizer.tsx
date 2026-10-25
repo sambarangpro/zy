@@ -884,14 +884,17 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     }
 
     const drawColorPartsAndContinue = () => {
-      const partsToDraw = currentSideColorParts.filter((p) => p.maskImg)
+      // Invert so bottom-most is drawn first, and top-most (index 0) is drawn last on top
+      const partsToDraw = [...currentSideColorParts].reverse().filter((p) => p.maskImg)
       if (partsToDraw.length === 0) {
         drawPaintLayerAndContinue()
         return
       }
 
+      const renderedLayers: (HTMLCanvasElement | null)[] = new Array(partsToDraw.length).fill(null)
       let loadedParts = 0
-      partsToDraw.forEach((part) => {
+
+      partsToDraw.forEach((part, idx) => {
         const maskImg = new Image()
         maskImg.crossOrigin = 'anonymous'
         maskImg.onload = () => {
@@ -905,20 +908,33 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             offCtx.fillRect(0, 0, offCanvas.width, offCanvas.height)
             offCtx.globalCompositeOperation = 'destination-in'
             offCtx.drawImage(maskImg, 0, 0, offCanvas.width, offCanvas.height)
-
-            ctx.save()
-            ctx.globalCompositeOperation = 'multiply'
-            ctx.drawImage(offCanvas, 0, 0)
-            ctx.restore()
+            renderedLayers[idx] = offCanvas
           }
           loadedParts++
           if (loadedParts === partsToDraw.length) {
+            // Draw in exact bottom-to-top sequence
+            renderedLayers.forEach((layer) => {
+              if (layer) {
+                ctx.save()
+                ctx.globalCompositeOperation = 'multiply'
+                ctx.drawImage(layer, 0, 0)
+                ctx.restore()
+              }
+            })
             drawPaintLayerAndContinue()
           }
         }
         maskImg.onerror = () => {
           loadedParts++
           if (loadedParts === partsToDraw.length) {
+            renderedLayers.forEach((layer) => {
+              if (layer) {
+                ctx.save()
+                ctx.globalCompositeOperation = 'multiply'
+                ctx.drawImage(layer, 0, 0)
+                ctx.restore()
+              }
+            })
             drawPaintLayerAndContinue()
           }
         }
@@ -2316,13 +2332,14 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 />
 
                 {/* 2. AUTOMATIC COLORABLE PARTS (Kerah, Saku, Kancing, Garis Kancing - Multiply Blending absorbs directly into fabric!) */}
-                {currentSideColorParts.map((part) => {
+                {currentSideColorParts.map((part, pIdx) => {
                   const color = partColors[part.id] || part.defaultColor
                   if (!part.maskImg || !color) return null
                   return (
                     <div
                       key={part.id}
                       style={{
+                        zIndex: 5 + (currentSideColorParts.length - pIdx),
                         WebkitMaskImage: `url("${part.maskImg}")`,
                         maskImage: `url("${part.maskImg}")`,
                         WebkitMaskSize: 'contain',
@@ -2334,7 +2351,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                         backgroundColor: color,
                         mixBlendMode: 'multiply',
                       }}
-                      className="absolute inset-0 w-full h-full pointer-events-none select-none z-10 transition-colors duration-150"
+                      className="absolute inset-0 w-full h-full pointer-events-none select-none transition-colors duration-150"
                     />
                   )
                 })}

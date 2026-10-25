@@ -34,6 +34,9 @@ import {
   Hand,
   Download,
   ShieldCheck,
+  ChevronUp,
+  ChevronDown,
+  GripVertical,
 } from 'lucide-react'
 
 interface MockupDashboardProps {
@@ -181,10 +184,104 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       side,
       defaultColor,
     }
-    setEditFormData((prev) => ({
-      ...prev,
-      colorParts: [...(prev.colorParts || []), newPart],
-    }))
+    setEditFormData((prev) => {
+      const otherParts = (prev.colorParts || []).filter((p) => p.side !== side)
+      const thisSideParts = (prev.colorParts || []).filter((p) => p.side === side)
+      return {
+        ...prev,
+        colorParts: [newPart, ...thisSideParts, ...otherParts],
+      }
+    })
+  }
+
+  // LAYER ORDERING & DRAG-AND-DROP HANDLERS
+  const [draggedPartId, setDraggedPartId] = useState<string | null>(null)
+  const [dragOverPartId, setDragOverPartId] = useState<string | null>(null)
+
+  const handleReorderSideParts = (reorderedSideParts: ColorablePart[]) => {
+    setEditFormData((prev) => {
+      const allParts = prev.colorParts || []
+      let sideIdx = 0
+      const newColorParts: ColorablePart[] = []
+
+      for (const part of allParts) {
+        if (part.side === selectedSide) {
+          if (sideIdx < reorderedSideParts.length) {
+            newColorParts.push(reorderedSideParts[sideIdx])
+            sideIdx++
+          }
+        } else {
+          newColorParts.push(part)
+        }
+      }
+      while (sideIdx < reorderedSideParts.length) {
+        newColorParts.push(reorderedSideParts[sideIdx])
+        sideIdx++
+      }
+      return {
+        ...prev,
+        colorParts: newColorParts,
+      }
+    })
+  }
+
+  const handleMovePart = (partId: string, direction: 'up' | 'down') => {
+    const currentSideParts = (editFormData.colorParts || []).filter(
+      (p) => p.side === selectedSide
+    )
+    const index = currentSideParts.findIndex((p) => p.id === partId)
+    if (index === -1) return
+
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= currentSideParts.length) return
+
+    const newSideParts = [...currentSideParts]
+    const [movedPart] = newSideParts.splice(index, 1)
+    newSideParts.splice(targetIndex, 0, movedPart)
+
+    handleReorderSideParts(newSideParts)
+  }
+
+  const handleDragStart = (e: React.DragEvent, partId: string) => {
+    e.dataTransfer.setData('text/plain', partId)
+    e.dataTransfer.effectAllowed = 'move'
+    setDraggedPartId(partId)
+  }
+
+  const handleDragOver = (e: React.DragEvent, partId: string) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragOverPartId !== partId) {
+      setDragOverPartId(partId)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent, targetPartId: string) => {
+    e.preventDefault()
+    setDragOverPartId(null)
+    const sourcePartId = draggedPartId || e.dataTransfer.getData('text/plain')
+    setDraggedPartId(null)
+
+    if (!sourcePartId || sourcePartId === targetPartId) return
+
+    const currentSideParts = (editFormData.colorParts || []).filter(
+      (p) => p.side === selectedSide
+    )
+    const sourceIndex = currentSideParts.findIndex((p) => p.id === sourcePartId)
+    const targetIndex = currentSideParts.findIndex((p) => p.id === targetPartId)
+
+    if (sourceIndex === -1 || targetIndex === -1) return
+
+    const newSideParts = [...currentSideParts]
+    const [movedPart] = newSideParts.splice(sourceIndex, 1)
+    newSideParts.splice(targetIndex, 0, movedPart)
+
+    handleReorderSideParts(newSideParts)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedPartId(null)
+    setDragOverPartId(null)
   }
 
   const handleUpdateColorPart = (id: string, updates: Partial<ColorablePart>) => {
@@ -282,7 +379,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     })
   }
 
-  // PEN TOOL METHODS (FILLABLE POLYGON AREA)
+  // PEN TOOL METHODS (FILLABLE POLYGON AREA - ZERO STROKE BORDER)
   const handleCloseAndFillPen = () => {
     const canvas = maskCanvasRef.current
     if (!canvas || penPoints.length < 3) return
@@ -293,11 +390,6 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
     ctx.save()
     ctx.fillStyle = 'rgba(6, 182, 212, 0.85)'
-    ctx.strokeStyle = 'rgba(6, 182, 212, 0.95)'
-    const scale = canvas.width / 500
-    ctx.lineWidth = 2 * scale
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
 
     ctx.beginPath()
     ctx.moveTo(penPoints[0].x, penPoints[0].y)
@@ -305,8 +397,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       ctx.lineTo(penPoints[i].x, penPoints[i].y)
     }
     ctx.closePath()
+    // Fill strictly inside the polygon with ZERO outer stroke bleeding
     ctx.fill()
-    ctx.stroke()
     ctx.restore()
 
     setPenPoints([])
@@ -604,10 +696,14 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       maskImg: maskDataUrl,
     }
 
-    setEditFormData((prev) => ({
-      ...prev,
-      colorParts: [...(prev.colorParts || []), newPart],
-    }))
+    setEditFormData((prev) => {
+      const otherParts = (prev.colorParts || []).filter((p) => p.side !== selectedSide)
+      const thisSideParts = (prev.colorParts || []).filter((p) => p.side === selectedSide)
+      return {
+        ...prev,
+        colorParts: [newPart, ...thisSideParts, ...otherParts],
+      }
+    })
 
     handleClearMaskDraft()
   }
@@ -1043,8 +1139,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                               className="block max-h-[500px] sm:max-h-[580px] w-auto max-w-[85vw] sm:max-w-[620px] object-contain pointer-events-none select-none z-0"
                             />
 
-                            {/* Saved Color Parts Overlays with Multiply Blend Mode */}
-                            {currentParts.map((part) => {
+                            {/* Saved Color Parts Overlays with Multiply Blend Mode & Layer Stacking Order */}
+                            {currentParts.map((part, pIdx) => {
                               if (!part.maskImg) return null
                               const isHighlighted = highlightedPartId === part.id
                               return (
@@ -1054,6 +1150,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                     isHighlighted ? 'ring-2 ring-[#ff5e00] ring-inset' : ''
                                   }`}
                                   style={{
+                                    zIndex: 1 + (currentParts.length - pIdx),
                                     mixBlendMode: 'multiply',
                                     opacity: isHighlighted ? 1 : 0.85,
                                     maskImage: `url(${part.maskImg})`,
@@ -1079,27 +1176,27 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                               className="absolute inset-0 w-full h-full touch-none z-10"
                             />
 
-                            {/* PEN TOOL VECTOR LIVE PREVIEW SVG */}
+                            {/* PEN TOOL VECTOR LIVE PREVIEW SVG (CRISP HAIRLINE STROKES, ZERO THICK BLUR) */}
                             {drawingTool === 'pen' && penPoints.length > 0 && (() => {
                               const zoomFactor = Math.max(0.5, zoomScale)
                               const baseScale = (canvasSize.width / 600) / zoomFactor
-                              const nodeRadius = Math.max(3, 5 * baseScale)
-                              const startNodeRadius = Math.max(5, 7.5 * baseScale)
-                              const strokeW = Math.max(1, 2 * baseScale)
+                              const nodeRadius = Math.max(3, 4.5 * baseScale)
+                              const startNodeRadius = Math.max(4.5, 6.5 * baseScale)
 
                               return (
                                 <svg
                                   className="absolute inset-0 w-full h-full pointer-events-none z-15"
                                   viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
                                 >
-                                  {/* Filled polygon preview if 3 or more points */}
+                                  {/* Filled polygon preview if 3 or more points - hairline outline */}
                                   {penPoints.length >= 3 && (
                                     <polygon
                                       points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
-                                      fill="rgba(6, 182, 212, 0.35)"
+                                      fill="rgba(6, 182, 212, 0.25)"
                                       stroke="#06b6d4"
-                                      strokeWidth={strokeW}
-                                      strokeDasharray="6,4"
+                                      strokeWidth="1"
+                                      strokeDasharray="4,4"
+                                      vectorEffect="non-scaling-stroke"
                                     />
                                   )}
 
@@ -1109,7 +1206,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                       points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
                                       fill="none"
                                       stroke="#06b6d4"
-                                      strokeWidth={strokeW * 1.3}
+                                      strokeWidth="1.5"
+                                      vectorEffect="non-scaling-stroke"
                                     />
                                   )}
 
@@ -1121,8 +1219,9 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                       x2={penHoverPoint.x}
                                       y2={penHoverPoint.y}
                                       stroke={isPenClosing ? '#22c55e' : '#06b6d4'}
-                                      strokeWidth={strokeW * 1.2}
-                                      strokeDasharray="4,4"
+                                      strokeWidth="1.5"
+                                      strokeDasharray="3,3"
+                                      vectorEffect="non-scaling-stroke"
                                     />
                                   )}
 
@@ -1138,16 +1237,18 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                           r={r}
                                           fill={isStart && isPenClosing ? '#22c55e' : '#ffffff'}
                                           stroke={isStart && isPenClosing ? '#15803d' : '#0891b2'}
-                                          strokeWidth={strokeW}
+                                          strokeWidth="1.5"
+                                          vectorEffect="non-scaling-stroke"
                                         />
                                         {isStart && isPenClosing && (
                                           <circle
                                             cx={p.x}
                                             cy={p.y}
-                                            r={r * 2}
+                                            r={r * 1.8}
                                             fill="none"
                                             stroke="#22c55e"
-                                            strokeWidth={strokeW}
+                                            strokeWidth="1.5"
+                                            vectorEffect="non-scaling-stroke"
                                             className="animate-ping"
                                           />
                                         )}
@@ -1438,19 +1539,19 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                     </button>
                   </div>
 
-                  {/* CARD 2: ACTIVE PARTS ON THIS SIDE */}
+                  {/* CARD 2: ACTIVE PARTS ON THIS SIDE (REORDERABLE LAYER STACK) */}
                   <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-3">
                     <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center shrink-0">
+                        <div className="w-7 h-7 rounded-xl bg-orange-100 text-[#ff5e00] flex items-center justify-center shrink-0">
                           <Layers className="w-4 h-4" />
                         </div>
                         <div>
                           <h4 className="text-xs font-extrabold text-slate-900">
-                            2. Bagian Aktif di Sisi {selectedSide === 'front' ? 'Depan' : selectedSide === 'back' ? 'Belakang' : selectedSide === 'left' ? 'Kiri' : 'Kanan'}
+                            2. Urutan Layer Sisi {selectedSide === 'front' ? 'Depan' : selectedSide === 'back' ? 'Belakang' : selectedSide === 'left' ? 'Kiri' : 'Kanan'}
                           </h4>
                           <span className="text-[10px] text-slate-500">
-                            Bagian yang siap diwarnai oleh pembeli
+                            Paling Atas = Tampil di Depan (Geser Naik / Turun)
                           </span>
                         </div>
                       </div>
@@ -1465,12 +1566,12 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                           Slot Manual
                         </button>
                         <span className="text-[10px] bg-orange-100 text-[#ff5e00] font-black px-2 py-0.5 rounded-full">
-                          {(editFormData.colorParts || []).filter((p) => p.side === selectedSide).length} Bagian
+                          {(editFormData.colorParts || []).filter((p) => p.side === selectedSide).length} Layer
                         </span>
                       </div>
                     </div>
 
-                    {/* Part List */}
+                    {/* Part List with Layer Reordering */}
                     {(() => {
                       const currentSideParts = (editFormData.colorParts || []).filter(
                         (p) => p.side === selectedSide
@@ -1482,66 +1583,149 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                               Belum ada bagian yang ditandai di sisi ini.
                             </p>
                             <p className="text-[10px] text-slate-400 mt-1">
-                              Gunakan kuas atau kotak penanda di foto seragam untuk menandai saku, kerah, kancing, dll.
+                              Gunakan Pen Tool atau Kuas di sebelah kiri untuk menandai saku, kerah, kancing, dll.
                             </p>
                           </div>
                         )
                       }
 
                       return (
-                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                          {currentSideParts.map((part) => (
-                            <div
-                              key={part.id}
-                              onMouseEnter={() => setHighlightedPartId(part.id)}
-                              onMouseLeave={() => setHighlightedPartId(null)}
-                              className={`p-2.5 rounded-2xl border transition-all ${
-                                highlightedPartId === part.id
-                                  ? 'bg-orange-50/70 border-[#ff5e00] shadow-xs'
-                                  : 'bg-slate-50 border-slate-200 hover:border-slate-300'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <input
-                                  type="text"
-                                  value={part.name}
-                                  onChange={(e) =>
-                                    handleUpdateColorPart(part.id, { name: e.target.value })
-                                  }
-                                  className="text-xs font-extrabold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#ff5e00] focus:outline-none px-1 py-0.5 flex-1"
-                                />
+                        <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
+                          {/* Mini guide banner */}
+                          <div className="flex items-center justify-between text-[9px] font-bold text-slate-400 px-1 uppercase tracking-wider">
+                            <span>▲ Layer Depan (Atas)</span>
+                            <span>Layer Belakang (Bawah) ▼</span>
+                          </div>
+
+                          {currentSideParts.map((part, idx) => {
+                            const isFirst = idx === 0
+                            const isLast = idx === currentSideParts.length - 1
+                            const isDragging = draggedPartId === part.id
+                            const isDragOver = dragOverPartId === part.id
+
+                            return (
+                              <div
+                                key={part.id}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, part.id)}
+                                onDragOver={(e) => handleDragOver(e, part.id)}
+                                onDrop={(e) => handleDrop(e, part.id)}
+                                onDragEnd={handleDragEnd}
+                                onMouseEnter={() => setHighlightedPartId(part.id)}
+                                onMouseLeave={() => setHighlightedPartId(null)}
+                                className={`p-2 rounded-2xl border transition-all select-none ${
+                                  isDragging
+                                    ? 'opacity-35 bg-slate-100 border-dashed border-slate-400'
+                                    : isDragOver
+                                    ? 'border-2 border-dashed border-[#ff5e00] bg-orange-50/80 scale-[1.01]'
+                                    : highlightedPartId === part.id
+                                    ? 'bg-orange-50/70 border-[#ff5e00] shadow-xs'
+                                    : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                                }`}
+                              >
                                 <div className="flex items-center gap-1.5">
-                                  <input
-                                    type="color"
-                                    value={part.defaultColor}
-                                    onChange={(e) =>
-                                      handleUpdateColorPart(part.id, {
-                                        defaultColor: e.target.value,
-                                      })
+                                  {/* Drag Handle */}
+                                  <div
+                                    className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-700 p-0.5 shrink-0"
+                                    title="Tahan & Drag untuk memindahkan posisi layer"
+                                  >
+                                    <GripVertical className="w-4 h-4" />
+                                  </div>
+
+                                  {/* Layer Index Badge */}
+                                  <span
+                                    className={`text-[9px] font-black px-1.5 py-0.5 rounded-md shrink-0 leading-none ${
+                                      isFirst
+                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                        : isLast && currentSideParts.length > 1
+                                        ? 'bg-slate-200 text-slate-600'
+                                        : 'bg-slate-200/80 text-slate-700'
+                                    }`}
+                                    title={
+                                      isFirst
+                                        ? 'Layer paling atas (tampil paling depan)'
+                                        : isLast
+                                        ? 'Layer paling bawah (tampil paling belakang)'
+                                        : `Layer #${idx + 1}`
                                     }
-                                    className="w-5 h-5 rounded border border-slate-300 cursor-pointer p-0 bg-transparent"
-                                    title="Ganti Warna Bagian"
+                                  >
+                                    #{idx + 1}
+                                  </span>
+
+                                  {/* Layer Name Input */}
+                                  <input
+                                    type="text"
+                                    value={part.name}
+                                    onChange={(e) =>
+                                      handleUpdateColorPart(part.id, { name: e.target.value })
+                                    }
+                                    className="text-xs font-extrabold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#ff5e00] focus:outline-none px-1 py-0.5 flex-1 min-w-0"
                                   />
-                                  <button
-                                    type="button"
-                                    onClick={() => triggerPartMaskUpload(part.id)}
-                                    className="p-1 text-slate-400 hover:text-[#ff5e00] transition-colors"
-                                    title={part.maskImg ? 'Ganti file Mask PNG' : 'Upload file Mask PNG'}
-                                  >
-                                    <Upload className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveColorPart(part.id)}
-                                    className="p-1 text-slate-400 hover:text-red-500 transition-colors"
-                                    title="Hapus bagian ini"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+
+                                  {/* Layer Shift Controls (Move Up / Down) */}
+                                  <div className="flex items-center bg-white rounded-lg border border-slate-200 p-0.5 shadow-2xs shrink-0">
+                                    <button
+                                      type="button"
+                                      disabled={isFirst}
+                                      onClick={() => handleMovePart(part.id, 'up')}
+                                      className={`p-1 rounded transition-colors ${
+                                        isFirst
+                                          ? 'text-slate-200 cursor-not-allowed'
+                                          : 'text-slate-700 hover:bg-slate-100 cursor-pointer hover:text-[#ff5e00]'
+                                      }`}
+                                      title="Geser ke Atas (Tampil Lebih di Depan)"
+                                    >
+                                      <ChevronUp className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isLast}
+                                      onClick={() => handleMovePart(part.id, 'down')}
+                                      className={`p-1 rounded transition-colors ${
+                                        isLast
+                                          ? 'text-slate-200 cursor-not-allowed'
+                                          : 'text-slate-700 hover:bg-slate-100 cursor-pointer hover:text-[#ff5e00]'
+                                      }`}
+                                      title="Geser ke Bawah (Tampil Lebih di Belakang)"
+                                    >
+                                      <ChevronDown className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+
+                                  {/* Color & Mask Actions */}
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <input
+                                      type="color"
+                                      value={part.defaultColor}
+                                      onChange={(e) =>
+                                        handleUpdateColorPart(part.id, {
+                                          defaultColor: e.target.value,
+                                        })
+                                      }
+                                      className="w-5 h-5 rounded border border-slate-300 cursor-pointer p-0 bg-transparent"
+                                      title="Ganti Warna Bagian"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => triggerPartMaskUpload(part.id)}
+                                      className="p-1 text-slate-400 hover:text-[#ff5e00] transition-colors cursor-pointer"
+                                      title={part.maskImg ? 'Ganti file Mask PNG' : 'Upload file Mask PNG'}
+                                    >
+                                      <Upload className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveColorPart(part.id)}
+                                      className="p-1 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                                      title="Hapus layer bagian ini"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       )
                     })()}
