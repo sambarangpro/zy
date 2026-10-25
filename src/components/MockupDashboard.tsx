@@ -19,6 +19,7 @@ import {
   Tag,
   Percent,
   Sparkles,
+  Scissors,
 } from 'lucide-react'
 
 interface MockupDashboardProps {
@@ -56,6 +57,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       category: 'Kaos',
       basePrice: 85000,
       description: '',
+      enableClippingMask: true,
       discount12: 5000,
       discount50: 10000,
       discount100: 15000,
@@ -104,6 +106,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       backImg: editFormData.backImg,
       leftImg: editFormData.leftImg,
       rightImg: editFormData.rightImg,
+      enableClippingMask: editFormData.enableClippingMask ?? true,
       discount12: Number(editFormData.discount12) || 5000,
       discount50: Number(editFormData.discount50) || 10000,
       discount100: Number(editFormData.discount100) || 15000,
@@ -341,6 +344,39 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Setting Clipping Mask Otomatis */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-orange-100 text-[#ff5e00] flex items-center justify-center shrink-0">
+                      <Scissors className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-extrabold text-slate-900 block">
+                        Metode Clipping Mask Otomatis
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        Kunci desain & warna kuas di siluet baju (tidak tembus keluar)
+                      </span>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editFormData.enableClippingMask ?? true}
+                      onChange={(e) =>
+                        setEditFormData({ ...editFormData, enableClippingMask: e.target.checked })
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#ff5e00]"></div>
+                  </label>
+                </div>
+                <p className="text-[10px] text-slate-500 bg-white p-2.5 rounded-xl border border-slate-200/80 leading-relaxed">
+                  💡 <b>Tips Pro:</b> Saat clipping mask aktif, gambar sablon/bordir dan goresan kuas pewarna akan otomatis dipotong rapi mengikuti bentuk luar baju (background transparan).
+                </p>
               </div>
 
               <div>

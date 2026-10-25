@@ -69,6 +69,7 @@ export interface MockupTemplate {
   backImg?: string
   leftImg?: string
   rightImg?: string
+  enableClippingMask?: boolean // metode clipping mask otomatis
   discount12?: number // default: 5000
   discount50?: number // default: 10000
   discount100?: number // default: 15000

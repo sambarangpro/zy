@@ -31,6 +31,10 @@ import {
   X,
   ChevronUp,
   ChevronDown,
+  Paintbrush,
+  Eraser,
+  RotateCcw,
+  Scissors,
 } from 'lucide-react'
 
 interface CanvasCustomizerProps {
@@ -54,7 +58,35 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const [showGuidelines, setShowGuidelines] = useState<boolean>(true)
   const [zoomLevel, setZoomLevel] = useState<number>(1)
   const [showLayersPanel, setShowLayersPanel] = useState<boolean>(true)
-  const [activeFlyout, setActiveFlyout] = useState<'text' | 'lighting' | 'presets' | null>(null)
+  const [activeFlyout, setActiveFlyout] = useState<'text' | 'lighting' | 'presets' | 'brush' | null>(null)
+
+  // Active Tool: 'select' | 'brush' | 'eraser'
+  const [activeTool, setActiveTool] = useState<'select' | 'brush' | 'eraser'>('select')
+
+  // Clipping Mask: Kunci gambar & kuas agar tidak keluar dari siluet seragam
+  const [isClippingMaskActive, setIsClippingMaskActive] = useState<boolean>(
+    activeMockup?.enableClippingMask ?? true
+  )
+
+  // Brush settings: ukuran, warna, blend mode, opacity
+  const [brushSize, setBrushSize] = useState<number>(10)
+  const [brushColor, setBrushColor] = useState<string>('#1e3a8a') // Default Navy
+  const [brushOpacity, setBrushOpacity] = useState<number>(100)
+  const [brushBlendMode, setBrushBlendMode] = useState<'multiply' | 'source-over'>('multiply')
+
+  // Paint storage per side (dataURL string) & undo history
+  const [paintLayers, setPaintLayers] = useState<Record<ViewSide, string | null>>({
+    front: null,
+    back: null,
+    left: null,
+    right: null,
+  })
+  const [paintHistory, setPaintHistory] = useState<Record<ViewSide, string[]>>({
+    front: [],
+    back: [],
+    left: [],
+    right: [],
+  })
 
   // Studio Lighting & 3D Shadow controls
   const [lighting, setLighting] = useState<StudioLighting>({
@@ -90,13 +122,25 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const [textColor, setTextColor] = useState('#ffffff')
   const [textTechnique, setTextTechnique] = useState<'bordir' | 'sablon'>('bordir')
 
+  // Brush drawing runtime state
+  const [isDrawing, setIsDrawing] = useState<boolean>(false)
+  const [lastPoint, setLastPoint] = useState<{ x: number; y: number } | null>(null)
+
   // Refs
   const viewportRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const paintCanvasRef = useRef<HTMLCanvasElement>(null)
 
   const currentSideGraphics = graphics.filter((g) => g.side === currentSide)
   const selectedGraphic = graphics.find((g) => g.id === selectedGraphicId)
   const currentPrintZones = PRINT_ZONES.filter((z) => z.side === currentSide)
+
+  // Sync clipping mask when activeMockup changes
+  useEffect(() => {
+    if (activeMockup?.enableClippingMask !== undefined) {
+      setIsClippingMaskActive(activeMockup.enableClippingMask)
+    }
+  }, [activeMockup?.id])
 
   // Get current active angle image from active mockup
   const currentMockupImage = activeMockup
@@ -109,10 +153,81 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       : activeMockup.rightImg
     : undefined
 
+  // Redraw paint layer whenever currentSide changes
+  useEffect(() => {
+    const canvas = paintCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    const currentData = paintLayers[currentSide]
+    if (currentData) {
+      const img = new Image()
+      img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      }
+      img.src = currentData
+    }
+  }, [currentSide])
+
   // Keyboard navigation & Photoshop shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) return
+
+      if (e.key === 'Escape') {
+        setSelectedGraphicId(null)
+        setActiveFlyout(null)
+        setActiveTool('select')
+        return
+      }
+
+      // Hotkey V: Select tool
+      if (e.key.toLowerCase() === 'v' && !e.ctrlKey && !e.metaKey) {
+        setActiveTool('select')
+        setActiveFlyout(null)
+        return
+      }
+
+      // Hotkey B: Brush tool
+      if (e.key.toLowerCase() === 'b' && !e.ctrlKey && !e.metaKey) {
+        setActiveTool('brush')
+        setActiveFlyout('brush')
+        setSelectedGraphicId(null)
+        return
+      }
+
+      // Hotkey E: Eraser tool
+      if (e.key.toLowerCase() === 'e' && !e.ctrlKey && !e.metaKey) {
+        setActiveTool('eraser')
+        setActiveFlyout('brush')
+        setSelectedGraphicId(null)
+        return
+      }
+
+      // Hotkey T: Text tool
+      if (e.key.toLowerCase() === 't' && !e.ctrlKey && !e.metaKey) {
+        setActiveTool('select')
+        setActiveFlyout('text')
+        return
+      }
+
+      // Hotkey [ and ]: Brush size adjust
+      if (e.key === '[') {
+        setBrushSize((s) => Math.max(2, s - 2))
+      } else if (e.key === ']') {
+        setBrushSize((s) => Math.min(60, s + 2))
+      }
+
+      // Ctrl + Z: Undo brush paint
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        if (activeTool === 'brush' || activeTool === 'eraser') {
+          e.preventDefault()
+          handleUndoPaint()
+        }
+      }
 
       if (selectedGraphicId) {
         if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -135,20 +250,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           handleDuplicateGraphic(selectedGraphicId)
         }
       }
-
-      if (e.key === 'Escape') {
-        setSelectedGraphicId(null)
-        setActiveFlyout(null)
-      } else if (e.key.toLowerCase() === 'v' && !e.ctrlKey && !e.metaKey) {
-        setActiveFlyout(null)
-      } else if (e.key.toLowerCase() === 't' && !e.ctrlKey && !e.metaKey) {
-        setActiveFlyout('text')
-      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedGraphicId, graphics])
+  }, [selectedGraphicId, graphics, activeTool, currentSide, paintHistory])
 
   const nudgeGraphic = (dx: number, dy: number) => {
     if (!selectedGraphicId) return
@@ -164,6 +270,141 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         return g
       })
     )
+  }
+
+  // ----------------------------------------------------
+  // BRUSH & ERASER DRAWING ENGINE
+  // ----------------------------------------------------
+  const getPaintCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = paintCanvasRef.current
+    if (!canvas) return { x: 0, y: 0 }
+    const rect = canvas.getBoundingClientRect()
+    return {
+      x: ((e.clientX - rect.left) / rect.width) * canvas.width,
+      y: ((e.clientY - rect.top) / rect.height) * canvas.height,
+    }
+  }
+
+  const handlePaintMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (activeTool !== 'brush' && activeTool !== 'eraser') return
+    const canvas = paintCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    setIsDrawing(true)
+    const coords = getPaintCoords(e)
+    setLastPoint(coords)
+
+    // Save history before stroke
+    const currentData = canvas.toDataURL('image/png')
+    setPaintHistory((prev) => ({
+      ...prev,
+      [currentSide]: [...(prev[currentSide] || []).slice(-15), currentData],
+    }))
+
+    // Draw initial dot
+    ctx.save()
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    const scaledSize = brushSize * (canvas.width / 450)
+
+    if (activeTool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out'
+      ctx.strokeStyle = 'rgba(0,0,0,1)'
+      ctx.fillStyle = 'rgba(0,0,0,1)'
+    } else {
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.strokeStyle = brushColor
+      ctx.fillStyle = brushColor
+      ctx.globalAlpha = brushOpacity / 100
+    }
+
+    ctx.beginPath()
+    ctx.arc(coords.x, coords.y, scaledSize / 2, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+  }
+
+  const handlePaintMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || (activeTool !== 'brush' && activeTool !== 'eraser')) return
+    const canvas = paintCanvasRef.current
+    if (!canvas || !lastPoint) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const coords = getPaintCoords(e)
+
+    ctx.save()
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    const scaledSize = brushSize * (canvas.width / 450)
+    ctx.lineWidth = scaledSize
+
+    if (activeTool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out'
+      ctx.strokeStyle = 'rgba(0,0,0,1)'
+    } else {
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.strokeStyle = brushColor
+      ctx.globalAlpha = brushOpacity / 100
+    }
+
+    ctx.beginPath()
+    ctx.moveTo(lastPoint.x, lastPoint.y)
+    ctx.lineTo(coords.x, coords.y)
+    ctx.stroke()
+    ctx.restore()
+
+    setLastPoint(coords)
+  }
+
+  const handlePaintMouseUp = () => {
+    if (!isDrawing) return
+    setIsDrawing(false)
+    setLastPoint(null)
+    const canvas = paintCanvasRef.current
+    if (!canvas) return
+    const dataUrl = canvas.toDataURL('image/png')
+    setPaintLayers((prev) => ({
+      ...prev,
+      [currentSide]: dataUrl,
+    }))
+  }
+
+  const handleUndoPaint = () => {
+    const history = paintHistory[currentSide] || []
+    const canvas = paintCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    if (history.length === 0) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      setPaintLayers((prev) => ({ ...prev, [currentSide]: null }))
+      return
+    }
+
+    const previousState = history[history.length - 1]
+    const newHistory = history.slice(0, -1)
+    setPaintHistory((prev) => ({ ...prev, [currentSide]: newHistory }))
+
+    const img = new Image()
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      setPaintLayers((prev) => ({ ...prev, [currentSide]: previousState }))
+    }
+    img.src = previousState
+  }
+
+  const handleClearPaint = () => {
+    const canvas = paintCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    ctx?.clearRect(0, 0, canvas.width, canvas.height)
+    setPaintLayers((prev) => ({ ...prev, [currentSide]: null }))
+    setPaintHistory((prev) => ({ ...prev, [currentSide]: [] }))
   }
 
   // Calculate live total print cost
@@ -372,6 +613,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   // MOUSE DRAG / RESIZE / ROTATE ENGINE
   // ----------------------------------------------------
   const handleStartMove = (e: React.MouseEvent, gId: string) => {
+    if (activeTool !== 'select') return
     e.stopPropagation()
     setSelectedGraphicId(gId)
     const g = graphics.find((item) => item.id === gId)
@@ -432,8 +674,14 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       const deltaPercentX = (deltaPixelX / rect.width) * 100
       const deltaPercentY = (deltaPixelY / rect.height) * 100
 
-      const newX = Math.max(5, Math.min(95, dragState.initialGraphicX + deltaPercentX))
-      const newY = Math.max(8, Math.min(92, dragState.initialGraphicY + deltaPercentY))
+      // When clipping mask is on, strictly constrain graphics within mockup bounds
+      const minX = isClippingMaskActive ? 15 : 5
+      const maxX = isClippingMaskActive ? 85 : 95
+      const minY = isClippingMaskActive ? 12 : 8
+      const maxY = isClippingMaskActive ? 88 : 92
+
+      const newX = Math.max(minX, Math.min(maxX, dragState.initialGraphicX + deltaPercentX))
+      const newY = Math.max(minY, Math.min(maxY, dragState.initialGraphicY + deltaPercentY))
 
       onGraphicsChange(
         graphics.map((g) => {
@@ -497,12 +745,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   }
 
   const handleCanvasClick = (e: React.MouseEvent) => {
+    if (activeTool !== 'select') return
     if (e.target === viewportRef.current || (e.target as HTMLElement).tagName === 'IMG') {
       setSelectedGraphicId(null)
     }
   }
 
-  // Export Lossless HD Mockup
+  // Export Lossless HD Mockup (includes Mockup Image, Paint Layer & Graphics)
   const handleDownloadMockup = () => {
     if (!viewportRef.current) return
     const canvas = document.createElement('canvas')
@@ -515,6 +764,21 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
     const drawGraphicsOnCanvas = () => {
+      let loadedCount = 0
+      const totalItems = currentSideGraphics.length
+
+      const finishExport = () => {
+        const link = document.createElement('a')
+        link.download = `ZY_Studio_${activeMockup?.name || 'Mockup'}_${currentSide}_${Date.now()}.png`
+        link.href = canvas.toDataURL('image/png')
+        link.click()
+      }
+
+      if (totalItems === 0) {
+        finishExport()
+        return
+      }
+
       currentSideGraphics.forEach((g) => {
         const posX = (g.x / 100) * canvas.width
         const posY = (g.y / 100) * canvas.height
@@ -535,14 +799,47 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           ctx.lineWidth = 3
           ctx.strokeText(g.content, 0, 0)
           ctx.fillText(g.content, 0, 0)
+          ctx.restore()
+          loadedCount++
+          if (loadedCount === totalItems) finishExport()
+        } else {
+          const img = new Image()
+          img.crossOrigin = 'anonymous'
+          img.onload = () => {
+            const w = 240
+            const h = (img.height / img.width) * w
+            ctx.drawImage(img, -w / 2, -h / 2, w, h)
+            ctx.restore()
+            loadedCount++
+            if (loadedCount === totalItems) finishExport()
+          }
+          img.onerror = () => {
+            ctx.restore()
+            loadedCount++
+            if (loadedCount === totalItems) finishExport()
+          }
+          img.src = g.content
         }
-        ctx.restore()
       })
+    }
 
-      const link = document.createElement('a')
-      link.download = `ZY_Studio_${activeMockup?.name || 'Mockup'}_${currentSide}_${Date.now()}.png`
-      link.href = canvas.toDataURL('image/png')
-      link.click()
+    const drawPaintLayerAndContinue = () => {
+      const paintData = paintLayers[currentSide]
+      if (paintData) {
+        const paintImg = new Image()
+        paintImg.onload = () => {
+          ctx.save()
+          if (brushBlendMode === 'multiply') {
+            ctx.globalCompositeOperation = 'multiply'
+          }
+          ctx.drawImage(paintImg, 0, 0, canvas.width, canvas.height)
+          ctx.restore()
+          drawGraphicsOnCanvas()
+        }
+        paintImg.src = paintData
+      } else {
+        drawGraphicsOnCanvas()
+      }
     }
 
     if (currentMockupImage) {
@@ -550,11 +847,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       customImg.crossOrigin = 'anonymous'
       customImg.onload = () => {
         ctx.drawImage(customImg, 0, 0, canvas.width, canvas.height)
-        drawGraphicsOnCanvas()
+        drawPaintLayerAndContinue()
       }
       customImg.src = currentMockupImage
     } else {
-      drawGraphicsOnCanvas()
+      drawPaintLayerAndContinue()
     }
   }
 
@@ -562,6 +859,21 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const filterStyle = {
     filter: `brightness(${1 + lighting.brightness / 100}) contrast(${1 + lighting.contrast / 100}) saturate(${1 + lighting.saturation / 100})`,
   }
+
+  // Clipping Mask style (masks inner elements to the silhouette of the garment PNG)
+  const clippingMaskStyle: React.CSSProperties =
+    isClippingMaskActive && currentMockupImage
+      ? {
+          WebkitMaskImage: `url("${currentMockupImage}")`,
+          maskImage: `url("${currentMockupImage}")`,
+          WebkitMaskSize: 'contain',
+          maskSize: 'contain',
+          WebkitMaskRepeat: 'no-repeat',
+          maskRepeat: 'no-repeat',
+          WebkitMaskPosition: 'center',
+          maskPosition: 'center',
+        }
+      : {}
 
   // JIKA BELUM ADA MOCKUP SAMA SEKALI (Empty State)
   if (!activeMockup) {
@@ -601,7 +913,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       />
 
       {/* ---------------------------------------------------- */}
-      {/* 1. TOP OPTIONS & CONTEXTUAL INSPECTOR BAR (Light Photoshop Studio) */}
+      {/* 1. TOP OPTIONS & CONTEXTUAL INSPECTOR BAR (Photoshop Light Style) */}
       {/* ---------------------------------------------------- */}
       <div className="h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-between gap-3 text-xs z-30 shrink-0">
         {/* Left: View Angles Switcher & Mockup Pill */}
@@ -668,7 +980,90 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
         {/* Center: Dynamic Contextual Inspector */}
         <div className="hidden lg:flex items-center gap-2.5 bg-slate-50 px-3.5 py-1.5 rounded-xl border border-slate-200">
-          {selectedGraphic ? (
+          {/* Inspector Mode 1: Brush / Eraser Active */}
+          {activeTool === 'brush' || activeTool === 'eraser' ? (
+            <div className="flex items-center gap-2.5">
+              <span className="text-[10px] font-black uppercase tracking-wider text-[#ff5e00] bg-orange-50 px-2 py-0.5 rounded border border-orange-200 flex items-center gap-1">
+                {activeTool === 'brush' ? (
+                  <>
+                    <Paintbrush className="w-3 h-3" />
+                    Kuas Pewarna
+                  </>
+                ) : (
+                  <>
+                    <Eraser className="w-3 h-3" />
+                    Penghapus Kuas
+                  </>
+                )}
+              </span>
+
+              {/* Ukuran Brush */}
+              <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-0.5 text-[11px]">
+                <span className="text-slate-500 font-medium">Ukuran:</span>
+                <span className="font-mono font-bold text-slate-900">{brushSize}px</span>
+                <input
+                  type="range"
+                  min="2"
+                  max="60"
+                  value={brushSize}
+                  onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                  className="w-16 accent-[#ff5e00] cursor-pointer"
+                  title="Ubah Ukuran Kuas ([ dan ])"
+                />
+              </div>
+
+              {/* Warna Kuas */}
+              {activeTool === 'brush' && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500 text-[11px] font-medium">Warna:</span>
+                  <label
+                    title="Ganti Warna Kuas"
+                    className="w-5 h-5 rounded-md border border-slate-300 cursor-pointer shadow-2xs overflow-hidden"
+                    style={{ backgroundColor: brushColor }}
+                  >
+                    <input
+                      type="color"
+                      value={brushColor}
+                      onChange={(e) => setBrushColor(e.target.value)}
+                      className="opacity-0 w-0 h-0 cursor-pointer"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {/* Mode Blend */}
+              <button
+                onClick={() =>
+                  setBrushBlendMode((m) => (m === 'multiply' ? 'source-over' : 'multiply'))
+                }
+                title="Klik untuk ganti efek warna kain"
+                className="px-2 py-0.5 rounded-lg border border-slate-200 bg-white text-[11px] font-bold text-slate-700 hover:text-slate-900 cursor-pointer"
+              >
+                {brushBlendMode === 'multiply' ? '🧵 Efek Kain (Multiply)' : '🎨 Cat Solid'}
+              </button>
+
+              <div className="h-4 w-px bg-slate-200" />
+
+              {/* Undo & Clear */}
+              <button
+                onClick={handleUndoPaint}
+                title="Batalkan Goresan (Ctrl+Z)"
+                className="p-1 hover:bg-slate-200/80 text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold">Undo</span>
+              </button>
+              <button
+                onClick={handleClearPaint}
+                title="Hapus Semua Warna di Sudut Ini"
+                className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold">Bersihkan</span>
+              </button>
+            </div>
+          ) : selectedGraphic ? (
+            /* Inspector Mode 2: Graphic Element Selected */
             <>
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-black uppercase tracking-wider text-[#ff5e00] bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
@@ -812,13 +1207,30 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
               </div>
             </>
           ) : (
+            /* Inspector Mode 3: Idle Studio Status */
             <div className="flex items-center gap-2 text-slate-500 text-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>
-                Studio Aktif • Pilih elemen di kanvas untuk mengatur bordir/sablon, warna & ukuran
+                Studio Aktif • [V] Seleksi • [B] Kuas Pewarna • [E] Penghapus • [T] Teks
               </span>
             </div>
           )}
+
+          <div className="h-4 w-px bg-slate-200" />
+
+          {/* Toggle Clipping Mask Quick Button */}
+          <button
+            onClick={() => setIsClippingMaskActive((prev) => !prev)}
+            className={`px-2 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+              isClippingMaskActive
+                ? 'bg-orange-100 text-[#ff5e00] border border-orange-200'
+                : 'bg-white text-slate-500 border border-slate-200 hover:text-slate-800'
+            }`}
+            title="Kunci gambar dan warna kuas pada siluet seragam agar tidak keluar garis"
+          >
+            <Scissors className="w-3 h-3" />
+            <span>Mask: {isClippingMaskActive ? 'Terkunci' : 'Bebas'}</span>
+          </button>
         </div>
 
         {/* Right: Zoom, Grid, HD Export & Order Button */}
@@ -888,15 +1300,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       {/* ---------------------------------------------------- */}
       <div className="flex-1 flex relative overflow-hidden bg-[#f8fafc]">
         {/* LEFT VERTICAL TOOLBAR (56px) */}
-        <div className="w-14 bg-white border-r border-slate-200 flex flex-col items-center py-3 gap-2.5 z-20 shrink-0">
+        <div className="w-14 bg-white border-r border-slate-200 flex flex-col items-center py-3 gap-2 z-20 shrink-0">
           {/* Tool: Move / Select (V) */}
           <button
             onClick={() => {
+              setActiveTool('select')
               setActiveFlyout(null)
             }}
             title="Alat Seleksi & Geser (V)"
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
-              activeFlyout === null
+              activeTool === 'select' && activeFlyout === null
                 ? 'bg-[#ff5e00] text-white shadow-md shadow-[#ff5e00]/30'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
@@ -904,9 +1317,68 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             <MousePointer className="w-5 h-5" />
           </button>
 
+          {/* Tool: Paint Brush (B) - Mewarnai Saku, Kancing, Kerah */}
+          <button
+            onClick={() => {
+              setActiveTool('brush')
+              setActiveFlyout((prev) => (prev === 'brush' ? null : 'brush'))
+              setSelectedGraphicId(null)
+            }}
+            title="Kuas Pewarna Seragam (B) - Warnai Saku, Kerah & Kancing"
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
+              activeTool === 'brush'
+                ? 'bg-[#ff5e00] text-white shadow-md shadow-[#ff5e00]/30'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Paintbrush className="w-5 h-5" />
+            <span className="absolute left-14 bg-slate-900 text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
+              Kuas Pewarna (B)
+            </span>
+          </button>
+
+          {/* Tool: Eraser (E) */}
+          <button
+            onClick={() => {
+              setActiveTool('eraser')
+              setActiveFlyout('brush')
+              setSelectedGraphicId(null)
+            }}
+            title="Penghapus Kuas (E)"
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
+              activeTool === 'eraser'
+                ? 'bg-slate-800 text-white shadow-md'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Eraser className="w-5 h-5" />
+            <span className="absolute left-14 bg-slate-900 text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
+              Penghapus Kuas (E)
+            </span>
+          </button>
+
+          {/* Tool: Clipping Mask Toggle */}
+          <button
+            onClick={() => setIsClippingMaskActive((prev) => !prev)}
+            title={`Metode Clipping Mask: ${isClippingMaskActive ? 'Aktif (Terkunci)' : 'Nonaktif (Bebas)'}`}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
+              isClippingMaskActive
+                ? 'bg-orange-50 text-[#ff5e00] border border-orange-300'
+                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Scissors className="w-5 h-5" />
+            <span className="absolute left-14 bg-slate-900 text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
+              {isClippingMaskActive ? 'Clipping Mask: Aktif' : 'Clipping Mask: Nonaktif'}
+            </span>
+          </button>
+
+          <div className="w-6 h-px bg-slate-200 my-0.5" />
+
           {/* Tool: Upload Image (U) */}
           <button
             onClick={() => {
+              setActiveTool('select')
               setActiveFlyout(null)
               fileInputRef.current?.click()
             }}
@@ -921,7 +1393,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
           {/* Tool: Type Tool (T) */}
           <button
-            onClick={() => setActiveFlyout((prev) => (prev === 'text' ? null : 'text'))}
+            onClick={() => {
+              setActiveTool('select')
+              setActiveFlyout((prev) => (prev === 'text' ? null : 'text'))
+            }}
             title="Alat Teks Sablon / Bordir (T)"
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
               activeFlyout === 'text'
@@ -937,7 +1412,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
           {/* Tool: Emblem Presets */}
           <button
-            onClick={() => setActiveFlyout((prev) => (prev === 'presets' ? null : 'presets'))}
+            onClick={() => {
+              setActiveTool('select')
+              setActiveFlyout((prev) => (prev === 'presets' ? null : 'presets'))
+            }}
             title="Emblem Cepat & Posisi Presets"
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
               activeFlyout === 'presets'
@@ -967,7 +1445,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             </span>
           </button>
 
-          <div className="w-6 h-px bg-slate-200 my-1" />
+          <div className="w-6 h-px bg-slate-200 my-0.5" />
 
           {/* Tool: Safe Guidelines Toggle */}
           <button
@@ -986,7 +1464,206 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           </button>
         </div>
 
-        {/* FLOATING FLYOUT MENUS (Positioned right next to toolbar) */}
+        {/* FLOATING FLYOUT MENUS */}
+        {/* FLYOUT 1: BRUSH TOOL CONTROLS */}
+        {activeFlyout === 'brush' && (
+          <div className="absolute left-16 top-3 z-40 w-84 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 text-slate-800 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Paintbrush className="w-4 h-4 text-[#ff5e00]" />
+                <h4 className="font-extrabold text-xs tracking-wide text-slate-900">
+                  Kuas Pewarna Seragam
+                </h4>
+              </div>
+              <button
+                onClick={() => setActiveFlyout(null)}
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 pt-3">
+              {/* Tool Toggle: Kuas vs Penghapus */}
+              <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
+                <button
+                  onClick={() => setActiveTool('brush')}
+                  className={`py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    activeTool === 'brush'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Paintbrush className="w-3.5 h-3.5 text-[#ff5e00]" />
+                  Kuas (B)
+                </button>
+                <button
+                  onClick={() => setActiveTool('eraser')}
+                  className={`py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    activeTool === 'eraser'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Eraser className="w-3.5 h-3.5 text-slate-700" />
+                  Penghapus (E)
+                </button>
+              </div>
+
+              {/* Ukuran Kuas Slider & Quick Size Buttons */}
+              <div>
+                <div className="flex justify-between items-center text-xs mb-1.5">
+                  <span className="text-slate-600 font-bold">Ukuran Kuas</span>
+                  <span className="font-mono font-black text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md text-xs">
+                    {brushSize} px
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="2"
+                  max="60"
+                  value={brushSize}
+                  onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                  className="w-full accent-[#ff5e00] cursor-pointer"
+                />
+
+                {/* Quick Presets: Kancing, Garis, Saku, Kerah */}
+                <div className="grid grid-cols-4 gap-1 mt-2">
+                  {[
+                    { label: 'Kancing', size: 3 },
+                    { label: 'Garis/Lis', size: 8 },
+                    { label: 'Saku', size: 18 },
+                    { label: 'Kerah/Blok', size: 36 },
+                  ].map((preset) => (
+                    <button
+                      key={preset.size}
+                      onClick={() => setBrushSize(preset.size)}
+                      className={`py-1 px-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer text-center ${
+                        brushSize === preset.size
+                          ? 'bg-[#ff5e00] text-white border-[#ff5e00]'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {preset.label} ({preset.size}px)
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Palet Warna Kuas */}
+              {activeTool === 'brush' && (
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1.5">
+                    Pilihan Warna Bagian Pakaian
+                  </label>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {[
+                      { name: 'Navy', hex: '#1e293b' },
+                      { name: 'Hitam', hex: '#0a0a0c' },
+                      { name: 'Putih', hex: '#ffffff' },
+                      { name: 'Maroon', hex: '#7f1d1d' },
+                      { name: 'Merah', hex: '#ef4444' },
+                      { name: 'Scotlite Kuning', hex: '#facc15' },
+                      { name: 'Hijau Army', hex: '#365314' },
+                      { name: 'Hijau Botol', hex: '#14532d' },
+                      { name: 'Biru Benhur', hex: '#1d4ed8' },
+                      { name: 'Krem / Khaki', hex: '#bfa07a' },
+                      { name: 'ZY Orange', hex: '#ff5e00' },
+                      { name: 'Abu-abu', hex: '#64748b' },
+                    ].map((c) => (
+                      <button
+                        key={c.hex}
+                        onClick={() => setBrushColor(c.hex)}
+                        title={c.name}
+                        style={{ backgroundColor: c.hex }}
+                        className={`w-6 h-6 rounded-lg border-2 cursor-pointer transition-transform hover:scale-110 ${
+                          brushColor === c.hex
+                            ? 'border-[#ff5e00] scale-110 shadow-sm ring-2 ring-orange-200'
+                            : 'border-slate-300'
+                        }`}
+                      />
+                    ))}
+                    <input
+                      type="color"
+                      value={brushColor}
+                      onChange={(e) => setBrushColor(e.target.value)}
+                      className="w-6 h-6 rounded-lg border border-slate-300 cursor-pointer p-0 bg-transparent"
+                      title="Pilih Warna Kustom"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Blend Mode: Realistis Kain vs Solid */}
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">
+                  Efek Pewarnaan
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setBrushBlendMode('multiply')}
+                    className={`p-2 rounded-xl text-left border cursor-pointer transition-all ${
+                      brushBlendMode === 'multiply'
+                        ? 'bg-orange-50 border-[#ff5e00] text-slate-900 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="font-extrabold text-[11px] text-[#ff5e00]">🧵 Realistis Kain</div>
+                    <div className="text-[9px] text-slate-500">Lipatan & bayangan tetap tampak nyata</div>
+                  </button>
+                  <button
+                    onClick={() => setBrushBlendMode('source-over')}
+                    className={`p-2 rounded-xl text-left border cursor-pointer transition-all ${
+                      brushBlendMode === 'source-over'
+                        ? 'bg-orange-50 border-[#ff5e00] text-slate-900 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="font-extrabold text-[11px] text-slate-900">🎨 Cat Solid</div>
+                    <div className="text-[9px] text-slate-500">Menutup rata warna asli kain</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Opacity Kuas */}
+              <div>
+                <div className="flex justify-between items-center text-xs mb-1">
+                  <span className="text-slate-600 font-bold">Kepekatan (Opacity)</span>
+                  <span className="font-mono text-slate-800 font-bold">{brushOpacity}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="20"
+                  max="100"
+                  value={brushOpacity}
+                  onChange={(e) => setBrushOpacity(parseInt(e.target.value))}
+                  className="w-full accent-[#ff5e00] cursor-pointer"
+                />
+              </div>
+
+              {/* Action Buttons: Undo & Clear */}
+              <div className="pt-2 border-t border-slate-100 flex gap-2">
+                <button
+                  onClick={handleUndoPaint}
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Undo (Ctrl+Z)
+                </button>
+                <button
+                  onClick={handleClearPaint}
+                  className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                  title="Hapus semua goresan kuas di sudut ini"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Reset
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* FLYOUT 2: TEXT TOOL */}
         {activeFlyout === 'text' && (
           <div className="absolute left-16 top-3 z-40 w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 text-slate-800 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -1113,7 +1790,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           </div>
         )}
 
-        {/* FLOATING PRESETS FLYOUT */}
+        {/* FLYOUT 3: PRESETS */}
         {activeFlyout === 'presets' && (
           <div className="absolute left-16 top-16 z-40 w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 text-slate-800 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -1200,7 +1877,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           </div>
         )}
 
-        {/* FLOATING LIGHTING FLYOUT */}
+        {/* FLYOUT 4: STUDIO LIGHTING */}
         {activeFlyout === 'lighting' && (
           <div className="absolute left-16 top-28 z-40 w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 text-slate-800 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -1289,7 +1966,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           onClick={handleCanvasClick}
-          className="flex-1 relative flex items-center justify-center p-4 sm:p-6 overflow-hidden select-none bg-[#f8f9fc] cursor-crosshair"
+          className="flex-1 relative flex items-center justify-center p-4 sm:p-6 overflow-hidden select-none bg-[#f8f9fc] cursor-default"
           style={{
             minHeight: '680px',
             backgroundImage: 'radial-gradient(circle, #cbd5e1 1.25px, transparent 1.25px)',
@@ -1324,17 +2001,18 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             </div>
           )}
 
-          {/* User's Realistic Mockup Photo for Current Side (MASSIVE, CRISP & COMFORTABLE) */}
+          {/* User's Realistic Mockup Stage with CLIPPING MASK CONTAINER */}
           <div
-            className="w-full h-full max-w-[680px] max-h-[760px] relative pointer-events-none flex items-center justify-center transition-transform"
+            className="w-full h-full max-w-[680px] max-h-[760px] relative flex items-center justify-center transition-transform"
             style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
           >
+            {/* The Base Shirt Mockup Photo */}
             {currentMockupImage ? (
               <img
                 src={currentMockupImage}
                 alt={`${activeMockup.name} - ${currentSide}`}
                 style={filterStyle}
-                className="w-full h-full object-contain select-none drop-shadow-[0_15px_30px_rgba(0,0,0,0.12)]"
+                className="w-full h-full object-contain select-none drop-shadow-[0_15px_30px_rgba(0,0,0,0.12)] pointer-events-none"
               />
             ) : (
               <div className="text-center p-8 border-2 border-dashed border-slate-300 rounded-3xl max-w-sm pointer-events-auto bg-white/95 backdrop-blur-xs shadow-md">
@@ -1353,169 +2031,195 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 </button>
               </div>
             )}
-          </div>
 
-          {/* Graphic & Text Elements Layer */}
-          <div
-            className="absolute inset-0 pointer-events-none flex items-center justify-center"
-            style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
-          >
-            <div className="w-full h-full max-w-[680px] max-h-[760px] relative pointer-events-none">
-              {currentSideGraphics.map((g) => {
-                const isSelected = g.id === selectedGraphicId
-                const calc = calculateGraphicPrice(g.scale)
-                const scaleX = (g.scaleX || 1) * g.scale
-                const scaleY = (g.scaleY || 1) * g.scale
+            {/* CLIPPING MASK WRAPPER: Both Brush Painting and Graphic Elements live here */}
+            <div
+              style={clippingMaskStyle}
+              className="absolute inset-0 w-full h-full overflow-hidden flex items-center justify-center"
+            >
+              <div className="w-full h-full relative">
+                {/* 1. INTERACTIVE PAINT CANVAS (Kuas Pewarna Saku/Kancing/Kerah) */}
+                <canvas
+                  ref={paintCanvasRef}
+                  width={1200}
+                  height={1400}
+                  onMouseDown={handlePaintMouseDown}
+                  onMouseMove={handlePaintMouseMove}
+                  onMouseUp={handlePaintMouseUp}
+                  onMouseLeave={handlePaintMouseUp}
+                  style={{
+                    mixBlendMode: brushBlendMode === 'multiply' ? 'multiply' : 'normal',
+                  }}
+                  className={`absolute inset-0 w-full h-full object-contain ${
+                    activeTool === 'brush' || activeTool === 'eraser'
+                      ? 'pointer-events-auto cursor-crosshair z-25'
+                      : 'pointer-events-none z-15'
+                  }`}
+                />
 
-                return (
-                  <div
-                    key={g.id}
-                    style={{
-                      left: `${g.x}%`,
-                      top: `${g.y}%`,
-                      transform: `translate(-50%, -50%) rotate(${g.rotation}deg)`,
-                      transformOrigin: 'center center',
-                    }}
-                    className={`absolute select-none pointer-events-auto cursor-move ${
-                      isSelected ? 'z-30' : 'z-10'
-                    }`}
-                  >
-                    {/* Floating Action Quickbar on Top of Selected Object */}
-                    {isSelected && (
+                {/* 2. GRAPHIC & TEXT ELEMENTS LAYER (Logos, Badges, Text) */}
+                <div
+                  className={`absolute inset-0 w-full h-full ${
+                    activeTool === 'select' ? 'pointer-events-auto' : 'pointer-events-none'
+                  } z-20`}
+                >
+                  {currentSideGraphics.map((g) => {
+                    const isSelected = g.id === selectedGraphicId
+                    const calc = calculateGraphicPrice(g.scale)
+                    const scaleX = (g.scaleX || 1) * g.scale
+                    const scaleY = (g.scaleY || 1) * g.scale
+
+                    return (
                       <div
-                        onMouseDown={(e) => e.stopPropagation()}
-                        className="absolute -top-11 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-slate-900 text-white px-2 py-1 rounded-xl text-[10px] shadow-xl whitespace-nowrap z-50 border border-slate-800"
-                      >
-                        <button
-                          onClick={() => handleDuplicateGraphic(g.id)}
-                          title="Duplikat (Ctrl+D)"
-                          className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                        >
-                          <Copy className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={() => handleFlipHorizontal(g.id)}
-                          title="Balik Horizontal (Mirror)"
-                          className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                        >
-                          <FlipHorizontal className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={() => handleFlipVertical(g.id)}
-                          title="Balik Vertikal"
-                          className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                        >
-                          <FlipVertical className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleAlignCenter(g.id)}
-                          title="Rata Tengah Horizontal"
-                          className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                        >
-                          <AlignCenter className="w-3.5 h-3.5" />
-                        </button>
-                        <div className="w-px h-3 bg-slate-700 mx-0.5" />
-                        <button
-                          onClick={() => handleBringToFront(g.id)}
-                          title="Bawa ke Paling Depan"
-                          className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                        >
-                          <Layers className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteGraphic(g.id)}
-                          title="Hapus (Delete)"
-                          className="p-1 bg-red-600/80 hover:bg-red-600 rounded text-white ml-0.5 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Main Bounding Box */}
-                    <div
-                      onMouseDown={(e) => handleStartMove(e, g.id)}
-                      className={`relative p-1 transition-all ${
-                        isSelected
-                          ? 'border-2 border-[#ff5e00] rounded-lg shadow-sm bg-orange-500/5'
-                          : 'hover:border hover:border-[#ff5e00]/60 rounded-lg'
-                      }`}
-                    >
-                      {/* Content Image / Text */}
-                      <div
+                        key={g.id}
                         style={{
-                          transform: `scale(${scaleX}, ${scaleY})`,
+                          left: `${g.x}%`,
+                          top: `${g.y}%`,
+                          transform: `translate(-50%, -50%) rotate(${g.rotation}deg)`,
                           transformOrigin: 'center center',
                         }}
-                        className="pointer-events-none"
+                        className={`absolute select-none pointer-events-auto cursor-move ${
+                          isSelected ? 'z-30' : 'z-10'
+                        }`}
                       >
-                        {g.type === 'image' ? (
-                          <div className="relative">
-                            <img
-                              src={g.content}
-                              alt="graphic"
-                              className={`max-w-[140px] max-h-[140px] object-contain drop-shadow-md select-none ${
-                                g.technique === 'bordir'
-                                  ? 'filter drop-shadow-[1px_2px_1px_rgba(0,0,0,0.5)]'
-                                  : ''
-                              }`}
-                            />
-                          </div>
-                        ) : (
+                        {/* Floating Action Quickbar on Top of Selected Object */}
+                        {isSelected && (
                           <div
-                            style={{
-                              color: g.textColor || '#ffffff',
-                              fontFamily: g.fontFamily || 'Montserrat',
-                              fontSize: `${g.fontSize || 22}px`,
-                            }}
-                            className="font-black whitespace-nowrap text-center drop-shadow-md px-2 py-0.5"
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="absolute -top-11 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-slate-900 text-white px-2 py-1 rounded-xl text-[10px] shadow-xl whitespace-nowrap z-50 border border-slate-800"
                           >
-                            {g.content}
+                            <button
+                              onClick={() => handleDuplicateGraphic(g.id)}
+                              title="Duplikat (Ctrl+D)"
+                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => handleFlipHorizontal(g.id)}
+                              title="Balik Horizontal (Mirror)"
+                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                            >
+                              <FlipHorizontal className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => handleFlipVertical(g.id)}
+                              title="Balik Vertikal"
+                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                            >
+                              <FlipVertical className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleAlignCenter(g.id)}
+                              title="Rata Tengah Horizontal"
+                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                            >
+                              <AlignCenter className="w-3.5 h-3.5" />
+                            </button>
+                            <div className="w-px h-3 bg-slate-700 mx-0.5" />
+                            <button
+                              onClick={() => handleBringToFront(g.id)}
+                              title="Bawa ke Paling Depan"
+                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                            >
+                              <Layers className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteGraphic(g.id)}
+                              title="Hapus (Delete)"
+                              className="p-1 bg-red-600/80 hover:bg-red-600 rounded text-white ml-0.5 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         )}
-                      </div>
 
-                      {/* Photoshop Bounding Box Handles when Selected */}
-                      {isSelected && (
-                        <>
-                          {/* Top Rotation Handle */}
+                        {/* Main Bounding Box */}
+                        <div
+                          onMouseDown={(e) => handleStartMove(e, g.id)}
+                          className={`relative p-1 transition-all ${
+                            isSelected
+                              ? 'border-2 border-[#ff5e00] rounded-lg shadow-sm bg-orange-500/5'
+                              : 'hover:border hover:border-[#ff5e00]/60 rounded-lg'
+                          }`}
+                        >
+                          {/* Content Image / Text */}
                           <div
-                            onMouseDown={(e) => handleStartRotate(e, g.id)}
-                            className="absolute -top-7 left-1/2 -translate-x-1/2 w-4 h-4 bg-[#ff5e00] border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing flex items-center justify-center hover:scale-125 transition-transform"
-                            title="Putar Objek Bebas"
+                            style={{
+                              transform: `scale(${scaleX}, ${scaleY})`,
+                              transformOrigin: 'center center',
+                            }}
+                            className="pointer-events-none"
                           >
-                            <div className="w-1 h-1 bg-white rounded-full" />
+                            {g.type === 'image' ? (
+                              <div className="relative">
+                                <img
+                                  src={g.content}
+                                  alt="graphic"
+                                  className={`max-w-[140px] max-h-[140px] object-contain drop-shadow-md select-none ${
+                                    g.technique === 'bordir'
+                                      ? 'filter drop-shadow-[1px_2px_1px_rgba(0,0,0,0.5)]'
+                                      : ''
+                                  }`}
+                                />
+                              </div>
+                            ) : (
+                              <div
+                                style={{
+                                  color: g.textColor || '#ffffff',
+                                  fontFamily: g.fontFamily || 'Montserrat',
+                                  fontSize: `${g.fontSize || 22}px`,
+                                }}
+                                className="font-black whitespace-nowrap text-center drop-shadow-md px-2 py-0.5"
+                              >
+                                {g.content}
+                              </div>
+                            )}
                           </div>
-                          <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-0.5 h-3 bg-[#ff5e00]" />
 
-                          {/* 4 Corner Resize Handles */}
-                          <div
-                            onMouseDown={(e) => handleStartResize(e, g.id, 'nw')}
-                            className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-xs cursor-nwse-resize shadow-xs hover:scale-125"
-                          />
-                          <div
-                            onMouseDown={(e) => handleStartResize(e, g.id, 'ne')}
-                            className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-xs cursor-nesw-resize shadow-xs hover:scale-125"
-                          />
-                          <div
-                            onMouseDown={(e) => handleStartResize(e, g.id, 'sw')}
-                            className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-xs cursor-nesw-resize shadow-xs hover:scale-125"
-                          />
-                          <div
-                            onMouseDown={(e) => handleStartResize(e, g.id, 'se')}
-                            className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-xs cursor-nwse-resize shadow-xs hover:scale-125"
-                          />
+                          {/* Photoshop Bounding Box Handles when Selected */}
+                          {isSelected && (
+                            <>
+                              {/* Top Rotation Handle */}
+                              <div
+                                onMouseDown={(e) => handleStartRotate(e, g.id)}
+                                className="absolute -top-7 left-1/2 -translate-x-1/2 w-4 h-4 bg-[#ff5e00] border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing flex items-center justify-center hover:scale-125 transition-transform"
+                                title="Putar Objek Bebas"
+                              >
+                                <div className="w-1 h-1 bg-white rounded-full" />
+                              </div>
+                              <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-0.5 h-3 bg-[#ff5e00]" />
 
-                          {/* Bottom Tag indicator */}
-                          <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 bg-slate-900 text-[#ff5e00] text-[9px] font-mono font-bold px-1.5 rounded-full shadow-xs whitespace-nowrap">
-                            {calc.sizeCategory.split(' ')[0]} • Rp {calc.price.toLocaleString('id-ID')}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
+                              {/* 4 Corner Resize Handles */}
+                              <div
+                                onMouseDown={(e) => handleStartResize(e, g.id, 'nw')}
+                                className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-xs cursor-nwse-resize shadow-xs hover:scale-125"
+                              />
+                              <div
+                                onMouseDown={(e) => handleStartResize(e, g.id, 'ne')}
+                                className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-xs cursor-nesw-resize shadow-xs hover:scale-125"
+                              />
+                              <div
+                                onMouseDown={(e) => handleStartResize(e, g.id, 'sw')}
+                                className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-xs cursor-nesw-resize shadow-xs hover:scale-125"
+                              />
+                              <div
+                                onMouseDown={(e) => handleStartResize(e, g.id, 'se')}
+                                className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-[#ff5e00] rounded-xs cursor-nwse-resize shadow-xs hover:scale-125"
+                              />
+
+                              {/* Bottom Tag indicator */}
+                              <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 bg-slate-900 text-[#ff5e00] text-[9px] font-mono font-bold px-1.5 rounded-full shadow-xs whitespace-nowrap">
+                                {calc.sizeCategory.split(' ')[0]} • Rp {calc.price.toLocaleString('id-ID')}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1549,7 +2253,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   <Layers className="w-8 h-8 stroke-[1.5] mb-2 text-slate-300" />
                   <p className="text-xs font-bold text-slate-700">Belum Ada Elemen Desain</p>
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Gunakan toolbar di sebelah kiri (Upload / Teks / Emblem) untuk memasang desain seragam.
+                    Gunakan toolbar di sebelah kiri (Upload / Teks / Kuas / Emblem) untuk memasang desain seragam.
                   </p>
                 </div>
               ) : (
@@ -1562,6 +2266,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                     <div
                       key={g.id}
                       onClick={() => {
+                        setActiveTool('select')
                         setCurrentSide(g.side)
                         setSelectedGraphicId(g.id)
                       }}
@@ -1682,10 +2387,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           <span className="truncate text-slate-600">
             {activeMockup.name} ({activeMockup.category})
           </span>
+          <span className="text-slate-400">•</span>
+          <span className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${isClippingMaskActive ? 'bg-orange-100 text-[#ff5e00]' : 'bg-slate-200 text-slate-600'}`}>
+            Mask: {isClippingMaskActive ? 'Aktif' : 'Bebas'}
+          </span>
         </div>
 
         <div className="hidden sm:flex items-center gap-3">
           <span>Sudut: <strong className="text-slate-900 uppercase">{currentSide}</strong></span>
+          <span className="text-slate-400">•</span>
+          <span>Tool: <strong className="text-slate-900 uppercase">{activeTool === 'brush' ? `Kuas (${brushSize}px)` : activeTool === 'eraser' ? 'Penghapus' : 'Seleksi'}</strong></span>
           <span className="text-slate-400">•</span>
           <span>{currentSideGraphics.length} Layer di sudut ini</span>
           <span className="text-slate-400">•</span>
