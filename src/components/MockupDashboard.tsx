@@ -37,6 +37,9 @@ import {
   ChevronUp,
   ChevronDown,
   GripVertical,
+  Eye,
+  EyeOff,
+  Copy,
 } from 'lucide-react'
 
 interface MockupDashboardProps {
@@ -92,6 +95,9 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const [hasDrawn, setHasDrawn] = useState<boolean>(false)
   const [maskHistory, setMaskHistory] = useState<string[]>([])
   const [highlightedPartId, setHighlightedPartId] = useState<string | null>(null)
+  const [hiddenPartIds, setHiddenPartIds] = useState<string[]>([])
+  const [layerPreviewOpacity, setLayerPreviewOpacity] = useState<number>(85)
+  const [editingExistingPartId, setEditingExistingPartId] = useState<string | null>(null)
 
   // Zoom & Pan for Maximum Detail Work (up to 1000% zoom!)
   const [zoomScale, setZoomScale] = useState<number>(1)
@@ -282,6 +288,73 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const handleDragEnd = () => {
     setDraggedPartId(null)
     setDragOverPartId(null)
+  }
+
+  const handleTogglePartVisibility = (partId: string) => {
+    setHiddenPartIds((prev) =>
+      prev.includes(partId) ? prev.filter((id) => id !== partId) : [...prev, partId]
+    )
+  }
+
+  const handleDuplicatePart = (partId: string) => {
+    const part = (editFormData.colorParts || []).find((p) => p.id === partId)
+    if (!part) return
+    const duplicate: ColorablePart = {
+      ...part,
+      id: 'part_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      name: `${part.name} (Salinan)`,
+    }
+    setEditFormData((prev) => {
+      const currentSideParts = (prev.colorParts || []).filter((p) => p.side === part.side)
+      const otherParts = (prev.colorParts || []).filter((p) => p.side !== part.side)
+      const idx = currentSideParts.findIndex((p) => p.id === partId)
+      const newSideParts = [...currentSideParts]
+      newSideParts.splice(idx + 1, 0, duplicate)
+      return {
+        ...prev,
+        colorParts: [...newSideParts, ...otherParts],
+      }
+    })
+  }
+
+  const handleLoadPartMaskToCanvas = (part: ColorablePart) => {
+    if (!part.maskImg) {
+      alert('Layer ini belum memiliki masker gambar untuk diedit.')
+      return
+    }
+
+    const canvas = maskCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      // Convert black silhouette mask pixels to cyan draft color
+      ctx.globalCompositeOperation = 'source-in'
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.85)'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.globalCompositeOperation = 'source-over'
+
+      setHasDrawn(true)
+      setMaskHistory([canvas.toDataURL()])
+      setNewPartName(part.name)
+      setNewPartColor(part.defaultColor)
+      setEditingExistingPartId(part.id)
+      setHiddenPartIds((prev) => (prev.includes(part.id) ? prev : [...prev, part.id]))
+    }
+    img.src = part.maskImg
+  }
+
+  const handleCancelEditingExistingPart = () => {
+    if (editingExistingPartId) {
+      setHiddenPartIds((prev) => prev.filter((id) => id !== editingExistingPartId))
+      setEditingExistingPartId(null)
+    }
+    handleClearMaskDraft()
   }
 
   const handleUpdateColorPart = (id: string, updates: Partial<ColorablePart>) => {
@@ -688,27 +761,46 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     const maskDataUrl = off.toDataURL('image/png')
     const partName = newPartName.trim() || 'Bagian Seragam'
 
-    const newPart: ColorablePart = {
-      id: 'part_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-      name: partName,
-      side: selectedSide,
-      defaultColor: newPartColor,
-      maskImg: maskDataUrl,
-    }
-
-    setEditFormData((prev) => {
-      const otherParts = (prev.colorParts || []).filter((p) => p.side !== selectedSide)
-      const thisSideParts = (prev.colorParts || []).filter((p) => p.side === selectedSide)
-      return {
+    if (editingExistingPartId) {
+      // Update existing layer in place
+      setEditFormData((prev) => ({
         ...prev,
-        colorParts: [newPart, ...thisSideParts, ...otherParts],
+        colorParts: (prev.colorParts || []).map((p) =>
+          p.id === editingExistingPartId
+            ? { ...p, name: partName, defaultColor: newPartColor, maskImg: maskDataUrl }
+            : p
+        ),
+      }))
+      setHiddenPartIds((prev) => prev.filter((id) => id !== editingExistingPartId))
+      setEditingExistingPartId(null)
+    } else {
+      // Create new layer on top
+      const newPart: ColorablePart = {
+        id: 'part_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        name: partName,
+        side: selectedSide,
+        defaultColor: newPartColor,
+        maskImg: maskDataUrl,
       }
-    })
+
+      setEditFormData((prev) => {
+        const otherParts = (prev.colorParts || []).filter((p) => p.side !== selectedSide)
+        const thisSideParts = (prev.colorParts || []).filter((p) => p.side === selectedSide)
+        return {
+          ...prev,
+          colorParts: [newPart, ...thisSideParts, ...otherParts],
+        }
+      })
+    }
 
     handleClearMaskDraft()
   }
 
   const handleSelectSide = (side: ViewSide) => {
+    if (editingExistingPartId) {
+      setHiddenPartIds((prev) => prev.filter((id) => id !== editingExistingPartId))
+      setEditingExistingPartId(null)
+    }
     handleClearMaskDraft()
     handleResetZoom()
     setSelectedSide(side)
@@ -1107,13 +1199,36 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                             <Maximize2 className="w-3.5 h-3.5 text-[#ff5e00]" />
                             <span className="hidden sm:inline">Reset</span>
                           </button>
+
+                          {/* Master Layer Opacity / Ghosting Slider */}
+                          {currentParts.length > 0 && (
+                            <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2">
+                              <span className="text-[10px] font-bold text-slate-500 hidden md:inline" title="Atur transparansi layer untuk melihat jahitan & lipatan kain di bawahnya">
+                                Tembus:
+                              </span>
+                              <input
+                                type="range"
+                                min={15}
+                                max={100}
+                                value={layerPreviewOpacity}
+                                onChange={(e) => setLayerPreviewOpacity(Number(e.target.value))}
+                                className="w-14 sm:w-16 accent-[#ff5e00] cursor-pointer"
+                                title="Transparansi Layer Masker: rendahkan slider untuk melihat lipatan kain di bawah masker"
+                              />
+                              <span className="font-mono text-[10px] font-bold text-slate-700 w-7 text-right">
+                                {layerPreviewOpacity}%
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         {/* TOP-LEFT STATUS BADGE */}
                         <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-md border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs pointer-events-none flex items-center gap-2 z-20">
                           <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
                           <span className="text-[11px] font-bold text-slate-700">
-                            {drawingTool === 'pen'
+                            {editingExistingPartId
+                              ? `Mode Edit Masker Layer: ${newPartName}`
+                              : drawingTool === 'pen'
                               ? 'Mode Pen Tool: Hubungkan titik sudut, klik titik awal untuk isi warna'
                               : drawingTool === 'hand'
                               ? 'Mode Geser: Drag kanvas untuk bernavigasi'
@@ -1141,7 +1256,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
                             {/* Saved Color Parts Overlays with Multiply Blend Mode & Layer Stacking Order */}
                             {currentParts.map((part, pIdx) => {
-                              if (!part.maskImg) return null
+                              if (!part.maskImg || hiddenPartIds.includes(part.id)) return null
                               const isHighlighted = highlightedPartId === part.id
                               return (
                                 <div
@@ -1152,7 +1267,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                   style={{
                                     zIndex: 1 + (currentParts.length - pIdx),
                                     mixBlendMode: 'multiply',
-                                    opacity: isHighlighted ? 1 : 0.85,
+                                    opacity: isHighlighted ? 1 : layerPreviewOpacity / 100,
                                     maskImage: `url(${part.maskImg})`,
                                     WebkitMaskImage: `url(${part.maskImg})`,
                                     maskSize: '100% 100%',
@@ -1445,18 +1560,44 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                 <div className="lg:col-span-5 xl:col-span-4 space-y-4">
                   {/* CARD 1: SAVE DRAWN AREA */}
                   <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-3.5">
-                    <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-                      <div className="w-7 h-7 rounded-xl bg-orange-100 text-[#ff5e00] flex items-center justify-center shrink-0">
-                        <CheckCircle2 className="w-4 h-4" />
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
+                            editingExistingPartId
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-orange-100 text-[#ff5e00]'
+                          }`}
+                        >
+                          {editingExistingPartId ? (
+                            <Edit3 className="w-4 h-4" />
+                          ) : (
+                            <CheckCircle2 className="w-4 h-4" />
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-extrabold text-slate-900">
+                            {editingExistingPartId
+                              ? '1. Perbarui Masker Layer'
+                              : '1. Simpan Area yang Ditandai'}
+                          </h4>
+                          <p className="text-[10px] text-slate-500">
+                            {editingExistingPartId
+                              ? `Memperbaiki coretan untuk layer "${newPartName}"`
+                              : 'Beri nama bagian yang baru saja Anda tandai di sebelah kiri.'}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-xs font-extrabold text-slate-900">
-                          1. Simpan Area yang Ditandai
-                        </h4>
-                        <p className="text-[10px] text-slate-500">
-                          Beri nama bagian yang baru saja Anda tandai dengan kuas/kotak di sebelah kiri.
-                        </p>
-                      </div>
+                      {editingExistingPartId && (
+                        <button
+                          type="button"
+                          onClick={handleCancelEditingExistingPart}
+                          className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer"
+                          title="Batalkan mode perbaikan masker layer"
+                        >
+                          Batal Edit
+                        </button>
+                      )}
                     </div>
 
                     {/* Quick Preset Names */}
@@ -1535,7 +1676,13 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                       }`}
                     >
                       <Check className="w-4 h-4" />
-                      <span>{hasDrawn ? '✓ Simpan Area Ini (Tambah Bagian)' : 'Goreskan Kuas Dulu di Mockup'}</span>
+                      <span>
+                        {hasDrawn
+                          ? editingExistingPartId
+                            ? `✓ Simpan Perubahan Layer '${newPartName}'`
+                            : '✓ Simpan Area Ini (Tambah Bagian)'
+                          : 'Goreskan Kuas / Pen Tool Dulu di Mockup'}
+                      </span>
                     </button>
                   </div>
 
@@ -1602,6 +1749,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                             const isLast = idx === currentSideParts.length - 1
                             const isDragging = draggedPartId === part.id
                             const isDragOver = dragOverPartId === part.id
+                            const isHidden = hiddenPartIds.includes(part.id)
+                            const isBeingEdited = editingExistingPartId === part.id
 
                             return (
                               <div
@@ -1618,8 +1767,12 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                     ? 'opacity-35 bg-slate-100 border-dashed border-slate-400'
                                     : isDragOver
                                     ? 'border-2 border-dashed border-[#ff5e00] bg-orange-50/80 scale-[1.01]'
+                                    : isBeingEdited
+                                    ? 'bg-amber-50/80 border-amber-400 ring-2 ring-amber-300/40 shadow-xs'
                                     : highlightedPartId === part.id
                                     ? 'bg-orange-50/70 border-[#ff5e00] shadow-xs'
+                                    : isHidden
+                                    ? 'bg-slate-100/60 border-slate-200 opacity-60'
                                     : 'bg-slate-50 border-slate-200 hover:border-slate-300'
                                 }`}
                               >
@@ -1631,6 +1784,28 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                   >
                                     <GripVertical className="w-4 h-4" />
                                   </div>
+
+                                  {/* Visibility Toggle (Eye / EyeOff) */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTogglePartVisibility(part.id)}
+                                    className={`p-1 rounded-md transition-colors cursor-pointer shrink-0 ${
+                                      isHidden
+                                        ? 'text-slate-400 hover:text-slate-700'
+                                        : 'text-slate-700 hover:text-slate-900'
+                                    }`}
+                                    title={
+                                      isHidden
+                                        ? 'Tampilkan layer ini di kanvas'
+                                        : 'Sembunyikan sementara layer ini agar mudah menggambar bagian lain'
+                                    }
+                                  >
+                                    {isHidden ? (
+                                      <EyeOff className="w-3.5 h-3.5" />
+                                    ) : (
+                                      <Eye className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
 
                                   {/* Layer Index Badge */}
                                   <span
@@ -1659,7 +1834,9 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                     onChange={(e) =>
                                       handleUpdateColorPart(part.id, { name: e.target.value })
                                     }
-                                    className="text-xs font-extrabold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#ff5e00] focus:outline-none px-1 py-0.5 flex-1 min-w-0"
+                                    className={`text-xs font-extrabold bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#ff5e00] focus:outline-none px-1 py-0.5 flex-1 min-w-0 ${
+                                      isHidden ? 'text-slate-400 line-through' : 'text-slate-900'
+                                    }`}
                                   />
 
                                   {/* Layer Shift Controls (Move Up / Down) */}
@@ -1705,6 +1882,26 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                       className="w-5 h-5 rounded border border-slate-300 cursor-pointer p-0 bg-transparent"
                                       title="Ganti Warna Bagian"
                                     />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleLoadPartMaskToCanvas(part)}
+                                      className={`p-1 rounded transition-colors cursor-pointer ${
+                                        isBeingEdited
+                                          ? 'text-[#ff5e00] bg-orange-100 ring-1 ring-orange-300'
+                                          : 'text-slate-400 hover:text-slate-800'
+                                      }`}
+                                      title="Muat coretan masker ke kanvas untuk diperbaiki/dihapus/ditambah"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDuplicatePart(part.id)}
+                                      className="p-1 text-slate-400 hover:text-slate-800 transition-colors cursor-pointer"
+                                      title="Duplikat layer ini"
+                                    >
+                                      <Copy className="w-3.5 h-3.5" />
+                                    </button>
                                     <button
                                       type="button"
                                       onClick={() => triggerPartMaskUpload(part.id)}
