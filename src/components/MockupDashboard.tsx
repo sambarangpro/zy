@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import type { MockupTemplate, ViewSide, ColorablePart } from '../types'
 import {
   saveMockup,
@@ -25,6 +25,11 @@ import {
   Percent,
   FolderPlus,
   Sparkles,
+  PenTool,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Hand,
 } from 'lucide-react'
 
 interface MockupDashboardProps {
@@ -66,7 +71,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const [selectedSide, setSelectedSide] = useState<ViewSide>('front')
 
   // Interactive Zone Marker Drawing State
-  const [drawingTool, setDrawingTool] = useState<'brush' | 'rect' | 'eraser'>('brush')
+  const [drawingTool, setDrawingTool] = useState<'brush' | 'pen' | 'rect' | 'eraser' | 'hand'>('brush')
   const [markerBrushSize, setMarkerBrushSize] = useState<number>(20)
   const [newPartName, setNewPartName] = useState<string>('Saku Dada')
   const [newPartColor, setNewPartColor] = useState<string>('#1e3a8a')
@@ -76,6 +81,18 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const [hasDrawn, setHasDrawn] = useState<boolean>(false)
   const [maskHistory, setMaskHistory] = useState<string[]>([])
   const [highlightedPartId, setHighlightedPartId] = useState<string | null>(null)
+
+  // Zoom & Pan for Maximum Detail Work (up to 1000% zoom!)
+  const [zoomScale, setZoomScale] = useState<number>(1)
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [isPanning, setIsPanning] = useState<boolean>(false)
+  const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [isSpacePressed, setIsSpacePressed] = useState<boolean>(false)
+
+  // Pen Tool (Polygon Path with Interior Fill)
+  const [penPoints, setPenPoints] = useState<{ x: number; y: number }[]>([])
+  const [penHoverPoint, setPenHoverPoint] = useState<{ x: number; y: number } | null>(null)
+  const [isPenClosing, setIsPenClosing] = useState<boolean>(false)
 
   const maskCanvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -172,6 +189,137 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     e.target.value = ''
   }
 
+  // ZOOM & PAN CONTROLS (UP TO 1000% FOR MAXIMUM PRECISION)
+  const handleResetZoom = () => {
+    setZoomScale(1)
+    setPanOffset({ x: 0, y: 0 })
+  }
+
+  const handleSetZoom = (newZoom: number) => {
+    const clamped = Math.min(Math.max(newZoom, 0.75), 10)
+    setZoomScale(clamped)
+    if (clamped === 1) {
+      setPanOffset({ x: 0, y: 0 })
+    }
+  }
+
+  const handleZoomStep = (delta: number) => {
+    setZoomScale((prev) => {
+      const next = Math.round((prev + delta) * 10) / 10
+      return Math.min(Math.max(next, 0.75), 10)
+    })
+  }
+
+  const handleWheelZoom = (e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const delta = e.deltaY < 0 ? 0.25 : -0.25
+    setZoomScale((prev) => {
+      const next = Math.round((prev + delta) * 100) / 100
+      return Math.min(Math.max(next, 0.75), 10)
+    })
+  }
+
+  // PEN TOOL METHODS (FILLABLE POLYGON AREA)
+  const handleCloseAndFillPen = () => {
+    const canvas = maskCanvasRef.current
+    if (!canvas || penPoints.length < 3) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    setMaskHistory((prev) => [...prev.slice(-15), canvas.toDataURL()])
+
+    ctx.save()
+    ctx.fillStyle = 'rgba(6, 182, 212, 0.85)'
+    ctx.strokeStyle = 'rgba(6, 182, 212, 0.95)'
+    const scale = canvas.width / 500
+    ctx.lineWidth = 2 * scale
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+
+    ctx.beginPath()
+    ctx.moveTo(penPoints[0].x, penPoints[0].y)
+    for (let i = 1; i < penPoints.length; i++) {
+      ctx.lineTo(penPoints[i].x, penPoints[i].y)
+    }
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
+    ctx.restore()
+
+    setPenPoints([])
+    setPenHoverPoint(null)
+    setIsPenClosing(false)
+    setHasDrawn(true)
+  }
+
+  const handleUndoPenPoint = () => {
+    setPenPoints((prev) => prev.slice(0, -1))
+    setIsPenClosing(false)
+  }
+
+  const handleCancelPen = () => {
+    setPenPoints([])
+    setPenHoverPoint(null)
+    setIsPenClosing(false)
+  }
+
+  const handleDoubleClickCanvas = () => {
+    if (drawingTool === 'pen' && penPoints.length >= 3) {
+      handleCloseAndFillPen()
+    }
+  }
+
+  // KEYBOARD SHORTCUTS FOR PEN TOOL & ZOOM & PAN (SPACEBAR)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeTag = (e.target as HTMLElement)?.tagName
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag)) return
+
+      if (e.code === 'Space') {
+        e.preventDefault()
+        setIsSpacePressed(true)
+      } else if (e.key === 'Enter') {
+        if (drawingTool === 'pen' && penPoints.length >= 3) {
+          e.preventDefault()
+          handleCloseAndFillPen()
+        }
+      } else if (e.key === 'Backspace') {
+        if (drawingTool === 'pen' && penPoints.length > 0) {
+          e.preventDefault()
+          handleUndoPenPoint()
+        }
+      } else if (e.key === 'Escape') {
+        if (drawingTool === 'pen' && penPoints.length > 0) {
+          e.preventDefault()
+          handleCancelPen()
+        }
+      } else if (e.key === '+' || e.key === '=') {
+        e.preventDefault()
+        handleZoomStep(0.5)
+      } else if (e.key === '-') {
+        e.preventDefault()
+        handleZoomStep(-0.5)
+      } else if (e.key === '0') {
+        e.preventDefault()
+        handleResetZoom()
+      }
+    }
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setIsSpacePressed(false)
+        setIsPanning(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [drawingTool, penPoints, zoomScale])
+
   // INTERACTIVE CANVAS ZONE MARKER METHODS
   const getMarkerCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = maskCanvasRef.current
@@ -184,15 +332,32 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   const handleStartDrawMask = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Pan mode: Spacebar pressed, Hand tool active, or middle mouse button
+    if (isSpacePressed || drawingTool === 'hand' || e.button === 1) {
+      setIsPanning(true)
+      setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y })
+      return
+    }
+
     const canvas = maskCanvasRef.current
     if (!canvas) return
+    const coords = getMarkerCoords(e)
+
+    // Pen tool mode
+    if (drawingTool === 'pen') {
+      if (isPenClosing && penPoints.length >= 3) {
+        handleCloseAndFillPen()
+        return
+      }
+      setPenPoints((prev) => [...prev, coords])
+      return
+    }
+
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const coords = getMarkerCoords(e)
     setIsDrawingMask(true)
     setLastPoint(coords)
-
     setMaskHistory((prev) => [...prev.slice(-15), canvas.toDataURL()])
 
     if (drawingTool === 'rect') {
@@ -215,13 +380,32 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   const handleDrawMaskMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isPanning) {
+      setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y })
+      return
+    }
+
+    const coords = getMarkerCoords(e)
+
+    if (drawingTool === 'pen') {
+      setPenHoverPoint(coords)
+      if (penPoints.length >= 3) {
+        const dx = coords.x - penPoints[0].x
+        const dy = coords.y - penPoints[0].y
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        const threshold = 35 / zoomScale
+        setIsPenClosing(dist < threshold)
+      } else {
+        setIsPenClosing(false)
+      }
+      return
+    }
+
     if (!isDrawingMask) return
     const canvas = maskCanvasRef.current
     if (!canvas || !lastPoint) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-
-    const coords = getMarkerCoords(e)
 
     if (drawingTool === 'rect' && rectStartPoint) {
       if (maskHistory.length > 0) {
@@ -276,12 +460,20 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   const handleEndDrawMask = () => {
+    if (isPanning) {
+      setIsPanning(false)
+    }
     setIsDrawingMask(false)
     setLastPoint(null)
     setRectStartPoint(null)
   }
 
   const handleUndoMask = () => {
+    if (drawingTool === 'pen' && penPoints.length > 0) {
+      handleUndoPenPoint()
+      return
+    }
+
     const canvas = maskCanvasRef.current
     if (!canvas || maskHistory.length === 0) return
     const ctx = canvas.getContext('2d')
@@ -311,6 +503,9 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     ctx?.clearRect(0, 0, canvas.width, canvas.height)
     setHasDrawn(false)
     setMaskHistory([])
+    setPenPoints([])
+    setPenHoverPoint(null)
+    setIsPenClosing(false)
   }
 
   const handleSaveDrawnArea = () => {
@@ -350,6 +545,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
   const handleSelectSide = (side: ViewSide) => {
     handleClearMaskDraft()
+    handleResetZoom()
     setSelectedSide(side)
   }
 
@@ -603,8 +799,38 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
               {/* Main Stage & Control Panel */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                {/* LARGE CANVAS STAGE */}
-                <div className="lg:col-span-7 xl:col-span-8 bg-slate-100/80 rounded-3xl border border-slate-200 relative flex flex-col items-center justify-center p-3 select-none overflow-hidden min-h-[580px] sm:min-h-[660px]">
+                {/* LARGE CANVAS STAGE WITH ZOOM (UP TO 1000%) & PEN TOOL */}
+                <div
+                  onWheel={handleWheelZoom}
+                  onMouseDown={(e) => {
+                    if (isSpacePressed || drawingTool === 'hand' || e.button === 1) {
+                      setIsPanning(true)
+                      setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y })
+                    }
+                  }}
+                  onMouseMove={(e) => {
+                    if (isPanning) {
+                      setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y })
+                    }
+                  }}
+                  onMouseUp={() => {
+                    if (isPanning) setIsPanning(false)
+                  }}
+                  onMouseLeave={() => {
+                    if (isPanning) setIsPanning(false)
+                  }}
+                  className={`lg:col-span-7 xl:col-span-8 bg-slate-200/60 rounded-3xl border border-slate-200 relative flex flex-col items-center justify-center p-0 select-none overflow-hidden min-h-[580px] sm:min-h-[660px] shadow-inner bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:16px_16px] ${
+                    isSpacePressed || drawingTool === 'hand'
+                      ? isPanning
+                        ? 'cursor-grabbing'
+                        : 'cursor-grab'
+                      : drawingTool === 'pen'
+                      ? isPenClosing
+                        ? 'cursor-pointer'
+                        : 'cursor-crosshair'
+                      : 'cursor-crosshair'
+                  }`}
+                >
                   {(() => {
                     const currentImg =
                       selectedSide === 'front'
@@ -646,153 +872,392 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                     }
 
                     return (
-                      <div className="relative w-full h-[540px] sm:h-[620px] flex items-center justify-center">
-                        {/* Garment Photo Base */}
-                        <img
-                          src={currentImg}
-                          alt="Base Mockup Angle"
-                          className="max-w-full max-h-full object-contain pointer-events-none select-none z-0"
-                        />
+                      <div className="relative w-full h-[540px] sm:h-[620px] flex items-center justify-center overflow-hidden">
+                        {/* TOP FLOATING ZOOM & PAN BAR (UP TO 1000% ZOOM) */}
+                        <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl px-2.5 py-1.5 shadow-md flex items-center gap-1.5 z-20 flex-wrap justify-end">
+                          <button
+                            type="button"
+                            onClick={() => handleZoomStep(-0.5)}
+                            className="p-1 rounded-lg hover:bg-slate-100 text-slate-700 cursor-pointer"
+                            title="Perkecil Zoom (-)"
+                          >
+                            <ZoomOut className="w-3.5 h-3.5" />
+                          </button>
 
-                        {/* Saved Color Parts Overlays with Multiply Blend Mode */}
-                        {currentParts.map((part) => {
-                          if (!part.maskImg) return null
-                          const isHighlighted = highlightedPartId === part.id
-                          return (
-                            <div
-                              key={part.id}
-                              className={`absolute inset-0 pointer-events-none transition-all duration-200 ${
-                                isHighlighted ? 'ring-2 ring-[#ff5e00] ring-inset' : ''
-                              }`}
-                              style={{
-                                mixBlendMode: 'multiply',
-                                opacity: isHighlighted ? 1 : 0.85,
-                                maskImage: `url(${part.maskImg})`,
-                                WebkitMaskImage: `url(${part.maskImg})`,
-                                maskSize: 'contain',
-                                WebkitMaskSize: 'contain',
-                                maskPosition: 'center',
-                                WebkitMaskPosition: 'center',
-                                maskRepeat: 'no-repeat',
-                                WebkitMaskRepeat: 'no-repeat',
-                                backgroundColor: part.defaultColor,
-                              }}
-                            />
-                          )
-                        })}
+                          <input
+                            type="range"
+                            min={0.75}
+                            max={10}
+                            step={0.25}
+                            value={zoomScale}
+                            onChange={(e) => handleSetZoom(Number(e.target.value))}
+                            className="w-20 sm:w-24 accent-[#ff5e00] cursor-pointer"
+                            title="Geser Tingkat Zoom (hingga 1000%)"
+                          />
 
-                        {/* Interactive Drawing Canvas */}
-                        <canvas
-                          ref={maskCanvasRef}
-                          width={1200}
-                          height={1400}
-                          onMouseDown={handleStartDrawMask}
-                          onMouseMove={handleDrawMaskMove}
-                          onMouseUp={handleEndDrawMask}
-                          onMouseLeave={handleEndDrawMask}
-                          className="absolute inset-0 w-full h-full object-contain cursor-crosshair touch-none z-10"
-                        />
+                          <span className="font-mono text-xs font-black text-slate-900 w-12 text-center">
+                            {Math.round(zoomScale * 100)}%
+                          </span>
 
-                        {/* Floating Tool Bar Overlay at Bottom */}
-                        <div className="absolute bottom-3 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl p-2 shadow-lg flex items-center gap-2 z-20 flex-wrap justify-center">
-                          {/* Tool Selector */}
-                          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl">
-                            <button
-                              type="button"
-                              onClick={() => setDrawingTool('brush')}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
-                                drawingTool === 'brush'
-                                  ? 'bg-[#ff5e00] text-white shadow-xs'
-                                  : 'text-slate-600 hover:text-slate-900'
-                              }`}
-                              title="Kuas Penanda Area (Bebas)"
-                            >
-                              <Paintbrush className="w-3.5 h-3.5" />
-                              <span>Kuas</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDrawingTool('rect')}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
-                                drawingTool === 'rect'
-                                  ? 'bg-[#ff5e00] text-white shadow-xs'
-                                  : 'text-slate-600 hover:text-slate-900'
-                              }`}
-                              title="Kotak Seleksi Cepat"
-                            >
-                              <Square className="w-3.5 h-3.5" />
-                              <span>Kotak</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDrawingTool('eraser')}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
-                                drawingTool === 'eraser'
-                                  ? 'bg-slate-800 text-white shadow-xs'
-                                  : 'text-slate-600 hover:text-slate-900'
-                              }`}
-                              title="Penghapus Goresan"
-                            >
-                              <Eraser className="w-3.5 h-3.5" />
-                              <span>Hapus</span>
-                            </button>
+                          <button
+                            type="button"
+                            onClick={() => handleZoomStep(0.5)}
+                            className="p-1 rounded-lg hover:bg-slate-100 text-slate-700 cursor-pointer"
+                            title="Perbesar Zoom (+)"
+                          >
+                            <ZoomIn className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Quick Presets */}
+                          <div className="hidden sm:flex items-center gap-1 border-l border-slate-200 pl-1.5">
+                            {[
+                              { label: '100%', val: 1 },
+                              { label: '250%', val: 2.5 },
+                              { label: '500%', val: 5 },
+                              { label: '1000%', val: 10 },
+                            ].map((preset) => (
+                              <button
+                                key={preset.label}
+                                type="button"
+                                onClick={() => handleSetZoom(preset.val)}
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-black transition-all cursor-pointer ${
+                                  Math.abs(zoomScale - preset.val) < 0.1
+                                    ? 'bg-[#ff5e00] text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                }`}
+                                title={`Zoom ke ${preset.label}`}
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
                           </div>
 
-                          {/* Brush Size Slider */}
-                          <div className="flex items-center gap-2 px-2 border-l border-slate-200">
-                            <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
-                              Ukuran:
-                            </span>
-                            <input
-                              type="range"
-                              min={3}
-                              max={65}
-                              value={markerBrushSize}
-                              onChange={(e) => setMarkerBrushSize(Number(e.target.value))}
-                              className="w-20 accent-[#ff5e00] cursor-pointer"
-                            />
-                            <span className="font-mono text-[10px] font-bold text-slate-700 w-5">
-                              {markerBrushSize}
-                            </span>
-                          </div>
-
-                          {/* Undo & Clear */}
-                          <div className="flex items-center gap-1 border-l border-slate-200 pl-1">
-                            <button
-                              type="button"
-                              onClick={handleUndoMask}
-                              disabled={maskHistory.length === 0}
-                              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                                maskHistory.length > 0
-                                  ? 'text-slate-700 hover:bg-slate-100'
-                                  : 'text-slate-300 cursor-not-allowed'
-                              }`}
-                              title="Urungkan Coretan (Undo)"
-                            >
-                              <RotateCcw className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleClearMaskDraft}
-                              disabled={!hasDrawn}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                                hasDrawn
-                                  ? 'text-red-600 hover:bg-red-50'
-                                  : 'text-slate-300 cursor-not-allowed'
-                              }`}
-                              title="Bersihkan Coretan Ini"
-                            >
-                              Reset
-                            </button>
-                          </div>
+                          {/* Reset Button */}
+                          <button
+                            type="button"
+                            onClick={handleResetZoom}
+                            className="p-1 sm:px-2 py-1 rounded-lg hover:bg-slate-100 text-slate-700 border-l border-slate-200 pl-1.5 cursor-pointer flex items-center gap-1 text-[10px] font-bold"
+                            title="Reset Zoom ke 100% & Tengahkan (0)"
+                          >
+                            <Maximize2 className="w-3.5 h-3.5 text-[#ff5e00]" />
+                            <span className="hidden sm:inline">Reset</span>
+                          </button>
                         </div>
 
-                        {/* Top Indicator */}
-                        <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-md border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs pointer-events-none flex items-center gap-2">
+                        {/* TOP-LEFT STATUS BADGE */}
+                        <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-md border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs pointer-events-none flex items-center gap-2 z-20">
                           <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
                           <span className="text-[11px] font-bold text-slate-700">
-                            Mode Gores Penanda Aktif (Warna Biru Cyan)
+                            {drawingTool === 'pen'
+                              ? 'Mode Pen Tool: Hubungkan titik sudut, klik titik awal untuk isi warna'
+                              : drawingTool === 'hand'
+                              ? 'Mode Geser: Drag kanvas untuk bernavigasi'
+                              : `Mode Penanda Aktif (${Math.round(zoomScale * 100)}% Detail)`}
                           </span>
+                        </div>
+
+                        {/* TRANSFORMED INNER VIEWPORT CONTAINER */}
+                        <div
+                          className="relative w-full h-full flex items-center justify-center"
+                          style={{
+                            transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
+                            transformOrigin: 'center center',
+                            transition: isPanning ? 'none' : 'transform 0.08s ease-out',
+                          }}
+                        >
+                          {/* Garment Photo Base */}
+                          <img
+                            src={currentImg}
+                            alt="Base Mockup Angle"
+                            className="max-w-full max-h-full object-contain pointer-events-none select-none z-0"
+                          />
+
+                          {/* Saved Color Parts Overlays with Multiply Blend Mode */}
+                          {currentParts.map((part) => {
+                            if (!part.maskImg) return null
+                            const isHighlighted = highlightedPartId === part.id
+                            return (
+                              <div
+                                key={part.id}
+                                className={`absolute inset-0 pointer-events-none transition-all duration-200 ${
+                                  isHighlighted ? 'ring-2 ring-[#ff5e00] ring-inset' : ''
+                                }`}
+                                style={{
+                                  mixBlendMode: 'multiply',
+                                  opacity: isHighlighted ? 1 : 0.85,
+                                  maskImage: `url(${part.maskImg})`,
+                                  WebkitMaskImage: `url(${part.maskImg})`,
+                                  maskSize: 'contain',
+                                  WebkitMaskSize: 'contain',
+                                  maskPosition: 'center',
+                                  WebkitMaskPosition: 'center',
+                                  maskRepeat: 'no-repeat',
+                                  WebkitMaskRepeat: 'no-repeat',
+                                  backgroundColor: part.defaultColor,
+                                }}
+                              />
+                            )
+                          })}
+
+                          {/* Interactive Drawing Canvas */}
+                          <canvas
+                            ref={maskCanvasRef}
+                            width={1200}
+                            height={1400}
+                            onMouseDown={handleStartDrawMask}
+                            onMouseMove={handleDrawMaskMove}
+                            onMouseUp={handleEndDrawMask}
+                            onMouseLeave={handleEndDrawMask}
+                            onDoubleClick={handleDoubleClickCanvas}
+                            className="absolute inset-0 w-full h-full object-contain touch-none z-10"
+                          />
+
+                          {/* PEN TOOL VECTOR LIVE PREVIEW SVG */}
+                          {drawingTool === 'pen' && penPoints.length > 0 && (
+                            <svg
+                              className="absolute inset-0 w-full h-full pointer-events-none z-15"
+                              viewBox="0 0 1200 1400"
+                            >
+                              {/* Filled polygon preview if 3 or more points */}
+                              {penPoints.length >= 3 && (
+                                <polygon
+                                  points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
+                                  fill="rgba(6, 182, 212, 0.35)"
+                                  stroke="#06b6d4"
+                                  strokeWidth={2 * (1 / Math.max(1, zoomScale * 0.5))}
+                                  strokeDasharray="6,4"
+                                />
+                              )}
+
+                              {/* Connected line between points */}
+                              {penPoints.length > 1 && (
+                                <polyline
+                                  points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
+                                  fill="none"
+                                  stroke="#06b6d4"
+                                  strokeWidth={3 * (1 / Math.max(1, zoomScale * 0.5))}
+                                />
+                              )}
+
+                              {/* Rubberband line to hover point */}
+                              {penHoverPoint && (
+                                <line
+                                  x1={penPoints[penPoints.length - 1].x}
+                                  y1={penPoints[penPoints.length - 1].y}
+                                  x2={penHoverPoint.x}
+                                  y2={penHoverPoint.y}
+                                  stroke={isPenClosing ? '#22c55e' : '#06b6d4'}
+                                  strokeWidth={2.5 * (1 / Math.max(1, zoomScale * 0.5))}
+                                  strokeDasharray="4,4"
+                                />
+                              )}
+
+                              {/* Node circles */}
+                              {penPoints.map((p, idx) => {
+                                const isStart = idx === 0
+                                const nodeRadius = (isStart ? 8 : 5) * (1 / Math.max(1, zoomScale * 0.5))
+                                return (
+                                  <g key={idx}>
+                                    <circle
+                                      cx={p.x}
+                                      cy={p.y}
+                                      r={nodeRadius}
+                                      fill={isStart && isPenClosing ? '#22c55e' : '#ffffff'}
+                                      stroke={isStart && isPenClosing ? '#15803d' : '#0891b2'}
+                                      strokeWidth={2 * (1 / Math.max(1, zoomScale * 0.5))}
+                                    />
+                                    {isStart && isPenClosing && (
+                                      <circle
+                                        cx={p.x}
+                                        cy={p.y}
+                                        r={nodeRadius * 2.2}
+                                        fill="none"
+                                        stroke="#22c55e"
+                                        strokeWidth={2 * (1 / Math.max(1, zoomScale * 0.5))}
+                                        className="animate-ping"
+                                      />
+                                    )}
+                                  </g>
+                                )
+                              })}
+                            </svg>
+                          )}
+                        </div>
+
+                        {/* FLOATING TOOL BAR OVERLAY AT BOTTOM */}
+                        <div className="absolute bottom-3 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl p-2 shadow-lg flex flex-col items-center gap-1.5 z-20">
+                          {/* Pen Tool In-Progress Action Bar */}
+                          {drawingTool === 'pen' && penPoints.length > 0 && (
+                            <div className="flex items-center gap-1.5 bg-cyan-50 border border-cyan-200 px-2.5 py-1 rounded-xl">
+                              <span className="text-[10px] font-black text-cyan-900">
+                                {penPoints.length} Titik Sudut
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleCloseAndFillPen}
+                                disabled={penPoints.length < 3}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-black flex items-center gap-1 transition-all cursor-pointer ${
+                                  penPoints.length >= 3
+                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                }`}
+                                title="Tutup bentuk poligon dan isi warna area dalamnya (Enter)"
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Isi Area Ini (Enter)</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleUndoPenPoint}
+                                className="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-[10px] font-bold cursor-pointer"
+                                title="Batalkan titik terakhir (Backspace)"
+                              >
+                                Urungkan Titik
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleCancelPen}
+                                className="px-2 py-0.5 bg-white hover:bg-red-50 text-red-600 border border-slate-200 rounded-lg text-[10px] font-bold cursor-pointer"
+                                title="Batalkan pen tool (Esc)"
+                              >
+                                Batal
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Main Tools Row */}
+                          <div className="flex items-center gap-2 flex-wrap justify-center">
+                            {/* Tool Selector */}
+                            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl">
+                              <button
+                                type="button"
+                                onClick={() => setDrawingTool('brush')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                  drawingTool === 'brush'
+                                    ? 'bg-[#ff5e00] text-white shadow-xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                                title="Kuas Penanda Area (Bebas)"
+                              >
+                                <Paintbrush className="w-3.5 h-3.5" />
+                                <span>Kuas</span>
+                              </button>
+
+                              {/* PEN TOOL */}
+                              <button
+                                type="button"
+                                onClick={() => setDrawingTool('pen')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                  drawingTool === 'pen'
+                                    ? 'bg-[#ff5e00] text-white shadow-xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                                title="Pen Tool: Buat garis sudut-sudut rapi (kerah, saku, kancing) lalu isi warna area dalamnya"
+                              >
+                                <PenTool className="w-3.5 h-3.5" />
+                                <span>Pen Tool</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setDrawingTool('rect')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                  drawingTool === 'rect'
+                                    ? 'bg-[#ff5e00] text-white shadow-xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                                title="Kotak Seleksi Cepat"
+                              >
+                                <Square className="w-3.5 h-3.5" />
+                                <span>Kotak</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setDrawingTool('eraser')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                  drawingTool === 'eraser'
+                                    ? 'bg-slate-800 text-white shadow-xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                                title="Penghapus Goresan"
+                              >
+                                <Eraser className="w-3.5 h-3.5" />
+                                <span>Hapus</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setDrawingTool('hand')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                  drawingTool === 'hand'
+                                    ? 'bg-slate-800 text-white shadow-xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                                title="Hand / Geser Kanvas (atau tahan tombol Spasi)"
+                              >
+                                <Hand className="w-3.5 h-3.5" />
+                                <span>Geser</span>
+                              </button>
+                            </div>
+
+                            {/* Brush Size Slider */}
+                            {(drawingTool === 'brush' || drawingTool === 'eraser') && (
+                              <div className="flex items-center gap-2 px-2 border-l border-slate-200">
+                                <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                                  Ukuran:
+                                </span>
+                                <input
+                                  type="range"
+                                  min={2}
+                                  max={65}
+                                  value={markerBrushSize}
+                                  onChange={(e) => setMarkerBrushSize(Number(e.target.value))}
+                                  className="w-20 accent-[#ff5e00] cursor-pointer"
+                                />
+                                <span className="font-mono text-[10px] font-bold text-slate-700 w-5">
+                                  {markerBrushSize}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Pen Tool Guide Info */}
+                            {drawingTool === 'pen' && penPoints.length === 0 && (
+                              <div className="hidden sm:flex items-center gap-1 px-2 border-l border-slate-200 text-[10px] text-slate-600 font-bold">
+                                <span>Klik di foto untuk buat titik sudut</span>
+                              </div>
+                            )}
+
+                            {/* Undo & Clear */}
+                            <div className="flex items-center gap-1 border-l border-slate-200 pl-1">
+                              <button
+                                type="button"
+                                onClick={handleUndoMask}
+                                disabled={maskHistory.length === 0 && penPoints.length === 0}
+                                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                  maskHistory.length > 0 || penPoints.length > 0
+                                    ? 'text-slate-700 hover:bg-slate-100'
+                                    : 'text-slate-300 cursor-not-allowed'
+                                }`}
+                                title="Urungkan Coretan / Titik (Undo)"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleClearMaskDraft}
+                                disabled={!hasDrawn && penPoints.length === 0}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                                  hasDrawn || penPoints.length > 0
+                                    ? 'text-red-600 hover:bg-red-50'
+                                    : 'text-slate-300 cursor-not-allowed'
+                                }`}
+                                title="Bersihkan Coretan Ini"
+                              >
+                                Reset
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )
