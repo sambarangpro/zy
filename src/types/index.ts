@@ -1,6 +1,7 @@
 export type GarmentType = 'kaos' | 'pdh' | 'kemeja' | 'rompi' | 'polo' | 'jaket' | 'hoodie'
 
-export type ViewSide = 'front' | 'back'
+// 4 Sudut Pandang (Depan, Belakang, Kiri, Kanan)
+export type ViewSide = 'front' | 'back' | 'left' | 'right'
 
 export interface GarmentColorParts {
   body: string
@@ -25,6 +26,8 @@ export interface CanvasGraphic {
   x: number // percentage 0-100
   y: number // percentage 0-100
   scale: number // 0.2 to 2.5
+  scaleX?: number // for flip horizontal (-1 or 1)
+  scaleY?: number // for flip vertical (-1 or 1)
   rotation: number // degrees -180 to 180
   textColor?: string
   fontFamily?: string
@@ -33,6 +36,7 @@ export interface CanvasGraphic {
   label?: string
   sizeCategory?: PrintSizeCategory
   calculatedPrice?: number
+  zIndex?: number
 }
 
 export interface StudioLighting {
@@ -40,6 +44,15 @@ export interface StudioLighting {
   contrast: number // -50 to 50
   saturation: number // -50 to 50
   shadowDepth: number // 0 to 100 (percentage)
+}
+
+// Data gambar mockup custom milik pengguna untuk 4 sisi
+export interface CustomMockupImages {
+  front?: string // dataURL or URL
+  back?: string
+  left?: string
+  right?: string
+  blendMode?: 'multiply' | 'source-over' | 'overlay'
 }
 
 export interface FabricOption {

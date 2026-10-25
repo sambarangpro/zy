@@ -1,4 +1,4 @@
-import type { FabricOption, GarmentColorParts, GarmentType, PrintSizeCategory } from '../types'
+import type { FabricOption, GarmentColorParts, GarmentType, PrintSizeCategory, ViewSide } from '../types'
 
 export interface GarmentDef {
   id: GarmentType
@@ -282,15 +282,59 @@ export const COLOR_PALETTE = [
   { name: 'Oranye K3 / Safety', hex: '#ea580c' },
 ]
 
-export const POSITION_PRESETS = [
-  { id: 'left_chest', label: 'Dada Kiri (Logo)', side: 'front' as const, x: 68, y: 32, scale: 0.55 },
-  { id: 'right_chest', label: 'Dada Kanan (Nama)', side: 'front' as const, x: 32, y: 32, scale: 0.55 },
-  { id: 'center_chest', label: 'Dada Tengah (Besar)', side: 'front' as const, x: 50, y: 40, scale: 1.1 },
-  { id: 'left_sleeve', label: 'Lengan Kiri (Bendera/Patch)', side: 'front' as const, x: 88, y: 36, scale: 0.45 },
-  { id: 'right_sleeve', label: 'Lengan Kanan', side: 'front' as const, x: 12, y: 36, scale: 0.45 },
-  { id: 'center_back', label: 'Punggung Tengah (Besar)', side: 'back' as const, x: 50, y: 42, scale: 1.3 },
-  { id: 'upper_back', label: 'Punggung Atas (Tulisan)', side: 'back' as const, x: 50, y: 26, scale: 0.8 },
-  { id: 'neck_back', label: 'Tengkuk Belakang', side: 'back' as const, x: 50, y: 16, scale: 0.4 },
+// Preset Posisi Cepat untuk 4 Sudut Pandang
+export const POSITION_PRESETS: Array<{
+  id: string
+  label: string
+  side: ViewSide
+  x: number
+  y: number
+  scale: number
+}> = [
+  // Tampak Depan
+  { id: 'left_chest', label: 'Dada Kiri (Logo)', side: 'front', x: 68, y: 32, scale: 0.55 },
+  { id: 'right_chest', label: 'Dada Kanan (Nama)', side: 'front', x: 32, y: 32, scale: 0.55 },
+  { id: 'center_chest', label: 'Dada Tengah (A4/A3)', side: 'front', x: 50, y: 40, scale: 1.1 },
+  { id: 'lower_belly', label: 'Perut / Bawah', side: 'front', x: 50, y: 65, scale: 0.8 },
+
+  // Tampak Belakang
+  { id: 'center_back', label: 'Punggung Tengah (Besar A3)', side: 'back', x: 50, y: 42, scale: 1.3 },
+  { id: 'upper_back', label: 'Punggung Atas (Tulisan)', side: 'back', x: 50, y: 26, scale: 0.8 },
+  { id: 'neck_back', label: 'Tengkuk Leher Belakang', side: 'back', x: 50, y: 16, scale: 0.4 },
+
+  // Tampak Sisi Kiri
+  { id: 'left_sleeve_center', label: 'Lengan Kiri Tengah', side: 'left', x: 50, y: 40, scale: 0.6 },
+  { id: 'left_sleeve_patch', label: 'Patch Bendera Lengan Kiri', side: 'left', x: 50, y: 28, scale: 0.5 },
+
+  // Tampak Sisi Kanan
+  { id: 'right_sleeve_center', label: 'Lengan Kanan Tengah', side: 'right', x: 50, y: 40, scale: 0.6 },
+  { id: 'right_sleeve_patch', label: 'Patch Lambang Lengan Kanan', side: 'right', x: 50, y: 28, scale: 0.5 },
+]
+
+// Definisi Garis Panduan Area Sablon Aman (Print Safe Zones)
+export interface PrintZone {
+  id: string
+  name: string
+  x: number // percentage
+  y: number
+  width: number
+  height: number
+  side: ViewSide
+}
+
+export const PRINT_ZONES: PrintZone[] = [
+  // Tampak Depan
+  { id: 'z_left_chest', name: 'Dada Kiri (10×10cm)', x: 68, y: 32, width: 20, height: 18, side: 'front' },
+  { id: 'z_right_chest', name: 'Dada Kanan (10×10cm)', x: 32, y: 32, width: 20, height: 18, side: 'front' },
+  { id: 'z_front_a3', name: 'Area Cetak Depan Maks (A3)', x: 50, y: 45, width: 52, height: 58, side: 'front' },
+
+  // Tampak Belakang
+  { id: 'z_back_a3', name: 'Area Cetak Punggung Maks (A3+)', x: 50, y: 45, width: 54, height: 62, side: 'back' },
+  { id: 'z_neck_back', name: 'Tengkuk Belakang (8×8cm)', x: 50, y: 16, width: 16, height: 12, side: 'back' },
+
+  // Tampak Lengan Kiri & Kanan
+  { id: 'z_left_sleeve', name: 'Area Patch Lengan Kiri', x: 50, y: 35, width: 40, height: 40, side: 'left' },
+  { id: 'z_right_sleeve', name: 'Area Patch Lengan Kanan', x: 50, y: 35, width: 40, height: 40, side: 'right' },
 ]
 
 // ZY Clothes Smart Pricing Engine by Graphic Size
