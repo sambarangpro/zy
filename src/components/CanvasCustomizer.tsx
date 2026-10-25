@@ -52,6 +52,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const [selectedGraphicId, setSelectedGraphicId] = useState<string | null>(null)
   const [showGuidelines, setShowGuidelines] = useState<boolean>(true)
   const [zoomLevel, setZoomLevel] = useState<number>(1)
+  const [activeControlTab, setActiveControlTab] = useState<'design' | 'lighting' | 'layers'>('design')
 
   // Studio Lighting & 3D Shadow controls
   const [lighting, setLighting] = useState<StudioLighting>({
@@ -577,316 +578,390 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      {/* ----------------- LEFT PANEL: CONTROLS & TOOLS (5 cols) ----------------- */}
-      <div className="lg:col-span-5 flex flex-col gap-5 order-2 lg:order-1">
-        {/* Info Mockup Aktif & Tombol Buka Dashboard */}
-        <div className="bg-black text-white rounded-3xl p-5 shadow-sm border border-slate-900 flex items-center justify-between">
+    <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+      {/* ----------------- LEFT PANEL: CONTROLS & TOOLS (4 cols) ----------------- */}
+      <div className="xl:col-span-4 flex flex-col gap-4 order-2 xl:order-1">
+        {/* Mockup Card (Sleek & Ringkas) */}
+        <div className="bg-white rounded-3xl p-4 shadow-xs border border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-3 truncate">
-            <div className="w-11 h-11 rounded-2xl bg-slate-900 text-[#ff5e00] border border-slate-800 flex items-center justify-center font-black text-sm shrink-0">
+            <div className="w-10 h-10 rounded-2xl bg-black text-[#ff5e00] flex items-center justify-center font-black text-sm shrink-0">
               ZY
             </div>
             <div className="truncate">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#ff5e00] bg-orange-500/10 px-2 py-0.5 rounded">
-                {activeMockup.category}
-              </span>
-              <h4 className="font-extrabold text-sm text-white truncate mt-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#ff5e00] bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
+                  {activeMockup.category}
+                </span>
+                <span className="text-xs font-bold text-slate-800 font-mono">
+                  Rp {activeMockup.basePrice.toLocaleString('id-ID')}
+                </span>
+              </div>
+              <h4 className="font-extrabold text-sm text-slate-900 truncate mt-0.5">
                 {activeMockup.name}
               </h4>
-              <p className="text-[11px] text-slate-400">
-                Dasar: Rp {activeMockup.basePrice.toLocaleString('id-ID')} / pcs
-              </p>
             </div>
           </div>
 
           <button
             onClick={onOpenDashboard}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs transition-colors shrink-0 cursor-pointer border border-slate-700"
+            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors shrink-0 cursor-pointer"
           >
             Ganti Mockup
           </button>
         </div>
 
-        {/* 1. Kontrol Pencahayaan Studio & Efek Realistis */}
-        <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-              <Sun className="w-4 h-4 text-[#ff5e00]" />
-              Pencahayaan Studio & Tekstur
-            </h3>
+        {/* Tabbed Tools Panel */}
+        <div className="bg-white rounded-3xl p-5 shadow-xs border border-slate-200 flex flex-col gap-4">
+          {/* Tabs Switcher */}
+          <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-2xl">
             <button
-              onClick={() =>
-                setLighting({ brightness: 0, contrast: 0, saturation: 0, shadowDepth: 30 })
-              }
-              className="text-[10px] text-[#ff5e00] font-bold hover:underline"
+              onClick={() => setActiveControlTab('design')}
+              className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeControlTab === 'design'
+                  ? 'bg-black text-white shadow-xs'
+                  : 'text-slate-600 hover:text-black'
+              }`}
             >
-              Reset
+              <Upload className="w-3.5 h-3.5 text-[#ff5e00]" />
+              + Desain
+            </button>
+            <button
+              onClick={() => setActiveControlTab('lighting')}
+              className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeControlTab === 'lighting'
+                  ? 'bg-black text-white shadow-xs'
+                  : 'text-slate-600 hover:text-black'
+              }`}
+            >
+              <Sun className="w-3.5 h-3.5 text-[#ff5e00]" />
+              Studio
+            </button>
+            <button
+              onClick={() => setActiveControlTab('layers')}
+              className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeControlTab === 'layers'
+                  ? 'bg-black text-white shadow-xs'
+                  : 'text-slate-600 hover:text-black'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 text-[#ff5e00]" />
+              Lapisan {graphics.length > 0 && `(${graphics.length})`}
             </button>
           </div>
 
-          <div className="space-y-3">
-            <div>
-              <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-0.5">
-                <span>Kecerahan (Brightness)</span>
-                <span className="font-mono text-black font-bold">{lighting.brightness}%</span>
-              </div>
-              <input
-                type="range"
-                min="-50"
-                max="50"
-                value={lighting.brightness}
-                onChange={(e) => setLighting({ ...lighting, brightness: parseInt(e.target.value) })}
-                className="w-full accent-[#ff5e00] h-1.5 bg-slate-200 rounded-lg"
-              />
-            </div>
-
-            <div>
-              <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-0.5">
-                <span>Kontras (Contrast)</span>
-                <span className="font-mono text-black font-bold">{lighting.contrast}%</span>
-              </div>
-              <input
-                type="range"
-                min="-50"
-                max="50"
-                value={lighting.contrast}
-                onChange={(e) => setLighting({ ...lighting, contrast: parseInt(e.target.value) })}
-                className="w-full accent-[#ff5e00] h-1.5 bg-slate-200 rounded-lg"
-              />
-            </div>
-
-            <div>
-              <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-0.5">
-                <span className="flex items-center gap-1">
-                  <Waves className="w-3 h-3 text-[#ff5e00]" />
-                  Efek Bayangan Lipatan Kain
-                </span>
-                <span className="font-mono text-[#ff5e00] font-bold">{lighting.shadowDepth}%</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={lighting.shadowDepth}
-                onChange={(e) =>
-                  setLighting({ ...lighting, shadowDepth: parseInt(e.target.value) })
-                }
-                className="w-full accent-[#ff5e00] h-1.5 bg-slate-200 rounded-lg"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 2. Upload Logo & Teks */}
-        <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-              <Upload className="w-4 h-4 text-[#ff5e00]" />
-              Tambah Logo & Desain Sablon
-            </h3>
-            <span className="text-[10px] bg-orange-100 text-orange-950 px-2 py-0.5 rounded-full font-bold">
-              Tampak {currentSide.toUpperCase()}
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <div className="flex gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="flex-1 py-2.5 px-3 bg-orange-50 hover:bg-orange-100/70 text-[#ff5e00] font-bold rounded-2xl text-xs flex items-center justify-center gap-2 transition-colors border border-orange-200"
-              >
-                <Upload className="w-4 h-4" />
-                Upload Logo Anda
-              </button>
-
-              <button
-                onClick={() => handleAddPresetLogo('flag')}
-                className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-2xl text-xs flex items-center gap-1.5"
-              >
-                <Flag className="w-3.5 h-3.5 text-red-500" />
-                + Bendera
-              </button>
-
-              <button
-                onClick={() => handleAddPresetLogo('k3')}
-                className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-2xl text-xs flex items-center gap-1.5"
-              >
-                <span className="w-2.5 h-2.5 bg-emerald-600 rounded-full inline-block" />
-                + K3
-              </button>
-            </div>
-
-            {/* Custom Text Tool */}
-            <div className="border border-slate-200 rounded-2xl p-3 bg-slate-50/70 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <Type className="w-3.5 h-3.5 text-slate-500" />
-                  Tambah Teks Nama / Komunitas
-                </span>
-                <div className="flex bg-slate-200 p-0.5 rounded-lg text-[10px]">
-                  <button
-                    onClick={() => setTextTechnique('bordir')}
-                    className={`px-2 py-0.5 rounded-md font-bold ${
-                      textTechnique === 'bordir' ? 'bg-white text-black shadow-xs' : 'text-slate-600'
-                    }`}
-                  >
-                    Bordir
-                  </button>
-                  <button
-                    onClick={() => setTextTechnique('sablon')}
-                    className={`px-2 py-0.5 rounded-md font-bold ${
-                      textTechnique === 'sablon' ? 'bg-white text-black shadow-xs' : 'text-slate-600'
-                    }`}
-                  >
-                    Sablon
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
+          {/* TAB 1: DESIGN (Logo, Presets, Teks) */}
+          {activeControlTab === 'design' && (
+            <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+              {/* Upload image button */}
+              <div>
                 <input
-                  type="text"
-                  placeholder="Contoh: ZY CLOTHES / TEKNIK MESIN"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddText()}
-                  className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
-                />
-                <input
-                  type="color"
-                  value={textColor}
-                  onChange={(e) => setTextColor(e.target.value)}
-                  className="w-8 h-8 rounded-xl border border-slate-300 cursor-pointer p-0"
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
                 />
                 <button
-                  onClick={handleAddText}
-                  className="bg-black hover:bg-slate-900 text-white font-bold px-3 py-1.5 rounded-xl text-xs transition-colors shrink-0 cursor-pointer"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-4 px-4 bg-orange-50/70 hover:bg-orange-100/80 text-[#ff5e00] font-bold rounded-2xl text-xs flex flex-col items-center justify-center gap-1.5 transition-all border-2 border-dashed border-orange-200 hover:border-[#ff5e00] cursor-pointer group"
                 >
-                  Pasang
+                  <Upload className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                  <span>Upload File Logo / Gambar Anda</span>
+                  <span className="text-[10px] text-slate-400 font-normal">PNG transparan / JPG</span>
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-slate-500 text-[11px]">Font:</span>
-                <select
-                  value={textFont}
-                  onChange={(e) => setTextFont(e.target.value)}
-                  className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 font-medium"
+              {/* Quick Preset Badges */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleAddPresetLogo('flag')}
+                  className="flex-1 py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-slate-200 transition-colors cursor-pointer"
                 >
-                  <option value="Montserrat, sans-serif">Montserrat (Modern Clean)</option>
-                  <option value="'Oswald', sans-serif">Oswald (Bold Sporty)</option>
-                  <option value="'Space Grotesk', sans-serif">Space Grotesk (Tech)</option>
-                  <option value="'Impact', sans-serif">Impact (Solid Tegas)</option>
-                </select>
+                  <Flag className="w-3.5 h-3.5 text-red-500" />
+                  + Bendera RI
+                </button>
+                <button
+                  onClick={() => handleAddPresetLogo('k3')}
+                  className="flex-1 py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-slate-200 transition-colors cursor-pointer"
+                >
+                  <span className="w-2.5 h-2.5 bg-emerald-600 rounded-full inline-block" />
+                  + Logo K3
+                </button>
               </div>
-            </div>
 
-            {/* Presets Posisi Cepat */}
-            {selectedGraphic && (
-              <div className="p-3 bg-orange-50/70 border border-orange-200 rounded-2xl">
-                <p className="text-xs font-bold text-orange-950 mb-2 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-[#ff5e00]" />
-                  Posisikan Cepat "{selectedGraphic.label || 'Elemen'}":
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {POSITION_PRESETS.map((preset) => (
+              {/* Teks Kustom */}
+              <div className="border border-slate-200 rounded-2xl p-3.5 bg-slate-50/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Type className="w-3.5 h-3.5 text-[#ff5e00]" />
+                    Tambah Tulisan / Teks
+                  </span>
+                  <div className="flex bg-slate-200 p-0.5 rounded-lg text-[10px]">
                     <button
-                      key={preset.id}
-                      onClick={() => handleApplyPresetPosition(preset)}
-                      className="px-2.5 py-1 bg-white hover:bg-orange-100 text-orange-950 border border-orange-300/80 rounded-lg text-[11px] font-semibold transition-colors"
+                      onClick={() => setTextTechnique('bordir')}
+                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer ${
+                        textTechnique === 'bordir' ? 'bg-white text-black shadow-xs' : 'text-slate-600'
+                      }`}
                     >
-                      {preset.label}
+                      Bordir
                     </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 3. Daftar Titik Desain Terpasang */}
-        {graphics.length > 0 && (
-          <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                <Layers className="w-4 h-4 text-[#ff5e00]" />
-                Titik Desain Terpasang ({graphics.length})
-              </h3>
-              <span className="text-xs font-bold text-[#ff5e00]">
-                +Rp {totalPrintCost.toLocaleString('id-ID')}
-              </span>
-            </div>
-
-            <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-              {graphics.map((g, idx) => {
-                const isSelected = g.id === selectedGraphicId
-                const calc = calculateGraphicPrice(g.scale)
-                return (
-                  <div
-                    key={g.id}
-                    onClick={() => {
-                      setSelectedGraphicId(g.id)
-                      setCurrentSide(g.side)
-                    }}
-                    className={`p-3 rounded-2xl border flex items-center justify-between text-xs cursor-pointer transition-colors ${
-                      isSelected
-                        ? 'border-[#ff5e00] bg-orange-50/50 text-orange-950 font-bold'
-                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 truncate">
-                      {g.type === 'image' ? (
-                        <img
-                          src={g.content}
-                          alt="preview"
-                          className="w-8 h-8 object-contain bg-slate-100 rounded-lg border"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 bg-black text-[#ff5e00] font-black flex items-center justify-center rounded-lg text-xs">
-                          T
-                        </div>
-                      )}
-                      <div className="truncate">
-                        <p className="font-extrabold truncate text-black">
-                          Titik {idx + 1}: {g.label || g.content}
-                        </p>
-                        <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
-                          <span className="font-mono bg-slate-100 px-1.5 py-0.2 rounded font-bold text-[#ff5e00]">
-                            {calc.sizeCategory}
-                          </span>
-                          <span>• {g.side.toUpperCase()} • Rp {calc.price.toLocaleString('id-ID')}</span>
-                        </div>
-                      </div>
-                    </div>
-
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteGraphic(g.id)
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg"
+                      onClick={() => setTextTechnique('sablon')}
+                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer ${
+                        textTechnique === 'sablon' ? 'bg-white text-black shadow-xs' : 'text-slate-600'
+                      }`}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      Sablon
                     </button>
                   </div>
-                )
-              })}
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Contoh: NAMA / INSTANSI"
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddText()}
+                    className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
+                  />
+                  <input
+                    type="color"
+                    value={textColor}
+                    onChange={(e) => setTextColor(e.target.value)}
+                    title="Pilih warna teks"
+                    className="w-9 h-9 rounded-xl border border-slate-200 cursor-pointer p-0.5 bg-white shrink-0"
+                  />
+                  <button
+                    onClick={handleAddText}
+                    className="px-3.5 py-2 bg-black hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition-colors shrink-0 cursor-pointer"
+                  >
+                    Pasang
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <span className="text-slate-500 text-[11px]">Jenis Font:</span>
+                  <select
+                    value={textFont}
+                    onChange={(e) => setTextFont(e.target.value)}
+                    className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-700 font-medium"
+                  >
+                    <option value="Montserrat, sans-serif">Montserrat (Modern)</option>
+                    <option value="'Oswald', sans-serif">Oswald (Bold)</option>
+                    <option value="'Space Grotesk', sans-serif">Space Grotesk (Tech)</option>
+                    <option value="'Impact', sans-serif">Impact (Solid)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Preset Posisi Cepat (jika ada elemen yang dipilih) */}
+              {selectedGraphic && (
+                <div className="p-3 bg-orange-50/70 border border-orange-200 rounded-2xl animate-in fade-in">
+                  <p className="text-[11px] font-bold text-orange-950 mb-2 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#ff5e00]" />
+                      Posisi Cepat "{selectedGraphic.label || 'Elemen'}":
+                    </span>
+                    <span className="text-[10px] text-[#ff5e00] font-mono font-bold">
+                      {selectedGraphic.sizeCategory?.split(' ')[0]}
+                    </span>
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {POSITION_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        onClick={() => handleApplyPresetPosition(preset)}
+                        className="px-2.5 py-1 bg-white hover:bg-orange-100 text-orange-950 border border-orange-300/80 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          )}
+
+          {/* TAB 2: STUDIO LIGHTING */}
+          {activeControlTab === 'lighting' && (
+            <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800">Efek & Pencahayaan Mockup</span>
+                <button
+                  onClick={() =>
+                    setLighting({ brightness: 0, contrast: 0, saturation: 0, shadowDepth: 30 })
+                  }
+                  className="text-[11px] text-[#ff5e00] font-bold hover:underline cursor-pointer"
+                >
+                  Reset Default
+                </button>
+              </div>
+
+              <div className="space-y-3.5">
+                <div>
+                  <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
+                    <span>Kecerahan (Brightness)</span>
+                    <span className="font-mono text-black font-bold">{lighting.brightness}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="-50"
+                    max="50"
+                    value={lighting.brightness}
+                    onChange={(e) => setLighting({ ...lighting, brightness: parseInt(e.target.value) })}
+                    className="w-full accent-[#ff5e00] h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
+                    <span>Kontras (Contrast)</span>
+                    <span className="font-mono text-black font-bold">{lighting.contrast}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="-50"
+                    max="50"
+                    value={lighting.contrast}
+                    onChange={(e) => setLighting({ ...lighting, contrast: parseInt(e.target.value) })}
+                    className="w-full accent-[#ff5e00] h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
+                    <span>Saturasi Warna Kain</span>
+                    <span className="font-mono text-black font-bold">{lighting.saturation}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="-50"
+                    max="50"
+                    value={lighting.saturation}
+                    onChange={(e) => setLighting({ ...lighting, saturation: parseInt(e.target.value) })}
+                    className="w-full accent-[#ff5e00] h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
+                    <span className="flex items-center gap-1">
+                      <Waves className="w-3 h-3 text-[#ff5e00]" />
+                      Efek Bayangan Lipatan Kain
+                    </span>
+                    <span className="font-mono text-[#ff5e00] font-bold">{lighting.shadowDepth}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={lighting.shadowDepth}
+                    onChange={(e) =>
+                      setLighting({ ...lighting, shadowDepth: parseInt(e.target.value) })
+                    }
+                    className="w-full accent-[#ff5e00] h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: LAYERS (Lapisan Terpasang) */}
+          {activeControlTab === 'layers' && (
+            <div className="flex flex-col gap-3 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <span className="text-xs font-bold text-slate-800">
+                  Titik Terpasang ({graphics.length})
+                </span>
+                <span className="text-xs font-black text-[#ff5e00]">
+                  +Rp {totalPrintCost.toLocaleString('id-ID')}
+                </span>
+              </div>
+
+              {graphics.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-xs">
+                  Belum ada logo atau teks yang dipasang di seragam.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {graphics.map((g, idx) => {
+                    const isSelected = g.id === selectedGraphicId
+                    const calc = calculateGraphicPrice(g.scale)
+                    return (
+                      <div
+                        key={g.id}
+                        onClick={() => {
+                          setSelectedGraphicId(g.id)
+                          setCurrentSide(g.side)
+                        }}
+                        className={`p-2.5 rounded-2xl border flex items-center justify-between text-xs cursor-pointer transition-colors ${
+                          isSelected
+                            ? 'border-[#ff5e00] bg-orange-50/50 text-orange-950 font-bold shadow-2xs'
+                            : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          {g.type === 'image' ? (
+                            <img
+                              src={g.content}
+                              alt="preview"
+                              className="w-7 h-7 object-contain bg-slate-100 rounded-lg border border-slate-200"
+                            />
+                          ) : (
+                            <div className="w-7 h-7 bg-black text-[#ff5e00] font-black flex items-center justify-center rounded-lg text-xs">
+                              T
+                            </div>
+                          )}
+                          <div className="truncate">
+                            <p className="font-extrabold truncate text-black text-[11px]">
+                              {idx + 1}. {g.label || g.content}
+                            </p>
+                            <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5">
+                              <span className="font-mono text-[#ff5e00] font-bold">
+                                {calc.sizeCategory.split(' ')[0]}
+                              </span>
+                              <span>• {g.side.toUpperCase()}</span>
+                              <span>• Rp {calc.price.toLocaleString('id-ID')}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleBringToFront(g.id)
+                            }}
+                            title="Naikkan Lapisan"
+                            className="p-1 text-slate-400 hover:text-black rounded"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteGraphic(g.id)
+                            }}
+                            className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* ----------------- RIGHT PANEL: MOCKUP CANVAS VIEWPORT (7 cols) ----------------- */}
-      <div className="lg:col-span-7 flex flex-col gap-4 order-1 lg:order-2">
-        {/* Top Viewport Header Toolbar - 4 Sudut Pandang */}
-        <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+      {/* ----------------- RIGHT PANEL: MOCKUP CANVAS VIEWPORT (8 cols) ----------------- */}
+      <div className="xl:col-span-8 flex flex-col gap-3 order-1 xl:order-2">
+        {/* Top Viewport Header Toolbar - 4 Sudut Pandang & Tools */}
+        <div className="bg-white rounded-3xl p-3 sm:p-4 shadow-xs border border-slate-200 flex flex-wrap items-center justify-between gap-3">
           {/* 4 View Angles Toggle */}
           <div className="flex items-center bg-slate-100 p-1 rounded-2xl gap-1">
             {[
@@ -904,7 +979,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer ${
                     isActive
                       ? 'bg-black text-white shadow-xs'
-                      : 'text-slate-600 hover:text-black'
+                      : 'text-slate-600 hover:text-black hover:bg-slate-200/50'
                   }`}
                 >
                   <span
@@ -915,8 +990,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   {side.label}
                   {count > 0 && (
                     <span
-                      className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono ${
-                        isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                      className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                        isActive ? 'bg-orange-500/20 text-[#ff5e00]' : 'bg-slate-200 text-slate-700'
                       }`}
                     >
                       {count}
@@ -927,54 +1002,67 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             })}
           </div>
 
-          {/* Action buttons */}
+          {/* Quick Action buttons */}
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setShowGuidelines(!showGuidelines)}
               title="Garis Batas Sablon Aman"
-              className={`p-2 rounded-xl border text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+              className={`p-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 showGuidelines
                   ? 'bg-orange-50 text-[#ff5e00] border-orange-200'
                   : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
               }`}
             >
               <Grid className="w-4 h-4" />
-              <span className="hidden sm:inline">Garis Panduan</span>
+              <span className="hidden sm:inline">Garis Sablon</span>
+            </button>
+
+            <div className="flex items-center bg-slate-100 rounded-xl p-0.5 border border-slate-200">
+              <button
+                onClick={() => setZoomLevel((z) => Math.max(0.7, z - 0.1))}
+                className="p-1.5 hover:bg-white rounded-lg text-slate-700 transition-colors cursor-pointer"
+                title="Perkecil Kanvas"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+              <span className="text-[11px] text-slate-700 font-mono w-10 text-center font-bold">
+                {Math.round(zoomLevel * 100)}%
+              </span>
+              <button
+                onClick={() => setZoomLevel((z) => Math.min(1.5, z + 0.1))}
+                className="p-1.5 hover:bg-white rounded-lg text-slate-700 transition-colors cursor-pointer"
+                title="Perbesar Kanvas"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <button
+              onClick={handleDownloadMockup}
+              className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-200 cursor-pointer"
+              title="Download gambar mockup HD"
+            >
+              <Download className="w-3.5 h-3.5 text-[#ff5e00]" />
+              <span className="hidden sm:inline">Export HD</span>
             </button>
 
             <button
-              onClick={() => setZoomLevel((z) => Math.max(0.8, z - 0.1))}
-              className="p-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs"
+              onClick={onApplyToOrder}
+              className="px-3.5 py-2 rounded-xl bg-[#ff5e00] hover:bg-[#e05300] text-white text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer ml-1"
             >
-              <ZoomOut className="w-4 h-4" />
-            </button>
-            <span className="text-xs text-slate-600 font-mono w-9 text-center font-bold">
-              {Math.round(zoomLevel * 100)}%
-            </span>
-            <button
-              onClick={() => setZoomLevel((z) => Math.min(1.4, z + 0.1))}
-              className="p-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs"
-            >
-              <ZoomIn className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleDownloadMockup}
-              className="px-3.5 py-2 rounded-xl bg-black hover:bg-slate-900 text-white text-xs font-extrabold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-            >
-              <Download className="w-3.5 h-3.5 text-[#ff5e00]" />
-              Export HD
+              Form Order
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
-        {/* The Interactive Mockup Viewport Canvas */}
+        {/* The Expansive Interactive Mockup Viewport Canvas */}
         <div
           ref={viewportRef}
           onClick={handleCanvasClick}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          className="relative aspect-4/5 w-full bg-radial from-slate-100 via-slate-200/90 to-slate-300/80 rounded-3xl border border-slate-300/80 shadow-inner overflow-hidden select-none flex items-center justify-center p-6"
-          style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
+          className="relative w-full h-[620px] sm:h-[720px] md:h-[780px] xl:h-[840px] bg-gradient-to-b from-slate-100 via-slate-200/60 to-slate-300/50 rounded-3xl border border-slate-300/80 shadow-inner overflow-hidden select-none flex items-center justify-center p-4 sm:p-8"
         >
           {/* Subtle Grid backdrop */}
           <div
@@ -1017,17 +1105,20 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             </div>
           )}
 
-          {/* User's Realistic Mockup Photo for Current Side */}
-          <div className="w-full h-full max-w-[520px] max-h-[620px] relative pointer-events-none flex items-center justify-center">
+          {/* User's Realistic Mockup Photo for Current Side (EXPANSIVE) */}
+          <div
+            className="w-full h-full max-w-[700px] max-h-[780px] relative pointer-events-none flex items-center justify-center transition-transform"
+            style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
+          >
             {currentMockupImage ? (
               <img
                 src={currentMockupImage}
                 alt={`${activeMockup.name} - ${currentSide}`}
                 style={filterStyle}
-                className="w-full h-full object-contain select-none"
+                className="w-full h-full object-contain select-none drop-shadow-md"
               />
             ) : (
-              <div className="text-center p-8 border-2 border-dashed border-slate-300 rounded-3xl max-w-sm pointer-events-auto bg-white/60 backdrop-blur-xs">
+              <div className="text-center p-8 border-2 border-dashed border-slate-300 rounded-3xl max-w-sm pointer-events-auto bg-white/80 backdrop-blur-xs">
                 <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
                 <p className="text-xs font-extrabold text-slate-800">
                   Foto {currentSide.toUpperCase()} Belum Di-upload
@@ -1037,7 +1128,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 </p>
                 <button
                   onClick={onOpenDashboard}
-                  className="px-4 py-2 bg-black hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition-colors"
+                  className="px-4 py-2 bg-black hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
                 >
                   Upload Foto di Dashboard
                 </button>
@@ -1046,7 +1137,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           </div>
 
           {/* Graphic & Text Elements Layer */}
-          <div className="absolute inset-0 pointer-events-auto">
+          <div
+            className="absolute inset-0 pointer-events-auto"
+            style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
+          >
             {currentSideGraphics.map((g) => {
               const isSelected = g.id === selectedGraphicId
               const calc = calculateGraphicPrice(g.scale)
@@ -1212,28 +1306,34 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           </div>
         </div>
 
-        {/* Bottom CTA Banner */}
-        <div className="bg-black rounded-3xl p-6 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl border border-slate-800">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold text-[#ff5e00] uppercase tracking-wider mb-1">
+        {/* Bottom CTA Banner (Sleek & Compact) */}
+        <div className="bg-black rounded-3xl p-4 sm:p-5 text-white flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md border border-slate-900">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-slate-900 text-[#ff5e00] flex items-center justify-center shrink-0 border border-slate-800">
               <Tag className="w-4 h-4" />
-              Auto Pricing Terhitung: Rp{' '}
-              {(activeMockup.basePrice + totalPrintCost).toLocaleString('id-ID')} / pcs
             </div>
-            <h4 className="font-extrabold text-base">
-              Siap Memesan Seragam {activeMockup.name}?
-            </h4>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Lanjut ke form untuk memilih ukuran (S-XXL), hitung diskon lusinan, dan kirim ke WhatsApp.
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Total Harga / Pcs:</span>
+                <span className="text-base font-black text-[#ff5e00]">
+                  Rp {(activeMockup.basePrice + totalPrintCost).toLocaleString('id-ID')}
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">
+                  (Dasar Rp {activeMockup.basePrice.toLocaleString('id-ID')} + Sablon/Bordir Rp {totalPrintCost.toLocaleString('id-ID')})
+                </span>
+              </div>
+              <p className="text-xs text-slate-300">
+                Model: <b>{activeMockup.name}</b> • {graphics.length} titik desain terpasang
+              </p>
+            </div>
           </div>
 
           <button
             onClick={onApplyToOrder}
-            className="w-full sm:w-auto px-6 py-3.5 bg-[#ff5e00] hover:bg-[#e05300] text-white font-extrabold rounded-2xl text-xs sm:text-sm transition-all transform hover:scale-105 shadow-md shadow-[#ff5e00]/25 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+            className="w-full sm:w-auto px-5 py-2.5 bg-[#ff5e00] hover:bg-[#e05300] text-white font-extrabold rounded-2xl text-xs transition-all shadow-md shadow-[#ff5e00]/25 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
           >
             Lanjut ke Form Pemesanan
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>

@@ -22,7 +22,6 @@ import {
 import {
   ShieldCheck,
   Truck,
-  Sparkles,
   Award,
   Clock,
   CheckCircle,
@@ -119,41 +118,14 @@ export function App() {
       />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main
+        className={`flex-1 w-full mx-auto px-3 sm:px-6 transition-all ${
+          activeTab === 'canvas' ? 'max-w-[1650px] py-4' : 'max-w-7xl py-8'
+        }`}
+      >
         {/* Dynamic View rendering based on activeTab */}
         {activeTab === 'canvas' && (
-          <div className="space-y-8 animate-in fade-in duration-300">
-            {/* Studio intro banner */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
-              <div>
-                <div className="flex items-center gap-2 text-[#ff5e00] font-extrabold text-xs uppercase tracking-wider mb-1">
-                  <Sparkles className="w-4 h-4 text-[#ff5e00]" />
-                  ZY CLOTHES • 3D MOCKUP STUDIO & SMART PRICING
-                </div>
-                <h1 className="text-2xl sm:text-3xl font-black text-black tracking-tight font-display">
-                  Studio Desain & Customizer Seragam
-                </h1>
-                <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl leading-relaxed">
-                  Pilih model baju, atur pencahayaan studio, kustomisasi kombinasi warna kain, dan pasang logo sablon atau bordir dengan tarif otomatis mengikuti ukuran logo.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2.5 shrink-0">
-                <button
-                  onClick={() => setIsSizeChartOpen(true)}
-                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-2xl text-xs transition-colors cursor-pointer"
-                >
-                  Size Chart
-                </button>
-                <button
-                  onClick={handleApplyToOrder}
-                  className="px-5 py-2.5 bg-[#ff5e00] hover:bg-[#e05300] text-white font-extrabold rounded-2xl text-xs transition-all shadow-md shadow-[#ff5e00]/25 cursor-pointer"
-                >
-                  Form Order Langsung
-                </button>
-              </div>
-            </div>
-
+          <div className="animate-in fade-in duration-300">
             {/* Interactive Canvas Customizer */}
             <CanvasCustomizer
               activeMockup={activeMockup}

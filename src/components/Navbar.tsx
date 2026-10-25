@@ -54,56 +54,48 @@ export const Navbar: React.FC<NavbarProps> = ({
       id: 'canvas' as ActiveTab,
       label: 'Studio Kanvas',
       icon: Palette,
-      badge: 'Desain 3D',
     },
     {
       id: 'mockups' as ActiveTab,
       label: 'Editor Mockup',
       icon: Layers,
-      badge: 'Kelola Foto',
     },
     {
       id: 'order' as ActiveTab,
-      label: 'Form Pemesanan',
+      label: 'Pemesanan',
       icon: ClipboardList,
       badge: totalPcs > 0 ? `${totalPcs} pcs` : undefined,
     },
     {
       id: 'portfolio' as ActiveTab,
-      label: 'Portofolio Produksi',
+      label: 'Portofolio',
       icon: FolderHeart,
-      badge: 'Inspirasi',
     },
   ]
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-2xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* ZY Clothes Brand Logo */}
         <div
           onClick={() => onTabChange('canvas')}
-          className="flex items-center gap-3 cursor-pointer group"
+          className="flex items-center gap-2.5 cursor-pointer group"
         >
-          <div className="w-11 h-11 bg-black text-[#ff5e00] rounded-2xl flex items-center justify-center font-black text-xl shadow-md border border-slate-900 group-hover:scale-105 transition-transform tracking-tighter">
+          <div className="w-9 h-9 bg-black text-[#ff5e00] rounded-xl flex items-center justify-center font-black text-base shadow-sm border border-slate-900 group-hover:scale-105 transition-transform tracking-tighter">
             ZY
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-xl tracking-tight text-black">
-                ZY <span className="text-[#ff5e00]">CLOTHES</span>
-              </span>
-              <span className="bg-black text-white text-[9px] font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-wider hidden sm:inline-block">
-                Studio & Pricing
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 font-medium hidden sm:block">
-              Custom Mockup Studio • Specific Fabrics • Auto Pricing
-            </p>
+          <div className="flex items-center gap-2">
+            <span className="font-black text-lg tracking-tight text-black">
+              ZY <span className="text-[#ff5e00]">CLOTHES</span>
+            </span>
+            <span className="bg-black text-white text-[9px] font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-wider hidden sm:inline-block">
+              Studio
+            </span>
           </div>
         </div>
 
         {/* Desktop Navigation Links */}
-        <nav className="hidden md:flex items-center gap-1 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+        <nav className="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200">
           {navItems.map((item) => {
             const isActive = activeTab === item.id
             const Icon = item.icon
@@ -111,17 +103,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                   isActive
                     ? 'bg-black text-white shadow-xs'
                     : 'text-slate-600 hover:text-black hover:bg-slate-200/60'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-[#ff5e00]' : 'text-slate-500'}`} />
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-[#ff5e00]' : 'text-slate-500'}`} />
                 {item.label}
                 {item.badge && (
                   <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                       isActive
                         ? 'bg-orange-500/20 text-[#ff5e00]'
                         : 'bg-slate-200 text-slate-700'
@@ -136,20 +128,10 @@ export const Navbar: React.FC<NavbarProps> = ({
         </nav>
 
         {/* Right Action Buttons */}
-        <div className="hidden lg:flex items-center gap-2.5">
-          {/* PWA Install Button */}
-          <button
-            onClick={handleInstallClick}
-            title="Install aplikasi ke Layar Utama HP / Desktop"
-            className="px-3.5 py-2 text-xs font-bold text-black hover:text-[#ff5e00] bg-orange-50/70 hover:bg-orange-100/80 rounded-xl border border-orange-200 flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-[#ff5e00]" />
-            Install Aplikasi
-          </button>
-
+        <div className="hidden lg:flex items-center gap-2">
           <button
             onClick={onOpenSizeChart}
-            className="px-3.5 py-2 text-xs font-bold text-slate-700 hover:text-black bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-black bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Ruler className="w-3.5 h-3.5 text-slate-500" />
             Size Chart
@@ -159,10 +141,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             href="https://wa.me/6281234567890?text=Halo%20Admin%20ZY%20Clothes,%20saya%20mau%20konsultasi%20pembuatan%20seragam"
             target="_blank"
             rel="noopener noreferrer"
-            className="px-4 py-2 bg-[#ff5e00] hover:bg-[#e05300] text-white text-xs font-extrabold rounded-xl shadow-xs flex items-center gap-2 transition-all cursor-pointer"
+            className="px-3.5 py-1.5 bg-[#ff5e00] hover:bg-[#e05300] text-white text-xs font-extrabold rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <PhoneCall className="w-3.5 h-3.5" />
-            WhatsApp CS
+            WhatsApp
           </a>
         </div>
 
