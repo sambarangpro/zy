@@ -67,6 +67,12 @@ export function App() {
     syncMockupsWithDisk().then((synced) => {
       if (synced && synced.length > 0) {
         setMockups(synced)
+        const currentActive = getActiveMockupId()
+        const targetId = currentActive && synced.some((m) => m.id === currentActive)
+          ? currentActive
+          : synced[0].id
+        setActiveMockupId(targetId)
+        setActiveMockupIdState(targetId)
       }
     })
   }, [])
@@ -81,7 +87,10 @@ export function App() {
 
   const handleMockupsChange = (updatedList: MockupTemplate[]) => {
     setMockups(updatedList)
-    if (!updatedList.some((m) => m.id === activeMockupId)) {
+    const currentActive = getActiveMockupId()
+    if (currentActive && updatedList.some((m) => m.id === currentActive)) {
+      setActiveMockupIdState(currentActive)
+    } else if (!updatedList.some((m) => m.id === activeMockupId)) {
       const nextId = updatedList[0]?.id || null
       if (nextId) setActiveMockupId(nextId)
       setActiveMockupIdState(nextId)

@@ -1099,11 +1099,12 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
     const updated = saveMockup(newMockup)
     onMockupsChange(updated)
-    setIsEditing(false)
-
-    if (openCanvasAfter) {
-      onSelectAndOpenCanvas(newMockup.id)
+    // Automatically set this newly created/updated mockup as active and open Studio Canvas
+    onSelectAndOpenCanvas(newMockup.id)
+    if (!openCanvasAfter) {
+      alert(`Blangko seragam "${newMockup.name}" berhasil disimpan! Foto dan seluruh zona pewarnaan aktif di Studio Canvas.`)
     }
+    setIsEditing(false)
   }
 
   const triggerUploadForSide = (side: ViewSide) => {
@@ -1117,22 +1118,52 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
     const reader = new FileReader()
     reader.onload = (event) => {
-      const dataUrl = event.target?.result as string
-      setEditFormData((prev) => {
-        const sideKey =
-          uploadTargetSide === 'front'
-            ? 'frontImg'
-            : uploadTargetSide === 'back'
-            ? 'backImg'
-            : uploadTargetSide === 'left'
-            ? 'leftImg'
-            : 'rightImg'
-        return {
-          ...prev,
-          [sideKey]: dataUrl,
+      const rawDataUrl = event.target?.result as string
+      const img = new Image()
+      img.onload = () => {
+        // High-definition optimization: auto-downscale to max 1600px so 4 photos are lightweight, fast & sharp
+        const MAX_DIM = 1600
+        let w = img.naturalWidth || img.width
+        let h = img.naturalHeight || img.height
+        if (w > MAX_DIM || h > MAX_DIM) {
+          if (w > h) {
+            h = Math.round((h * MAX_DIM) / w)
+            w = MAX_DIM
+          } else {
+            w = Math.round((w * MAX_DIM) / h)
+            h = MAX_DIM
+          }
         }
-      })
-      setSelectedSide(uploadTargetSide)
+        const off = document.createElement('canvas')
+        off.width = w
+        off.height = h
+        const offCtx = off.getContext('2d')
+        let finalDataUrl = rawDataUrl
+        if (offCtx) {
+          offCtx.drawImage(img, 0, 0, w, h)
+          const isJpeg = file.type === 'image/jpeg' || file.name.match(/\.(jpe?g)$/i)
+          finalDataUrl = isJpeg
+            ? off.toDataURL('image/jpeg', 0.92)
+            : off.toDataURL('image/png')
+        }
+
+        setEditFormData((prev) => {
+          const sideKey =
+            uploadTargetSide === 'front'
+              ? 'frontImg'
+              : uploadTargetSide === 'back'
+              ? 'backImg'
+              : uploadTargetSide === 'left'
+              ? 'leftImg'
+              : 'rightImg'
+          return {
+            ...prev,
+            [sideKey]: finalDataUrl,
+          }
+        })
+        setSelectedSide(uploadTargetSide)
+      }
+      img.src = rawDataUrl
     }
     reader.readAsDataURL(file)
     e.target.value = ''

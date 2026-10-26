@@ -254,11 +254,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       activeMockup.colorParts.forEach((p) => {
         initial[p.id] = p.defaultColor
       })
-      setPartColors(initial)
+      setPartColors((prev) => ({ ...initial, ...prev }))
     } else {
       setPartColors({})
     }
-  }, [activeMockup?.id])
+  }, [activeMockup?.id, activeMockup?.colorParts])
 
   const handlePartColorChange = (partId: string, color: string) => {
     setPartColors((prev) => ({

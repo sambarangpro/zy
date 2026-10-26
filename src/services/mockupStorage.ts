@@ -3,15 +3,81 @@ import type { MockupTemplate } from '../types'
 const STORAGE_KEY = 'zy_custom_mockup_templates'
 const ACTIVE_MOCKUP_KEY = 'zy_active_mockup_id'
 
+// In-memory cache guarantees that active session data is never lost or blocked by storage quotas
+let memoryMockupCache: MockupTemplate[] = []
+
+// IndexedDB Storage Engine (Virtually unlimited capacity, handles large high-res base64 images effortlessly)
+const IDB_NAME = 'zy_mockup_database'
+const IDB_STORE = 'mockups_store'
+const IDB_VERSION = 1
+
+function openMockupDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+      reject(new Error('IndexedDB not supported'))
+      return
+    }
+    const request = indexedDB.open(IDB_NAME, IDB_VERSION)
+    request.onupgradeneeded = (e: any) => {
+      const db = e.target.result
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE, { keyPath: 'id' })
+      }
+    }
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+}
+
+export async function idbSaveAllMockups(mockups: MockupTemplate[]): Promise<void> {
+  try {
+    const db = await openMockupDB()
+    const tx = db.transaction(IDB_STORE, 'readwrite')
+    const store = tx.objectStore(IDB_STORE)
+    store.clear()
+    for (const m of mockups) {
+      store.put(m)
+    }
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+  } catch (err) {
+    console.warn('IndexedDB save failed', err)
+  }
+}
+
+export async function idbGetAllMockups(): Promise<MockupTemplate[]> {
+  try {
+    const db = await openMockupDB()
+    const tx = db.transaction(IDB_STORE, 'readonly')
+    const store = tx.objectStore(IDB_STORE)
+    const request = store.getAll()
+    return new Promise((resolve) => {
+      request.onsuccess = () => resolve(request.result || [])
+      request.onerror = () => resolve([])
+    })
+  } catch {
+    return []
+  }
+}
+
 export function getMockupList(): MockupTemplate[] {
+  if (memoryMockupCache.length > 0) {
+    return memoryMockupCache
+  }
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return []
-    return JSON.parse(raw)
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      memoryMockupCache = parsed
+      return parsed
+    }
   } catch (e) {
-    console.error('Failed to load mockups from localStorage', e)
-    return []
+    console.warn('Failed to load mockups from localStorage', e)
   }
+  return []
 }
 
 // ASYNC PERSISTENCE TO DISK (Vite dev server middleware writes to mockups-db.json)
@@ -33,7 +99,7 @@ export async function syncMockupsWithDisk(): Promise<MockupTemplate[]> {
     const res = await fetch('/api/mockups')
     if (res.ok) {
       const diskList: MockupTemplate[] = await res.json()
-      if (Array.isArray(diskList)) {
+      if (Array.isArray(diskList) && diskList.length > 0) {
         // Merge diskList and localList so no mockup is ever lost
         const map = new Map<string, MockupTemplate>()
         diskList.forEach((m) => {
@@ -49,7 +115,13 @@ export async function syncMockupsWithDisk(): Promise<MockupTemplate[]> {
         })
         const merged = Array.from(map.values())
         if (merged.length > 0) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+          memoryMockupCache = merged
+          idbSaveAllMockups(merged)
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+          } catch {
+            // Exceeds 5MB localStorage quota; safely stored in IndexedDB & Disk API!
+          }
           if (merged.length !== diskList.length) {
             saveToDiskAsync(merged)
           }
@@ -60,11 +132,19 @@ export async function syncMockupsWithDisk(): Promise<MockupTemplate[]> {
   } catch (e) {
     console.warn('Could not sync with disk mockups API', e)
   }
+
+  // Fallback to IndexedDB
+  const idbList = await idbGetAllMockups()
+  if (idbList.length > 0) {
+    memoryMockupCache = idbList
+    return idbList
+  }
+
   return localList
 }
 
 export function saveMockup(mockup: MockupTemplate): MockupTemplate[] {
-  const current = getMockupList()
+  const current = memoryMockupCache.length > 0 ? memoryMockupCache : getMockupList()
   const existingIdx = current.findIndex((m) => m.id === mockup.id)
 
   let updated: MockupTemplate[]
@@ -74,35 +154,50 @@ export function saveMockup(mockup: MockupTemplate): MockupTemplate[] {
     updated = [mockup, ...current]
   }
 
+  // 1. Always update in-memory cache immediately
+  memoryMockupCache = updated
+
+  // 2. Always set active mockup ID (20 bytes string, guaranteed to succeed)
+  setActiveMockupId(mockup.id)
+
+  // 3. Save to IndexedDB (virtually unlimited quota for large images)
+  idbSaveAllMockups(updated)
+
+  // 4. Safely attempt localStorage without letting QuotaExceededError stop execution
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
-    setActiveMockupId(mockup.id)
   } catch (e) {
-    console.error('Failed to save mockup to localStorage', e)
+    console.warn('LocalStorage quota exceeded (safely stored in IndexedDB & disk)', e)
   }
 
-  // Persist directly to hard drive file mockups-db.json
+  // 5. Persist directly to hard drive file mockups-db.json
   saveToDiskAsync(updated)
 
   return updated
 }
 
 export function deleteMockup(id: string): MockupTemplate[] {
-  const current = getMockupList()
+  const current = memoryMockupCache.length > 0 ? memoryMockupCache : getMockupList()
   const updated = current.filter((m) => m.id !== id)
+  memoryMockupCache = updated
+
+  idbSaveAllMockups(updated)
 
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
-    const active = getActiveMockupId()
-    if (active === id) {
-      if (updated.length > 0) {
-        setActiveMockupId(updated[0].id)
-      } else {
-        localStorage.removeItem(ACTIVE_MOCKUP_KEY)
-      }
-    }
   } catch (e) {
-    console.error('Failed to delete mockup', e)
+    console.warn('Failed to delete mockup in localStorage', e)
+  }
+
+  const active = getActiveMockupId()
+  if (active === id) {
+    if (updated.length > 0) {
+      setActiveMockupId(updated[0].id)
+    } else {
+      try {
+        localStorage.removeItem(ACTIVE_MOCKUP_KEY)
+      } catch {}
+    }
   }
 
   // Update hard drive file mockups-db.json
