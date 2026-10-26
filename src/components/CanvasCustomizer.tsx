@@ -45,8 +45,13 @@ import {
   EyeOff,
   GripVertical,
   Check,
-  RefreshCw,
+  Search,
 } from 'lucide-react'
+import {
+  FABRIC_COLOR_DATABASE,
+  FABRIC_CATALOGS,
+  findClosestFabricSwatch,
+} from '../data/fabricColors'
 
 interface CanvasCustomizerProps {
   activeMockup: MockupTemplate | null
@@ -78,6 +83,20 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
   // Part Colors per defined part ID: { [partId: string]: hexColor }
   const [partColors, setPartColors] = useState<Record<string, string>>({})
+
+  // Visibility layer masker bagian seragam (fungsi mata-mata setiap bagian kain)
+  const [hiddenColorPartKeys, setHiddenColorPartKeys] = useState<string[]>([])
+
+  // Pop-up Katalog Warna Kain Resmi untuk layer bagian yang diklik
+  const [activeColorPickerGroupKey, setActiveColorPickerGroupKey] = useState<string | null>(null)
+  const [fabricCatalogFilter, setFabricCatalogFilter] = useState<string>('all')
+  const [fabricSearchQuery, setFabricSearchQuery] = useState<string>('')
+
+  const handleToggleColorPartVisibility = (groupKey: string) => {
+    setHiddenColorPartKeys((prev) =>
+      prev.includes(groupKey) ? prev.filter((k) => k !== groupKey) : [...prev, groupKey]
+    )
+  }
 
   // Clipping Mask: Kunci gambar & kuas agar tidak keluar dari siluet seragam
   const [isClippingMaskActive, setIsClippingMaskActive] = useState<boolean>(
@@ -1220,7 +1239,12 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
     const drawColorPartsAndContinue = () => {
       // Invert so bottom-most is drawn first, and top-most (index 0) is drawn last on top
-      const partsToDraw = [...currentSideColorParts].reverse().filter((p) => p.maskImg)
+      const allParts = activeMockup?.colorParts || []
+      const partsToDraw = [...currentSideColorParts].reverse().filter((p) => {
+        if (!p.maskImg) return false
+        const groupKey = getPartMatchKey(p, allParts)
+        return !hiddenColorPartKeys.includes(groupKey) && !hiddenColorPartKeys.includes(p.id)
+      })
       if (partsToDraw.length === 0) {
         drawPaintLayerAndContinue()
         return
@@ -1880,27 +1904,30 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             <MousePointer className="w-5 h-5" />
           </button>
 
-          {/* Tool: Palet Warna Bagian (Kerah, Saku, Kancing, dll) */}
+          {/* Tool: Palet Warna Kain & Bagian Seragam - Pindah ke Panel Layer Kanan */}
           <button
             onClick={() => {
-              setActiveFlyout((prev) => (prev === 'colorParts' ? null : 'colorParts'))
-              setActiveTool('select')
+              setShowLayersPanel(true)
+              setActiveFlyout(null)
+              if (unifiedPartGroups.length > 0) {
+                setActiveColorPickerGroupKey(unifiedPartGroups[0].key)
+              }
             }}
-            title="Palet Warna Bagian Pakaian (Kerah, Saku, Kancing, dll)"
+            title="Warna Bagian Kain Seragam (Buka Panel Layer & Katalog Kain)"
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
-              activeFlyout === 'colorParts'
+              showLayersPanel && activeColorPickerGroupKey !== null
                 ? 'bg-[#ff5e00] text-white shadow-md shadow-[#ff5e00]/30'
-                : currentSideColorParts.length > 0
+                : unifiedPartGroups.length > 0
                 ? 'bg-orange-50 text-[#ff5e00] hover:bg-orange-100'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
             <Palette className="w-5 h-5" />
-            {currentSideColorParts.length > 0 && (
+            {unifiedPartGroups.length > 0 && (
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#ff5e00] ring-1.5 ring-white" />
             )}
             <span className="absolute left-14 bg-slate-900 text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
-              Warna Bagian Baju ({currentSideColorParts.length} Bagian)
+              Warna Bagian Kain ({unifiedPartGroups.length} Layer di Kanan)
             </span>
           </button>
 
@@ -2083,167 +2110,6 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         </div>
 
         {/* FLOATING FLYOUT MENUS */}
-        {/* FLYOUT 0: COLORABLE PARTS PALETTE */}
-        {activeFlyout === 'colorParts' && (
-          <div className="absolute left-16 top-3 z-40 w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 text-slate-800 animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Palette className="w-4 h-4 text-[#ff5e00]" />
-                <h4 className="font-extrabold text-xs tracking-wide text-slate-900">
-                  Palet Warna Bagian Seragam
-                </h4>
-              </div>
-              <button
-                onClick={() => setActiveFlyout(null)}
-                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-4 pt-3">
-              {/* SINKRONISASI 4 SISI TOGGLE */}
-              <label className="flex items-center justify-between p-2.5 rounded-xl bg-orange-50/80 border border-orange-200/90 cursor-pointer shadow-2xs">
-                <div className="flex flex-col gap-0.5 pr-2">
-                  <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                    <RefreshCw className="w-3.5 h-3.5 text-[#ff5e00]" />
-                    Sinkronisasi 4 Sisi Otomatis
-                  </span>
-                  <span className="text-[10px] text-slate-600 leading-tight">
-                    Mengganti warna bagian (misal: Kerah/Bagian 1) otomatis merubah warna di Depan, Belakang, Kiri & Kanan secara bersamaan.
-                  </span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={syncColorPartsAcrossSides}
-                  onChange={(e) => setSyncColorPartsAcrossSides(e.target.checked)}
-                  className="rounded border-slate-300 text-[#ff5e00] focus:ring-0 w-4 h-4 cursor-pointer"
-                />
-              </label>
-
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                Pilih warna untuk komponen seragam. Warna langsung <b>meresap ke serat kain (Multiply)</b> sehingga karakter kain & lipatan asli foto tetap realistis!
-              </p>
-
-              {unifiedPartGroups.length === 0 ? (
-                <div className="text-center py-6 px-3 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                  <Palette className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                  <p className="text-xs font-bold text-slate-700">
-                    Belum Ada Bagian Warna di Mockup Ini
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-1 mb-3">
-                    Buka Dashboard Mockup untuk menambahkan bagian (Kerah, Saku, Lengan, Badan) yang dapat diwarnai secara otomatis.
-                  </p>
-                  <button
-                    onClick={onOpenDashboard}
-                    className="px-3.5 py-2 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded-xl text-xs font-extrabold transition-colors cursor-pointer shadow-xs"
-                  >
-                    Atur Bagian di Dashboard
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {unifiedPartGroups.map((group) => {
-                    const currentColor = group.currentColor
-                    const allSidesCount = group.sides.length
-
-                    return (
-                      <div
-                        key={group.key}
-                        className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 hover:border-slate-300 transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex flex-col">
-                            <span className="font-black text-xs text-slate-900">
-                              {group.name}
-                            </span>
-                            <div className="flex items-center gap-1 mt-0.5">
-                              {allSidesCount === 4 ? (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center gap-0.5">
-                                  <Check className="w-2.5 h-2.5" /> 4 Sisi Tersinkron
-                                </span>
-                              ) : (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-indigo-50 text-indigo-700 font-medium">
-                                  {group.sides.map((s) => s === 'front' ? 'Depan' : s === 'back' ? 'Belakang' : s === 'left' ? 'Kiri' : 'Kanan').join(', ')}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              style={{ backgroundColor: currentColor }}
-                              className="w-4 h-4 rounded-full border border-slate-300 shadow-2xs inline-block"
-                            />
-                            <span className="font-mono text-[10px] text-slate-600 font-bold">
-                              {currentColor}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Quick Color Swatches */}
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {[
-                            { name: 'Navy', hex: '#1e293b' },
-                            { name: 'Hitam', hex: '#0a0a0c' },
-                            { name: 'Putih', hex: '#ffffff' },
-                            { name: 'Maroon', hex: '#7f1d1d' },
-                            { name: 'Merah', hex: '#ef4444' },
-                            { name: 'Kuning', hex: '#facc15' },
-                            { name: 'Hijau Army', hex: '#365314' },
-                            { name: 'Hijau Botol', hex: '#14532d' },
-                            { name: 'Biru Benhur', hex: '#1d4ed8' },
-                            { name: 'Krem Khaki', hex: '#bfa07a' },
-                            { name: 'Orange ZY', hex: '#ff5e00' },
-                            { name: 'Abu-abu', hex: '#64748b' },
-                          ].map((c) => (
-                            <button
-                              key={c.hex}
-                              type="button"
-                              onClick={() => handlePartColorChange(group.primaryPartId, c.hex)}
-                              title={`${group.name}: ${c.name} (${c.hex})`}
-                              style={{ backgroundColor: c.hex }}
-                              className={`w-5 h-5 rounded-md border cursor-pointer transition-transform hover:scale-115 ${
-                                currentColor.toLowerCase() === c.hex.toLowerCase()
-                                  ? 'border-[#ff5e00] ring-2 ring-orange-200 scale-110 shadow-2xs'
-                                  : 'border-slate-300'
-                              }`}
-                            />
-                          ))}
-
-                          {/* Custom Color Input */}
-                          <input
-                            type="color"
-                            value={currentColor}
-                            onChange={(e) => handlePartColorChange(group.primaryPartId, e.target.value)}
-                            className="w-5 h-5 rounded-md border border-slate-300 cursor-pointer p-0 bg-transparent"
-                            title="Pilih Warna Kustom Lainnya"
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                    <button
-                      onClick={handleResetPartColors}
-                      className="text-[11px] font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      Reset ke Warna Bawaan
-                    </button>
-                    <button
-                      onClick={onOpenDashboard}
-                      className="text-[11px] font-bold text-[#ff5e00] hover:underline cursor-pointer"
-                    >
-                      + Atur di Dashboard
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* FLYOUT 1: BRUSH TOOL CONTROLS */}
         {activeFlyout === 'brush' && (
           <div className="absolute left-16 top-3 z-40 w-84 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 text-slate-800 animate-in fade-in zoom-in-95 duration-150">
@@ -2863,6 +2729,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
                 {/* 2. AUTOMATIC COLORABLE PARTS (Kerah, Saku, Kancing, Garis Kancing - Multiply Blending absorbs directly into fabric!) */}
                 {currentSideColorParts.map((part, pIdx) => {
+                  const allParts = activeMockup?.colorParts || []
+                  const groupKey = getPartMatchKey(part, allParts)
+                  if (hiddenColorPartKeys.includes(groupKey) || hiddenColorPartKeys.includes(part.id)) {
+                    return null
+                  }
                   const color = getPartColor(part)
                   if (!part.maskImg || !color) return null
                   return (
@@ -3158,7 +3029,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
               <div className="flex items-center gap-2">
                 <Layers className="w-4 h-4 text-[#ff5e00]" />
                 <h4 className="font-extrabold text-xs tracking-wide text-slate-900">
-                  Daftar Layers ({graphics.length})
+                  Daftar Layers ({unifiedPartGroups.length + graphics.length})
                 </h4>
               </div>
               <button
@@ -3171,128 +3042,244 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             </div>
 
             {/* Layers List (Scrollable) */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[calc(100vh-320px)] min-h-[260px]">
-              {graphics.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
-                  <Layers className="w-8 h-8 stroke-[1.5] mb-2 text-slate-300" />
-                  <p className="text-xs font-bold text-slate-700">Belum Ada Elemen Desain</p>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Gunakan toolbar di sebelah kiri (Upload / Teks / Kuas / Emblem) untuk memasang desain seragam.
-                  </p>
+            <div className="flex-1 overflow-y-auto p-3 space-y-4 max-h-[calc(100vh-320px)] min-h-[260px]">
+              {/* 1. SECTION: BAGIAN KAIN & POLA SERAGAM (MASKING COLOR LAYERS) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex items-center gap-1.5 text-[11px] font-black text-slate-800 uppercase tracking-wider">
+                    <Palette className="w-3.5 h-3.5 text-[#ff5e00]" />
+                    <span>Bagian Kain ({unifiedPartGroups.length})</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-medium">Klik untuk ubah warna</span>
                 </div>
-              ) : (
-                [...graphics]
-                  .map((g, origIdx) => ({ g, origIdx }))
-                  .reverse()
-                  .map(({ g, origIdx }) => {
-                    const isSelected = g.id === selectedGraphicId
-                    const calc = calculateGraphicPrice(g.scale)
-                    const isCurrentSide = g.side === currentSide
-                    const isHidden = hiddenGraphicIds.includes(g.id)
 
-                    return (
-                      <div
-                        key={g.id}
-                        draggable
-                        onDragStart={(e) => handleGraphicDragStart(e, g.id)}
-                        onDragOver={(e) => handleGraphicDragOver(e, g.id)}
-                        onDrop={(e) => handleGraphicDrop(e, g.id)}
-                        onDragEnd={handleGraphicDragEnd}
-                        onClick={() => {
-                          setActiveTool('select')
-                          setCurrentSide(g.side)
-                          setSelectedGraphicId(g.id)
-                        }}
-                        className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center gap-2 ${
-                          isSelected
-                            ? 'bg-orange-50/80 border-[#ff5e00] shadow-xs'
-                            : 'bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-slate-100/70'
-                        } ${isHidden ? 'opacity-40' : ''}`}
-                      >
-                        {/* Drag Handle */}
-                        <GripVertical className="w-3.5 h-3.5 text-slate-400 cursor-grab shrink-0" />
+                {unifiedPartGroups.length === 0 ? (
+                  <div className="p-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center text-slate-400 text-xs">
+                    <p className="font-semibold text-slate-600">Belum Ada Pola Bagian</p>
+                    <p className="text-[10px] mt-0.5">Buka Dashboard untuk membuat masker zona warna.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {unifiedPartGroups.map((group) => {
+                      const isHidden = hiddenColorPartKeys.includes(group.key)
+                      const swatchInfo = findClosestFabricSwatch(group.currentColor)
 
-                        {/* Thumbnail */}
-                        <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
-                          {g.type === 'image' ? (
-                            <img src={g.content} alt="" className="w-full h-full object-contain p-1" />
-                          ) : (
-                            <Type className="w-4 h-4 text-[#ff5e00]" />
-                          )}
-                        </div>
-
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded font-mono ${
-                                isCurrentSide
-                                  ? 'bg-[#ff5e00] text-white'
-                                  : 'bg-slate-200 text-slate-700'
-                              }`}
+                      return (
+                        <div
+                          key={group.key}
+                          onClick={() => setActiveColorPickerGroupKey(group.key)}
+                          className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 group ${
+                            activeColorPickerGroupKey === group.key
+                              ? 'bg-orange-50/90 border-[#ff5e00] shadow-2xs'
+                              : 'bg-slate-50/90 border-slate-200 hover:border-slate-300 hover:bg-slate-100/80'
+                          } ${isHidden ? 'opacity-40' : ''}`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {/* Tombol Mata-mata (Fungsi Layer Visibility) */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleToggleColorPartVisibility(group.key)
+                              }}
+                              title={isHidden ? `Aktifkan warna ${group.name}` : `Sembunyikan warna ${group.name}`}
+                              className="p-1 hover:bg-slate-200/80 rounded-lg text-slate-400 hover:text-slate-800 transition-colors cursor-pointer shrink-0"
                             >
-                              {g.side}
-                            </span>
-                            <span className="text-[10px] text-slate-500 capitalize flex items-center gap-0.5">
-                              {g.technique === 'bordir' ? '🧵 Bordir' : '🎨 Sablon'}
-                            </span>
+                              {isHidden ? (
+                                <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                              ) : (
+                                <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                              )}
+                            </button>
+
+                            {/* Bulatan Warna Kain */}
+                            <div
+                              style={{ backgroundColor: group.currentColor }}
+                              className="w-5 h-5 rounded-full border-2 border-white ring-1 ring-slate-300 shrink-0 shadow-2xs"
+                              title={`Warna: ${group.currentColor}`}
+                            />
+
+                            {/* Nama Bagian & Info Kain Pabrik */}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-extrabold text-xs text-slate-900 truncate">
+                                  {group.name}
+                                </span>
+                                {group.sides.length === 4 ? (
+                                  <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 shrink-0">
+                                    4 Sisi
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] px-1 py-0.2 rounded bg-slate-200 text-slate-600 font-medium shrink-0">
+                                    {group.sides.length} Sisi
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-slate-500 truncate flex items-center gap-1">
+                                {swatchInfo ? (
+                                  <span className="font-medium text-slate-700">
+                                    {swatchInfo.code} • {swatchInfo.name}
+                                  </span>
+                                ) : (
+                                  <span className="font-mono text-slate-400">{group.currentColor}</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <h5 className="font-bold text-xs text-slate-900 truncate mt-0.5">
-                            {g.label || (g.type === 'text' ? g.content : 'Logo')}
-                          </h5>
-                          <div className="text-[10px] font-mono text-[#ff5e00] font-bold">
-                            {calc.sizeCategory} • Rp {calc.price.toLocaleString('id-ID')}
-                          </div>
-                        </div>
 
-                        {/* Actions: Visibility, Lock, Step Up, Step Down, Delete */}
-                        <div className="flex flex-col gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center gap-0.5">
+                          {/* Tombol Pilih Warna Katalog */}
+                          <div className="flex items-center gap-1 shrink-0">
                             <button
-                              onClick={() => handleToggleGraphicVisibility(g.id)}
-                              title={isHidden ? 'Tampilkan Layer' : 'Sembunyikan Layer'}
-                              className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 rounded cursor-pointer"
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setActiveColorPickerGroupKey(group.key)
+                              }}
+                              className="px-2 py-1 rounded-lg bg-white group-hover:bg-[#ff5e00] text-slate-600 group-hover:text-white border border-slate-200 group-hover:border-[#ff5e00] text-[10px] font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
+                              title="Pilih warna kain dari database katalog resmi"
                             >
-                              {isHidden ? <EyeOff className="w-3 h-3 text-slate-400" /> : <Eye className="w-3 h-3 text-indigo-600" />}
-                            </button>
-                            <button
-                              onClick={() => handleToggleLock(g.id)}
-                              title={g.isLocked ? 'Buka Kunci Layer' : 'Kunci Layer (Cegah Tergeser)'}
-                              className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 rounded cursor-pointer"
-                            >
-                              {g.isLocked ? <Lock className="w-3 h-3 text-amber-600" /> : <Unlock className="w-3 h-3" />}
-                            </button>
-                          </div>
-                          <div className="flex items-center gap-0.5">
-                            <button
-                              onClick={() => handleMoveLayer(g.id, 'up')}
-                              disabled={origIdx === graphics.length - 1}
-                              title="Naikkan Layer (Maju ke Depan)"
-                              className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 disabled:opacity-30 rounded cursor-pointer"
-                            >
-                              <ChevronUp className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => handleMoveLayer(g.id, 'down')}
-                              disabled={origIdx === 0}
-                              title="Turunkan Layer (Mundur ke Belakang)"
-                              className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 disabled:opacity-30 rounded cursor-pointer"
-                            >
-                              <ChevronDown className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteGraphic(g.id)}
-                              title="Hapus Layer"
-                              className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded cursor-pointer"
-                            >
-                              <Trash2 className="w-3 h-3" />
+                              <Palette className="w-3 h-3" />
+                              <span>Warna</span>
                             </button>
                           </div>
                         </div>
-                      </div>
-                    )
-                  })
-              )}
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* 2. SECTION: ELEMEN DESAIN (LOGO, BORDIR & TEKS) */}
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex items-center gap-1.5 text-[11px] font-black text-slate-800 uppercase tracking-wider">
+                    <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Elemen Desain ({graphics.length})</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-medium">Bordir & Sablon</span>
+                </div>
+
+                {graphics.length === 0 ? (
+                  <div className="p-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center text-slate-400 text-xs">
+                    <p className="font-semibold text-slate-600">Belum Ada Elemen Desain</p>
+                    <p className="text-[10px] mt-0.5">Upload logo atau tambah teks dari menu sebelah kiri.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {[...graphics]
+                      .map((g, origIdx) => ({ g, origIdx }))
+                      .reverse()
+                      .map(({ g, origIdx }) => {
+                        const isSelected = g.id === selectedGraphicId
+                        const calc = calculateGraphicPrice(g.scale)
+                        const isCurrentSide = g.side === currentSide
+                        const isHidden = hiddenGraphicIds.includes(g.id)
+
+                        return (
+                          <div
+                            key={g.id}
+                            draggable
+                            onDragStart={(e) => handleGraphicDragStart(e, g.id)}
+                            onDragOver={(e) => handleGraphicDragOver(e, g.id)}
+                            onDrop={(e) => handleGraphicDrop(e, g.id)}
+                            onDragEnd={handleGraphicDragEnd}
+                            onClick={() => {
+                              setActiveTool('select')
+                              setCurrentSide(g.side)
+                              setSelectedGraphicId(g.id)
+                            }}
+                            className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center gap-2 ${
+                              isSelected
+                                ? 'bg-orange-50/80 border-[#ff5e00] shadow-xs'
+                                : 'bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-slate-100/70'
+                            } ${isHidden ? 'opacity-40' : ''}`}
+                          >
+                            {/* Drag Handle */}
+                            <GripVertical className="w-3.5 h-3.5 text-slate-400 cursor-grab shrink-0" />
+
+                            {/* Thumbnail */}
+                            <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                              {g.type === 'image' ? (
+                                <img src={g.content} alt="" className="w-full h-full object-contain p-1" />
+                              ) : (
+                                <Type className="w-4 h-4 text-[#ff5e00]" />
+                              )}
+                            </div>
+
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded font-mono ${
+                                    isCurrentSide
+                                      ? 'bg-[#ff5e00] text-white'
+                                      : 'bg-slate-200 text-slate-700'
+                                  }`}
+                                >
+                                  {g.side}
+                                </span>
+                                <span className="text-[10px] text-slate-500 capitalize flex items-center gap-0.5">
+                                  {g.technique === 'bordir' ? '🧵 Bordir' : '🎨 Sablon'}
+                                </span>
+                              </div>
+                              <h5 className="font-bold text-xs text-slate-900 truncate mt-0.5">
+                                {g.label || (g.type === 'text' ? g.content : 'Logo')}
+                              </h5>
+                              <div className="text-[10px] font-mono text-[#ff5e00] font-bold">
+                                {calc.sizeCategory} • Rp {calc.price.toLocaleString('id-ID')}
+                              </div>
+                            </div>
+
+                            {/* Actions: Visibility, Lock, Step Up, Step Down, Delete */}
+                            <div className="flex flex-col gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center gap-0.5">
+                                <button
+                                  onClick={() => handleToggleGraphicVisibility(g.id)}
+                                  title={isHidden ? 'Tampilkan Layer' : 'Sembunyikan Layer'}
+                                  className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 rounded cursor-pointer"
+                                >
+                                  {isHidden ? <EyeOff className="w-3 h-3 text-slate-400" /> : <Eye className="w-3 h-3 text-indigo-600" />}
+                                </button>
+                                <button
+                                  onClick={() => handleToggleLock(g.id)}
+                                  title={g.isLocked ? 'Buka Kunci Layer' : 'Kunci Layer (Cegah Tergeser)'}
+                                  className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 rounded cursor-pointer"
+                                >
+                                  {g.isLocked ? <Lock className="w-3 h-3 text-amber-600" /> : <Unlock className="w-3 h-3" />}
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-0.5">
+                                <button
+                                  onClick={() => handleMoveLayer(g.id, 'up')}
+                                  disabled={origIdx === graphics.length - 1}
+                                  title="Naikkan Layer (Maju ke Depan)"
+                                  className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 disabled:opacity-30 rounded cursor-pointer"
+                                >
+                                  <ChevronUp className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => handleMoveLayer(g.id, 'down')}
+                                  disabled={origIdx === 0}
+                                  title="Turunkan Layer (Mundur ke Belakang)"
+                                  className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 disabled:opacity-30 rounded cursor-pointer"
+                                >
+                                  <ChevronDown className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteGraphic(g.id)}
+                                  title="Hapus Layer"
+                                  className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded cursor-pointer"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Bottom Summary & Order CTA */}
@@ -3329,6 +3316,234 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           </div>
         )}
       </div>
+
+      {/* POP-UP MODAL: KATALOG WARNA KAIN RESMI (STANDAR PABRIK TEKSTIL) */}
+      {activeColorPickerGroupKey && (() => {
+        const activeGroup = unifiedPartGroups.find((g) => g.key === activeColorPickerGroupKey)
+        if (!activeGroup) return null
+
+        const currentSwatch = findClosestFabricSwatch(activeGroup.currentColor)
+
+        const filteredSwatches = FABRIC_COLOR_DATABASE.filter((swatch) => {
+          const matchCatalog = fabricCatalogFilter === 'all' || swatch.catalog === fabricCatalogFilter
+          const query = fabricSearchQuery.trim().toLowerCase()
+          const matchSearch =
+            !query ||
+            swatch.name.toLowerCase().includes(query) ||
+            swatch.code.toLowerCase().includes(query) ||
+            (swatch.description && swatch.description.toLowerCase().includes(query))
+          return matchCatalog && matchSearch
+        })
+
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+            onClick={() => setActiveColorPickerGroupKey(null)}
+          >
+            <div
+              className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[88vh] animate-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="p-4 px-6 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-[#ff5e00]/10 text-[#ff5e00] flex items-center justify-center">
+                    <Palette className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                      <span>Katalog Warna Kain:</span>
+                      <span className="text-[#ff5e00] bg-orange-50 px-2 py-0.5 rounded-lg border border-orange-200 text-xs font-black">
+                        {activeGroup.name}
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Standar resmi pabrik tekstil (Nagata Drill, American Drill, Tropical & Combed). Warna otomatis tersinkron di 4 sisi.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveColorPickerGroupKey(null)}
+                  className="p-1.5 hover:bg-slate-200 text-slate-400 hover:text-slate-800 rounded-xl transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Active Selection Banner */}
+              <div className="p-3 px-6 bg-orange-50/60 border-b border-orange-100 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    style={{ backgroundColor: activeGroup.currentColor }}
+                    className="w-8 h-8 rounded-full border-2 border-white ring-2 ring-orange-300 shadow-sm shrink-0"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-slate-900">
+                        {currentSwatch ? currentSwatch.name : 'Warna Terpilih'}
+                      </span>
+                      {currentSwatch && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white text-slate-700 border border-orange-200 font-bold">
+                          Kode: {currentSwatch.code}
+                        </span>
+                      )}
+                      {currentSwatch?.badge && (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-orange-100 text-[#ff5e00] font-black">
+                          {currentSwatch.badge}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      {currentSwatch?.description || 'Warna diterapkan dengan blending serat kain realistis'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleResetPartColors}
+                    className="text-[10px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer bg-white px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors shadow-2xs"
+                    title="Kembalikan semua bagian seragam ke warna bawaan awal"
+                  >
+                    <RotateCcw className="w-3 h-3 text-slate-400" />
+                    <span>Reset Bawaan</span>
+                  </button>
+                  <label className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1.5 cursor-pointer shadow-2xs">
+                    <input
+                      type="checkbox"
+                      checked={syncColorPartsAcrossSides}
+                      onChange={(e) => setSyncColorPartsAcrossSides(e.target.checked)}
+                      className="rounded text-[#ff5e00] focus:ring-0 w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <span>Sinkron 4 Sisi</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Filter & Search Bar */}
+              <div className="p-4 px-6 border-b border-slate-100 space-y-3 bg-white">
+                {/* Catalog Tabs */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                  {FABRIC_CATALOGS.map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setFabricCatalogFilter(cat.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                        fabricCatalogFilter === cat.id
+                          ? 'bg-[#ff5e00] text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search Input */}
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={fabricSearchQuery}
+                    onChange={(e) => setFabricSearchQuery(e.target.value)}
+                    placeholder="Cari nama warna atau kode katalog (misal: Navy, Khaki, Kuning, 114, Army)..."
+                    className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#ff5e00]/20 focus:border-[#ff5e00]"
+                  />
+                  {fabricSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setFabricSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-700 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Swatches Grid */}
+              <div className="flex-1 overflow-y-auto p-6 max-h-[420px]">
+                {filteredSwatches.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400">
+                    <Palette className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-slate-700">Warna Tidak Ditemukan</p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Coba kata kunci lain atau pilih tab "Semua Katalog Kain".
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {filteredSwatches.map((swatch) => {
+                      const isSelected = activeGroup.currentColor.toLowerCase() === swatch.hex.toLowerCase()
+
+                      return (
+                        <button
+                          key={swatch.id}
+                          type="button"
+                          onClick={() => handlePartColorChange(activeGroup.primaryPartId, swatch.hex)}
+                          className={`p-2 rounded-2xl border text-left transition-all cursor-pointer flex flex-col gap-2 relative group hover:scale-[1.02] ${
+                            isSelected
+                              ? 'bg-orange-50/90 border-[#ff5e00] ring-2 ring-orange-300 shadow-sm'
+                              : 'bg-slate-50/70 border-slate-200 hover:border-slate-300 hover:bg-slate-100/80 shadow-2xs'
+                          }`}
+                        >
+                          {/* Color Swatch Box */}
+                          <div
+                            style={{ backgroundColor: swatch.hex }}
+                            className="w-full h-12 rounded-xl border border-black/10 relative overflow-hidden shadow-inner flex items-center justify-center"
+                          >
+                            {isSelected && (
+                              <div className="w-6 h-6 rounded-full bg-white/95 shadow-md flex items-center justify-center text-[#ff5e00]">
+                                <Check className="w-4 h-4 stroke-[3]" />
+                              </div>
+                            )}
+                            {swatch.badge && (
+                              <span className="absolute top-1 right-1 px-1.5 py-0.2 rounded bg-black/60 backdrop-blur-xs text-white text-[8px] font-bold">
+                                {swatch.badge}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Info */}
+                          <div className="min-w-0">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-[10px] font-mono font-bold text-slate-500">
+                                #{swatch.code}
+                              </span>
+                              <span className="text-[9px] text-slate-400 truncate">
+                                {swatch.catalogName}
+                              </span>
+                            </div>
+                            <h5 className="font-extrabold text-[11px] text-slate-900 truncate mt-0.5 leading-tight">
+                              {swatch.name}
+                            </h5>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-3.5 px-6 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+                <div className="text-[11px] text-slate-500">
+                  Menampilkan <b>{filteredSwatches.length}</b> warna kain resmi katalog pabrik.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveColorPickerGroupKey(null)}
+                  className="px-5 py-2 bg-[#ff5e00] hover:bg-[#e05300] text-white font-extrabold rounded-xl text-xs transition-colors shadow-xs cursor-pointer"
+                >
+                  Selesai & Terapkan
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ---------------------------------------------------- */}
       {/* 3. BOTTOM STATUS BAR (Light Pro Status) */}
