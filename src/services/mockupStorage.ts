@@ -156,7 +156,7 @@ export async function syncMockupsWithDisk(): Promise<MockupTemplate[]> {
     } catch {
       // Exceeds 5MB localStorage quota; safely stored in IndexedDB & Disk API
     }
-    saveToDiskAsync(merged)
+    // Do NOT call saveToDiskAsync here during read/sync to prevent endless write loops & reload triggers
     return merged
   }
 
