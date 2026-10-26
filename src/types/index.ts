@@ -67,6 +67,7 @@ export interface ColorablePart {
   side: ViewSide // 'front' | 'back' | 'left' | 'right'
   defaultColor: string // Hex code e.g. '#1e293b'
   maskImg?: string // DataURL or image URL of isolated transparent PNG / SVG mask
+  groupId?: string // Link across 4 sides (e.g. 'part_group_1', 'kerah', etc.)
 }
 
 // Model Mockup Seragam Custom yang dibuat oleh pengguna di Dashboard

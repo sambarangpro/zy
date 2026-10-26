@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import type { MockupTemplate, ViewSide, ColorablePart } from '../types'
 import {
   saveMockup,
@@ -234,6 +234,22 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     colorPartsRef.current = editFormData.colorParts || []
   }, [editFormData.colorParts])
 
+  // Komponen yang telah dibuat di sisi lain untuk kemudahan tautan 4 sisi
+  const otherSidesComponents = useMemo(() => {
+    const currentSideParts = (editFormData.colorParts || []).filter((p) => p.side === selectedSide)
+    const currentSideNames = new Set(currentSideParts.map((p) => p.name.trim().toLowerCase()))
+    const others = (editFormData.colorParts || []).filter((p) => p.side !== selectedSide)
+
+    const unique = new Map<string, { name: string; defaultColor: string }>()
+    others.forEach((p) => {
+      const key = p.name.trim().toLowerCase()
+      if (!currentSideNames.has(key) && !unique.has(key)) {
+        unique.set(key, { name: p.name, defaultColor: p.defaultColor })
+      }
+    })
+    return Array.from(unique.values())
+  }, [editFormData.colorParts, selectedSide])
+
   // Sync canvas dimensions with actual mockup photo aspect ratio (defaults to 540x640 for PDH vector)
   useEffect(() => {
     const currentImg =
@@ -305,13 +321,26 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const handleAddColorPart = (initialName?: string, side: ViewSide = 'front', defaultColor = '#1e3a8a') => {
     const currentAll = colorPartsRef.current || editFormData.colorParts || []
     const thisSideParts = currentAll.filter((p) => p.side === side)
-    const partName = (initialName && initialName.trim()) || `Bagian ${thisSideParts.length + 1}`
+    const slotIdx = thisSideParts.length + 1
+    const partName = (initialName && initialName.trim()) || `Bagian ${slotIdx}`
+
+    // Link dengan komponen yang sudah dibuat di sisi lain jika ada nama atau slot yang cocok
+    const matchingFromOtherSide = currentAll.find(
+      (p) =>
+        p.side !== side &&
+        ((initialName && p.name.trim().toLowerCase() === initialName.trim().toLowerCase()) ||
+          p.groupId === `group_${slotIdx}` ||
+          p.name.trim().toLowerCase() === `bagian ${slotIdx}`)
+    )
+    const groupId = matchingFromOtherSide?.groupId || `group_${slotIdx}`
+    const finalDefaultColor = matchingFromOtherSide?.defaultColor || defaultColor
 
     const newPart: ColorablePart = {
       id: 'part_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       name: partName.trim(),
       side,
-      defaultColor,
+      defaultColor: finalDefaultColor,
+      groupId,
     }
 
     const otherParts = currentAll.filter((p) => p.side !== side)
@@ -563,12 +592,30 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   const handleUpdateColorPart = (id: string, updates: Partial<ColorablePart>) => {
-    colorPartsRef.current = (colorPartsRef.current || []).map((p) =>
-      p.id === id ? { ...p, ...updates } : p
-    )
+    const current = colorPartsRef.current || editFormData.colorParts || []
+    const target = current.find((p) => p.id === id)
+
+    const updated = current.map((p) => {
+      if (p.id === id) return { ...p, ...updates }
+      // Sinkronkan nama dan defaultColor ke sisi lain jika autoSync4Sides aktif
+      if (autoSync4Sides && target) {
+        const isSibling =
+          (target.groupId && p.groupId && target.groupId === p.groupId) ||
+          (p.name && target.name && p.name.trim().toLowerCase() === target.name.trim().toLowerCase())
+        if (isSibling) {
+          const syncUpdates: Partial<ColorablePart> = {}
+          if (updates.name !== undefined) syncUpdates.name = updates.name
+          if (updates.defaultColor !== undefined) syncUpdates.defaultColor = updates.defaultColor
+          return { ...p, ...syncUpdates }
+        }
+      }
+      return p
+    })
+
+    colorPartsRef.current = updated
     setEditFormData((prev) => ({
       ...prev,
-      colorParts: (prev.colorParts || []).map((p) => (p.id === id ? { ...p, ...updates } : p)),
+      colorParts: updated,
     }))
   }
 
@@ -1017,13 +1064,22 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       `Bagian ${thisSideParts.length + 1}`
 
     let updatedParts: ColorablePart[] = []
+    const slotIdx = thisSideParts.length + 1
+    const matchingFromOtherSide = currentAll.find(
+      (p) =>
+        p.side !== selectedSide &&
+        ((partName && p.name.trim().toLowerCase() === partName.trim().toLowerCase()) ||
+          p.groupId === `group_${slotIdx}` ||
+          p.name.trim().toLowerCase() === `bagian ${slotIdx}`)
+    )
+    const resolvedGroupId = matchingFromOtherSide?.groupId || `group_${slotIdx}`
 
     if (partId) {
       const exists = currentAll.some((p) => p.id === partId)
       if (exists) {
         updatedParts = currentAll.map((p) =>
           p.id === partId
-            ? { ...p, name: partName, defaultColor: newPartColor, maskImg: maskDataUrl! }
+            ? { ...p, name: partName, defaultColor: newPartColor, maskImg: maskDataUrl!, groupId: p.groupId || resolvedGroupId }
             : p
         )
       } else {
@@ -1033,6 +1089,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
           side: selectedSide,
           defaultColor: newPartColor,
           maskImg: maskDataUrl!,
+          groupId: resolvedGroupId,
         }
         const otherParts = currentAll.filter((p) => p.side !== selectedSide)
         updatedParts = [newPart, ...thisSideParts, ...otherParts]
@@ -1044,6 +1101,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
         side: selectedSide,
         defaultColor: newPartColor,
         maskImg: maskDataUrl!,
+        groupId: resolvedGroupId,
       }
       const otherParts = currentAll.filter((p) => p.side !== selectedSide)
       updatedParts = [newPart, ...thisSideParts, ...otherParts]
@@ -2521,9 +2579,32 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
                   <div className="flex flex-col gap-1.5 text-[11px] max-h-56 overflow-y-auto pr-0.5">
                     {(editFormData.colorParts || []).filter((p) => p.side === selectedSide).length === 0 ? (
-                      <div className="text-center py-4 text-slate-400 text-[11px]">
-                        Belum ada zona warna di sisi ini. Klik <strong>+ Slot Manual</strong> atau
-                        gambar dengan <strong>Pen Tool</strong> di kanvas.
+                      <div className="text-center py-3 text-slate-400 text-[11px] space-y-2">
+                        <p>Belum ada zona warna di sisi ini.</p>
+                        {otherSidesComponents.length > 0 && (
+                          <div className="bg-indigo-50/70 p-2 rounded-lg border border-indigo-100 text-left">
+                            <span className="text-[10px] font-bold text-indigo-900 block mb-1">
+                              Tautkan Komponen Sisi Lain (Sinkron 4 Sisi):
+                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {otherSidesComponents.map((comp) => (
+                                <button
+                                  key={comp.name}
+                                  type="button"
+                                  onClick={() => handleAddColorPart(comp.name, selectedSide, comp.defaultColor)}
+                                  className="px-2 py-0.5 rounded bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 text-indigo-700 text-[10px] font-semibold transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                                  title={`Tautkan dan gambar masker untuk ${comp.name}`}
+                                >
+                                  <span className="w-2 h-2 rounded-full border border-black/20" style={{ backgroundColor: comp.defaultColor }} />
+                                  <span>+ Gambar {comp.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <p className="text-[10px] text-slate-400">
+                          Atau klik <strong>+ Slot Manual</strong> / langsung gambar dengan <strong>Pen Tool</strong> di kanvas.
+                        </p>
                       </div>
                     ) : (
                       (editFormData.colorParts || [])

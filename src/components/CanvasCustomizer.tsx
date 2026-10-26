@@ -1,9 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type {
   ViewSide,
   CanvasGraphic,
   StudioLighting,
   MockupTemplate,
+  ColorablePart,
 } from '../types'
 import {
   POSITION_PRESETS,
@@ -43,6 +44,8 @@ import {
   Eye,
   EyeOff,
   GripVertical,
+  Check,
+  RefreshCw,
 } from 'lucide-react'
 
 interface CanvasCustomizerProps {
@@ -257,6 +260,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     }
   }, [activeMockup?.id])
 
+  // Toggle sync color parts across all 4 sides (Depan, Belakang, Kiri, Kanan) - default ACTIVE
+  const [syncColorPartsAcrossSides, setSyncColorPartsAcrossSides] = useState<boolean>(true)
+
   // Sync colorable parts colors when activeMockup changes
   useEffect(() => {
     if (activeMockup?.colorParts && activeMockup.colorParts.length > 0) {
@@ -270,11 +276,86 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     }
   }, [activeMockup?.id, activeMockup?.colorParts])
 
+  // Helper: Dapatkan kunci identifikasi unik komponen lintas sudut pandang
+  const getPartMatchKey = useCallback((part: ColorablePart, allParts: ColorablePart[]) => {
+    if (part.groupId && part.groupId.trim()) {
+      return part.groupId.trim().toLowerCase()
+    }
+    const cleanName = (part.name || '').trim().toLowerCase()
+    if (cleanName) {
+      return cleanName
+    }
+    const sameSide = allParts.filter((p) => p.side === part.side)
+    const idx = sameSide.findIndex((p) => p.id === part.id)
+    return `slot_index_${idx >= 0 ? idx : 0}`
+  }, [])
+
+  // Helper: Cari semua bagian (part) di 4 sisi yang merupakan komponen yang sama (misal: Kerah / Bagian 1)
+  const findMatchingSiblingParts = useCallback(
+    (targetPart: ColorablePart, allParts: ColorablePart[]): ColorablePart[] => {
+      const targetKey = getPartMatchKey(targetPart, allParts)
+      const targetName = (targetPart.name || '').trim().toLowerCase()
+
+      // Ambil indeks pada sisinya sendiri
+      const targetSideParts = allParts.filter((p) => p.side === targetPart.side)
+      const targetIdx = targetSideParts.findIndex((p) => p.id === targetPart.id)
+
+      return allParts.filter((p) => {
+        if (p.id === targetPart.id) return true
+        if (targetPart.groupId && p.groupId && targetPart.groupId === p.groupId) return true
+        if (targetName && p.name && p.name.trim().toLowerCase() === targetName) return true
+        if (getPartMatchKey(p, allParts) === targetKey) return true
+
+        // Slot position match: jika urutan layer sama pada sisinya masing-masing (misal Bagian 1 / index 0)
+        const pSideParts = allParts.filter((s) => s.side === p.side)
+        const pIdx = pSideParts.findIndex((s) => s.id === p.id)
+        if (targetIdx !== -1 && pIdx === targetIdx) return true
+
+        return false
+      })
+    },
+    [getPartMatchKey]
+  )
+
+  // Getter warna bagian yang selalu konsisten dan tersinkronisasi lintas sisi
+  const getPartColor = useCallback(
+    (part: ColorablePart): string => {
+      if (partColors[part.id]) return partColors[part.id]
+
+      const allParts = activeMockup?.colorParts || []
+      const siblings = findMatchingSiblingParts(part, allParts)
+      for (const sib of siblings) {
+        if (partColors[sib.id]) return partColors[sib.id]
+      }
+
+      return part.defaultColor || '#1e3a8a'
+    },
+    [partColors, activeMockup?.colorParts, findMatchingSiblingParts]
+  )
+
+  // Handler ganti warna: Otomatis sinkronkan 4 sisi secara bersamaan
   const handlePartColorChange = (partId: string, color: string) => {
-    setPartColors((prev) => ({
-      ...prev,
-      [partId]: color,
-    }))
+    const allParts = activeMockup?.colorParts || []
+    const targetPart = allParts.find((p) => p.id === partId)
+
+    if (!targetPart || !syncColorPartsAcrossSides) {
+      setPartColors((prev) => ({
+        ...prev,
+        [partId]: color,
+      }))
+      return
+    }
+
+    // Cari seluruh bagian yang sesuai di Depan, Belakang, Kiri, Kanan
+    const siblings = findMatchingSiblingParts(targetPart, allParts)
+    setPartColors((prev) => {
+      const next = { ...prev }
+      siblings.forEach((sib) => {
+        next[sib.id] = color
+      })
+      next[partId] = color
+      return next
+    })
   }
 
   const handleResetPartColors = () => {
@@ -291,6 +372,51 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const currentSideColorParts = (activeMockup?.colorParts || []).filter(
     (p) => p.side === currentSide
   )
+
+  // Unified groups untuk palet warna komponen seragam di 4 sudut pandang
+  const unifiedPartGroups = useMemo(() => {
+    const allParts = activeMockup?.colorParts || []
+    const groupsMap = new Map<
+      string,
+      {
+        key: string
+        name: string
+        defaultColor: string
+        currentColor: string
+        primaryPartId: string
+        parts: ColorablePart[]
+        sides: ViewSide[]
+      }
+    >()
+
+    allParts.forEach((part) => {
+      const key = getPartMatchKey(part, allParts)
+      const existing = groupsMap.get(key)
+      const currentColor = getPartColor(part)
+
+      if (existing) {
+        existing.parts.push(part)
+        if (!existing.sides.includes(part.side)) {
+          existing.sides.push(part.side)
+        }
+        if (partColors[part.id]) {
+          existing.currentColor = partColors[part.id]
+        }
+      } else {
+        groupsMap.set(key, {
+          key,
+          name: part.name || 'Bagian 1',
+          defaultColor: part.defaultColor || '#1e3a8a',
+          currentColor,
+          primaryPartId: part.id,
+          parts: [part],
+          sides: [part.side],
+        })
+      }
+    })
+
+    return Array.from(groupsMap.values())
+  }, [activeMockup?.colorParts, getPartMatchKey, getPartColor, partColors])
 
   // Get current active angle image from active mockup
   const currentMockupImage = activeMockup
@@ -1112,7 +1238,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           offCanvas.height = canvas.height
           const offCtx = offCanvas.getContext('2d')
           if (offCtx) {
-            const color = partColors[part.id] || part.defaultColor
+            const color = getPartColor(part)
             offCtx.fillStyle = color
             offCtx.fillRect(0, 0, offCanvas.width, offCanvas.height)
             offCtx.globalCompositeOperation = 'destination-in'
@@ -1976,18 +2102,37 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             </div>
 
             <div className="space-y-4 pt-3">
+              {/* SINKRONISASI 4 SISI TOGGLE */}
+              <label className="flex items-center justify-between p-2.5 rounded-xl bg-orange-50/80 border border-orange-200/90 cursor-pointer shadow-2xs">
+                <div className="flex flex-col gap-0.5 pr-2">
+                  <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <RefreshCw className="w-3.5 h-3.5 text-[#ff5e00]" />
+                    Sinkronisasi 4 Sisi Otomatis
+                  </span>
+                  <span className="text-[10px] text-slate-600 leading-tight">
+                    Mengganti warna bagian (misal: Kerah/Bagian 1) otomatis merubah warna di Depan, Belakang, Kiri & Kanan secara bersamaan.
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={syncColorPartsAcrossSides}
+                  onChange={(e) => setSyncColorPartsAcrossSides(e.target.checked)}
+                  className="rounded border-slate-300 text-[#ff5e00] focus:ring-0 w-4 h-4 cursor-pointer"
+                />
+              </label>
+
               <p className="text-[11px] text-slate-500 leading-relaxed">
-                Pilih warna khusus untuk bagian baju sudut <b>{currentSide.toUpperCase()}</b>. Warna langsung <b>meresap ke serat kain (Multiply)</b> sehingga karakter kain & lipatan asli foto tetap terlihat!
+                Pilih warna untuk komponen seragam. Warna langsung <b>meresap ke serat kain (Multiply)</b> sehingga karakter kain & lipatan asli foto tetap realistis!
               </p>
 
-              {currentSideColorParts.length === 0 ? (
+              {unifiedPartGroups.length === 0 ? (
                 <div className="text-center py-6 px-3 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                   <Palette className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                   <p className="text-xs font-bold text-slate-700">
-                    Belum Ada Bagian Warna di Sisi Ini
+                    Belum Ada Bagian Warna di Mockup Ini
                   </p>
                   <p className="text-[11px] text-slate-500 mt-1 mb-3">
-                    Buka Dashboard Mockup untuk menambahkan bagian (Saku, Kerah, Kancing) yang dapat diwarnai secara otomatis.
+                    Buka Dashboard Mockup untuk menambahkan bagian (Kerah, Saku, Lengan, Badan) yang dapat diwarnai secara otomatis.
                   </p>
                   <button
                     onClick={onOpenDashboard}
@@ -1998,17 +2143,32 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {currentSideColorParts.map((part) => {
-                    const currentColor = partColors[part.id] || part.defaultColor
+                  {unifiedPartGroups.map((group) => {
+                    const currentColor = group.currentColor
+                    const allSidesCount = group.sides.length
+
                     return (
                       <div
-                        key={part.id}
+                        key={group.key}
                         className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 hover:border-slate-300 transition-colors"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-black text-xs text-slate-900">
-                            {part.name}
-                          </span>
+                          <div className="flex flex-col">
+                            <span className="font-black text-xs text-slate-900">
+                              {group.name}
+                            </span>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              {allSidesCount === 4 ? (
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center gap-0.5">
+                                  <Check className="w-2.5 h-2.5" /> 4 Sisi Tersinkron
+                                </span>
+                              ) : (
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-indigo-50 text-indigo-700 font-medium">
+                                  {group.sides.map((s) => s === 'front' ? 'Depan' : s === 'back' ? 'Belakang' : s === 'left' ? 'Kiri' : 'Kanan').join(', ')}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                           <div className="flex items-center gap-1.5">
                             <span
                               style={{ backgroundColor: currentColor }}
@@ -2039,8 +2199,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             <button
                               key={c.hex}
                               type="button"
-                              onClick={() => handlePartColorChange(part.id, c.hex)}
-                              title={`${part.name}: ${c.name}`}
+                              onClick={() => handlePartColorChange(group.primaryPartId, c.hex)}
+                              title={`${group.name}: ${c.name} (${c.hex})`}
                               style={{ backgroundColor: c.hex }}
                               className={`w-5 h-5 rounded-md border cursor-pointer transition-transform hover:scale-115 ${
                                 currentColor.toLowerCase() === c.hex.toLowerCase()
@@ -2054,7 +2214,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           <input
                             type="color"
                             value={currentColor}
-                            onChange={(e) => handlePartColorChange(part.id, e.target.value)}
+                            onChange={(e) => handlePartColorChange(group.primaryPartId, e.target.value)}
                             className="w-5 h-5 rounded-md border border-slate-300 cursor-pointer p-0 bg-transparent"
                             title="Pilih Warna Kustom Lainnya"
                           />
@@ -2620,37 +2780,39 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             </div>
           )}
 
-          {/* FLOATING QUICK BAR FOR COLOR PARTS (if defined on this side) */}
-          {currentSideColorParts.length > 0 && (
+          {/* FLOATING QUICK BAR FOR COLOR PARTS (Sinkron Lintas Sudut Pandang) */}
+          {unifiedPartGroups.length > 0 && (
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl shadow-lg px-3.5 py-1.5 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="flex items-center gap-1.5 text-xs font-black text-slate-800">
                 <Palette className="w-3.5 h-3.5 text-[#ff5e00]" />
                 <span>Warna Bagian:</span>
               </div>
               <div className="flex items-center gap-2">
-                {currentSideColorParts.slice(0, 4).map((part) => {
-                  const currentColor = partColors[part.id] || part.defaultColor
+                {unifiedPartGroups.slice(0, 4).map((group) => {
                   return (
                     <button
-                      key={part.id}
+                      key={group.key}
                       onClick={() => setActiveFlyout('colorParts')}
-                      title={`Klik untuk ubah warna ${part.name}`}
-                      className="flex items-center gap-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-lg text-[10px] font-bold text-slate-700 cursor-pointer transition-colors"
+                      title={`Klik untuk ubah warna ${group.name} (Sinkron 4 Sisi)`}
+                      className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-700 cursor-pointer transition-colors shadow-2xs"
                     >
                       <span
-                        style={{ backgroundColor: currentColor }}
+                        style={{ backgroundColor: group.currentColor }}
                         className="w-2.5 h-2.5 rounded-full border border-slate-300 inline-block shadow-2xs"
                       />
-                      <span>{part.name}</span>
+                      <span>{group.name}</span>
+                      <span className="text-[9px] text-slate-400 font-normal">
+                        ({group.sides.length} Sisi)
+                      </span>
                     </button>
                   )
                 })}
-                {currentSideColorParts.length > 4 && (
+                {unifiedPartGroups.length > 4 && (
                   <button
                     onClick={() => setActiveFlyout('colorParts')}
                     className="text-[10px] font-extrabold text-[#ff5e00] hover:underline cursor-pointer"
                   >
-                    +{currentSideColorParts.length - 4} lainnya
+                    +{unifiedPartGroups.length - 4} lainnya
                   </button>
                 )}
               </div>
@@ -2701,7 +2863,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
                 {/* 2. AUTOMATIC COLORABLE PARTS (Kerah, Saku, Kancing, Garis Kancing - Multiply Blending absorbs directly into fabric!) */}
                 {currentSideColorParts.map((part, pIdx) => {
-                  const color = partColors[part.id] || part.defaultColor
+                  const color = getPartColor(part)
                   if (!part.maskImg || !color) return null
                   return (
                     <div
