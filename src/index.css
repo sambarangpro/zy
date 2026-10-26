@@ -6,6 +6,28 @@
   }
 }
 
+.font-tech-data {
+  font-family: 'JetBrains Mono', monospace;
+}
+.font-title-md {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
 /* Custom scrollbars and styling */
 ::-webkit-scrollbar {
   width: 8px;

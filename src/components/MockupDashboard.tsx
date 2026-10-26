@@ -16,22 +16,12 @@ import {
   Check,
   Palette,
   Layers,
-  ArrowRight,
   Tag,
-  Scissors,
   Paintbrush,
   Eraser,
-  Square,
-  RotateCcw,
   CheckCircle2,
-  Percent,
   FolderPlus,
   Sparkles,
-  PenTool,
-  ZoomIn,
-  ZoomOut,
-  Maximize2,
-  Hand,
   Download,
   ShieldCheck,
   ChevronUp,
@@ -40,6 +30,8 @@ import {
   Eye,
   EyeOff,
   Copy,
+  X,
+  Sliders,
 } from 'lucide-react'
 
 interface MockupDashboardProps {
@@ -78,9 +70,6 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const backupFileInputRef = useRef<HTMLInputElement>(null)
   const [backupStatusMessage, setBackupStatusMessage] = useState<string | null>(null)
 
-  // Active Tab in Form: 'marker' (Big Photo & Zone Marker) | 'details' (Info & Pricing)
-  const [activeEditorTab, setActiveEditorTab] = useState<'marker' | 'details'>('marker')
-
   // Angle currently selected in the large interactive stage
   const [selectedSide, setSelectedSide] = useState<ViewSide>('front')
 
@@ -94,7 +83,6 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const [rectStartPoint, setRectStartPoint] = useState<{ x: number; y: number } | null>(null)
   const [hasDrawn, setHasDrawn] = useState<boolean>(false)
   const [maskHistory, setMaskHistory] = useState<string[]>([])
-  const [highlightedPartId, setHighlightedPartId] = useState<string | null>(null)
   const [hiddenPartIds, setHiddenPartIds] = useState<string[]>([])
   const [layerPreviewOpacity, setLayerPreviewOpacity] = useState<number>(85)
   const [editingExistingPartId, setEditingExistingPartId] = useState<string | null>(null)
@@ -116,6 +104,26 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     width: 1200,
     height: 1400,
   })
+
+  // Seragam Atelier Owner Mode UI States
+  const [showGrid, setShowGrid] = useState<boolean>(true)
+  const [showCenterGuide, setShowCenterGuide] = useState<boolean>(true)
+  const [showInfoModal, setShowInfoModal] = useState<boolean>(false)
+  const [showLogoSlot, setShowLogoSlot] = useState<boolean>(true)
+  const [showMonogramSlot, setShowMonogramSlot] = useState<boolean>(true)
+  const [showScotlight, setShowScotlight] = useState<boolean>(false)
+  const [autoSync4Sides, setAutoSync4Sides] = useState<boolean>(true)
+  const [visitorPalette, setVisitorPalette] = useState<string[]>([
+    '#1e293b', // Navy
+    '#ffffff', // Putih
+    '#0f172a', // Hitam
+    '#a89577', // Khaki
+    '#7f1d1d', // Maroon
+    '#14532d', // Hijau Army
+    '#1d4ed8', // Biru Benhur
+    '#ff5e00', // ZY Orange
+  ])
+  const [simulatedPreviewColor, setSimulatedPreviewColor] = useState<string>('#1e293b')
 
   const maskCanvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -156,7 +164,6 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       createdAt: Date.now(),
     })
     setSelectedSide('front')
-    setActiveEditorTab('marker')
     handleClearMaskDraft()
     setIsEditing(true)
   }
@@ -164,7 +171,6 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const handleOpenEdit = (item: MockupTemplate) => {
     setEditFormData({ ...item, colorParts: item.colorParts ? [...item.colorParts] : [] })
     setSelectedSide('front')
-    setActiveEditorTab('marker')
     handleClearMaskDraft()
     setIsEditing(true)
   }
@@ -210,6 +216,10 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     setPenPoints([])
     setPenHoverPoint(null)
     setIsPenClosing(false)
+  }
+
+  const handleAddNewColorSlot = () => {
+    handleAddColorPart(undefined, selectedSide)
   }
 
   const handleStartDrawingForSlot = (partId: string) => {
@@ -562,6 +572,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     setPenPoints([])
     setPenHoverPoint(null)
     setIsPenClosing(false)
+    handleCancelEditingExistingPart()
   }
 
   const handleDoubleClickCanvas = () => {
@@ -977,6 +988,79 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     return 'Rp ' + (num || 0).toLocaleString('id-ID')
   }
 
+  const renderBaseMockup = (side: ViewSide) => {
+    const sideKey =
+      side === 'front'
+        ? 'frontImg'
+        : side === 'back'
+        ? 'backImg'
+        : side === 'left'
+        ? 'leftImg'
+        : 'rightImg'
+    const imgUrl = editFormData[sideKey]
+    if (imgUrl) {
+      return (
+        <img
+          src={imgUrl}
+          alt={`Mockup ${side}`}
+          className="w-full h-full object-contain pointer-events-none select-none"
+        />
+      )
+    }
+
+    // High detail PDH workwear vector fallback if no photo uploaded yet
+    return (
+      <svg className="w-full h-full drop-shadow-md" fill="none" viewBox="0 0 540 640" xmlns="http://www.w3.org/2000/svg">
+        {/* Shadow Body Base */}
+        <path d="M190 40 L110 95 L40 180 L85 240 L130 190 L130 580 L410 580 L410 190 L455 240 L500 180 L430 95 L350 40 Z" fill="#1b2536" stroke="#0f172a" strokeLinejoin="round" strokeWidth="2.5" />
+        {/* Fabric Body (Drill Heavyweight Navy #1E293B) */}
+        <path d="M130 190 L190 40 L350 40 L410 190 L410 580 L130 580 Z" fill="#1e293b" />
+        {/* Left Sleeves */}
+        <path d="M190 40 L110 95 L40 180 L85 240 L130 190 Z" fill="#1a2538" stroke="#0f172a" strokeWidth="1.5" />
+        {/* Right Sleeves */}
+        <path d="M350 40 L430 95 L500 180 L455 240 L410 190 Z" fill="#1a2538" stroke="#0f172a" strokeWidth="1.5" />
+        {/* Shoulder Epaulette Left */}
+        <polygon fill="#151e2e" points="175,45 125,95 140,115 190,65" stroke="#334155" strokeWidth="1.5" />
+        <circle cx="178" cy="58" fill="#94a3b8" r="3.5" />
+        {/* Shoulder Epaulette Right */}
+        <polygon fill="#151e2e" points="365,45 415,95 400,115 350,65" stroke="#334155" strokeWidth="1.5" />
+        <circle cx="362" cy="58" fill="#94a3b8" r="3.5" />
+        {/* Collar Stand */}
+        <path d="M190 40 C220 70 320 70 350 40 L330 85 C295 105 245 105 210 85 Z" fill="#151e2e" stroke="#334155" strokeWidth="1.5" />
+        <path d="M210 85 L270 120 L330 85" stroke="#475569" strokeDasharray="3 3" strokeWidth="1.8" />
+        {/* Front Central Placket */}
+        <rect fill="#151e2e" height="490" stroke="#334155" strokeWidth="1.5" width="32" x="254" y="90" />
+        <line stroke="#475569" strokeDasharray="2 2" strokeWidth="1" x1="258" x2="258" y1="90" y2="580" />
+        <line stroke="#475569" strokeDasharray="2 2" strokeWidth="1" x1="282" x2="282" y1="90" y2="580" />
+        {/* Buttons */}
+        <circle cx="270" cy="130" fill="#0f172a" r="4" stroke="#64748b" strokeWidth="1.5" />
+        <circle cx="270" cy="200" fill="#0f172a" r="4" stroke="#64748b" strokeWidth="1.5" />
+        <circle cx="270" cy="280" fill="#0f172a" r="4" stroke="#64748b" strokeWidth="1.5" />
+        <circle cx="270" cy="360" fill="#0f172a" r="4" stroke="#64748b" strokeWidth="1.5" />
+        <circle cx="270" cy="440" fill="#0f172a" r="4" stroke="#64748b" strokeWidth="1.5" />
+        <circle cx="270" cy="520" fill="#0f172a" r="4" stroke="#64748b" strokeWidth="1.5" />
+        {/* Left Pocket */}
+        <polygon fill="#172233" points="152,190 236,190 236,215 194,228 152,215" stroke="#334155" strokeWidth="1.5" />
+        <circle cx="194" cy="214" fill="#0f172a" r="3.5" stroke="#64748b" strokeWidth="1" />
+        <polygon fill="#141c2b" points="155,215 233,215 233,295 194,310 155,295" stroke="#334155" strokeWidth="1.5" />
+        {/* Right Pocket */}
+        <polygon fill="#172233" points="304,190 388,190 388,215 346,228 304,215" stroke="#334155" strokeWidth="1.5" />
+        <circle cx="346" cy="214" fill="#0f172a" r="3.5" stroke="#64748b" strokeWidth="1" />
+        <polygon fill="#141c2b" points="307,215 385,215 385,295 346,310 307,295" stroke="#334155" strokeWidth="1.5" />
+        {/* Safe Zone Garis Bantu Slot */}
+        <rect height="55" opacity="0.45" rx="3" stroke="#38bdf8" strokeDasharray="3 3" strokeWidth="1.2" width="90" x="150" y="130" />
+        <rect height="55" opacity="0.45" rx="3" stroke="#fbbf24" strokeDasharray="3 3" strokeWidth="1.2" width="90" x="302" y="130" />
+        {/* Strip Scotlight K3 (Bawah) */}
+        {showScotlight && (
+          <>
+            <rect fill="#a3e635" height="22" opacity="0.9" width="280" x="130" y="525" />
+            <rect fill="#f8fafc" height="7" opacity="0.95" width="280" x="130" y="532.5" />
+          </>
+        )}
+      </svg>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {/* Hidden File Input for Mockup Photo */}
@@ -1021,1347 +1105,1339 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
         </button>
       </div>
 
-      {/* FORM EDITOR MODAL / VIEW (Jika sedang mode edit/tambah) */}
+      {/* FULLSCREEN EDITOR BLANGKO MASTER - SERAGAM ATELIER (OWNER MODE) */}
       {isEditing && (
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 animate-in fade-in duration-200 space-y-6">
-          {/* Header Modal */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
-            <div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-orange-100 text-[#ff5e00] flex items-center justify-center">
-                  <Edit3 className="w-4 h-4" />
-                </div>
-                <h3 className="font-extrabold text-slate-900 text-lg">
-                  {editFormData.id && mockups.some((m) => m.id === editFormData.id)
-                    ? 'Editor Model Mockup & Area Warna'
-                    : 'Buat Model Mockup Baru'}
-                </h3>
+        <div className="fixed inset-0 z-50 bg-[#fafbfe] text-[#0f172a] font-body flex flex-col h-screen w-screen overflow-hidden select-none text-[13px] antialiased">
+          {/* 1. TOP HEADER (CLEAN WHITE THEME) */}
+          <header className="h-14 bg-white border-b border-[#e2e8f0] flex items-center justify-between px-4 text-[#0f172a] select-none z-50 flex-shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+            {/* Left: Branding & Nama Template Blangko */}
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                <span className="material-symbols-outlined text-[18px]">design_services</span>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Tandai langsung area saku, kerah, dan kancing di tampilan foto besar agar pengguna bisa ganti warna instan di Studio.
-              </p>
-            </div>
-
-            {/* Main Tabs Switcher */}
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl">
-              <button
-                type="button"
-                onClick={() => setActiveEditorTab('marker')}
-                className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                  activeEditorTab === 'marker'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Palette className="w-3.5 h-3.5 text-[#ff5e00]" />
-                <span>1. Editor Foto & Penanda Area (Tampilan Besar)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveEditorTab('details')}
-                className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                  activeEditorTab === 'details'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Tag className="w-3.5 h-3.5 text-slate-500" />
-                <span>2. Informasi & Harga</span>
-              </button>
-            </div>
-          </div>
-
-          {/* TAB CONTENT */}
-          {activeEditorTab === 'marker' ? (
-            <div className="space-y-4">
-              {/* Angle Switcher Header Bar */}
-              <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-2.5 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-bold text-slate-500 mr-1">Pilih Sudut Foto:</span>
-                  {[
-                    { id: 'front' as ViewSide, label: 'Tampak Depan (Utama)', key: 'frontImg' as const },
-                    { id: 'back' as ViewSide, label: 'Tampak Belakang', key: 'backImg' as const },
-                    { id: 'left' as ViewSide, label: 'Tampak Kiri', key: 'leftImg' as const },
-                    { id: 'right' as ViewSide, label: 'Tampak Kanan', key: 'rightImg' as const },
-                  ].map((angle) => {
-                    const img = editFormData[angle.key]
-                    const count = (editFormData.colorParts || []).filter((p) => p.side === angle.id).length
-                    const isActive = selectedSide === angle.id
-                    return (
-                      <button
-                        key={angle.id}
-                        type="button"
-                        onClick={() => handleSelectSide(angle.id)}
-                        className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                          isActive
-                            ? 'bg-white text-slate-900 border border-[#ff5e00]/40 shadow-xs ring-2 ring-[#ff5e00]/20'
-                            : 'bg-white/60 text-slate-600 border border-slate-200 hover:bg-white hover:text-slate-900'
-                        }`}
-                      >
-                        {img ? (
-                          <img src={img} alt={angle.label} className="w-5 h-5 object-contain rounded" />
-                        ) : (
-                          <div className="w-5 h-5 rounded bg-slate-200 border border-slate-300 flex items-center justify-center text-[9px] text-slate-500 font-bold">
-                            ?
-                          </div>
-                        )}
-                        <span>{angle.label}</span>
-                        {img ? (
-                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full">
-                            Foto Ada
-                          </span>
-                        ) : (
-                          <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-full">
-                            Kosong
-                          </span>
-                        )}
-                        <span className="text-[10px] bg-orange-100 text-[#ff5e00] font-black px-1.5 py-0.5 rounded-full">
-                          {count} Area
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-
+              <div className="flex flex-col">
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => triggerUploadForSide(selectedSide)}
-                    className="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                  >
-                    <Upload className="w-3.5 h-3.5 text-[#ff5e00]" />
-                    <span>Upload / Ganti Foto {selectedSide === 'front' ? 'Depan' : selectedSide === 'back' ? 'Belakang' : selectedSide === 'left' ? 'Kiri' : 'Kanan'}</span>
-                  </button>
+                  <h1 className="font-title-md font-bold text-sm text-[#0f172a] leading-tight">
+                    Blangko Master: {editFormData.name || 'Kemeja PDH'}
+                  </h1>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 font-semibold text-[10px] tracking-wide flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                    OWNER MODE
+                  </span>
                 </div>
+                <p className="text-[11px] text-[#64748b]">
+                  {editFormData.category || 'Kemeja PDH/PDL'} • {(editFormData.colorParts || []).length} Zona Masking Aktif
+                </p>
+              </div>
+            </div>
+
+            {/* Center: Sudut Pandang Switcher (Depan, Belakang, Lengan Kiri, Lengan Kanan) */}
+            <div className="flex items-center gap-1 bg-[#f8fafc] p-1 rounded-lg border border-[#e2e8f0]">
+              {(
+                [
+                  { id: 'front', label: 'Tampak Depan' },
+                  { id: 'back', label: 'Tampak Belakang' },
+                  { id: 'left', label: 'Lengan Kiri' },
+                  { id: 'right', label: 'Lengan Kanan' },
+                ] as const
+              ).map((angle) => {
+                const isActive = selectedSide === angle.id
+                const hasPhoto =
+                  angle.id === 'front'
+                    ? !!editFormData.frontImg
+                    : angle.id === 'back'
+                    ? !!editFormData.backImg
+                    : angle.id === 'left'
+                    ? !!editFormData.leftImg
+                    : !!editFormData.rightImg
+                return (
+                  <button
+                    key={angle.id}
+                    type="button"
+                    onClick={() => handleSelectSide(angle.id)}
+                    className={`px-3 py-1 rounded-md text-[12px] transition-colors flex items-center gap-1.5 cursor-pointer ${
+                      isActive
+                        ? 'bg-white text-indigo-600 font-semibold shadow-xs border border-slate-200'
+                        : 'text-[#64748b] hover:text-[#0f172a] hover:bg-white/70 font-medium'
+                    }`}
+                  >
+                    {isActive && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>}
+                    {angle.label}
+                    {hasPhoto && !isActive && (
+                      <span className="w-1 h-1 rounded-full bg-emerald-500" title="Foto Terunggah"></span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Right: Kontrol Zoom Minimalis & Aksi Utama */}
+            <div className="flex items-center gap-2">
+              {/* Zoom Control Minimalis */}
+              <div className="flex items-center bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-2 py-1 text-[#64748b] text-[11px] font-tech-data mr-1">
+                <button
+                  type="button"
+                  onClick={() => handleZoomStep(-0.25)}
+                  className="hover:text-[#0f172a] px-1 text-[13px] font-bold cursor-pointer"
+                  title="Zoom Out (-)"
+                >
+                  -
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetZoom(1)}
+                  className="px-1.5 text-[#0f172a] font-medium cursor-pointer hover:underline"
+                  title="Klik untuk reset zoom (100%)"
+                >
+                  {Math.round(zoomScale * 100)}%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleZoomStep(0.25)}
+                  className="hover:text-[#0f172a] px-1 text-[13px] font-bold cursor-pointer"
+                  title="Zoom In (+)"
+                >
+                  +
+                </button>
               </div>
 
-              {/* Main Stage & Control Panel */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                {/* LARGE CANVAS STAGE WITH ZOOM (UP TO 1000%) & PEN TOOL */}
-                <div
-                  onWheel={handleWheelZoom}
-                  onMouseDown={(e) => {
-                    if (isSpacePressed || drawingTool === 'hand' || e.button === 1) {
-                      setIsPanning(true)
-                      setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y })
-                    }
-                  }}
-                  onMouseMove={(e) => {
-                    if (isPanning) {
-                      setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y })
-                    }
-                  }}
-                  onMouseUp={() => {
-                    if (isPanning) setIsPanning(false)
-                  }}
-                  onMouseLeave={() => {
-                    if (isPanning) setIsPanning(false)
-                  }}
-                  className={`lg:col-span-7 xl:col-span-8 bg-slate-200/60 rounded-3xl border border-slate-200 relative flex flex-col items-center justify-center p-0 select-none overflow-hidden min-h-[580px] sm:min-h-[660px] shadow-inner bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:16px_16px] ${
-                    isSpacePressed || drawingTool === 'hand'
-                      ? isPanning
-                        ? 'cursor-grabbing'
-                        : 'cursor-grab'
-                      : drawingTool === 'pen'
-                      ? isPenClosing
-                        ? 'cursor-pointer'
-                        : 'cursor-crosshair'
-                      : 'cursor-crosshair'
-                  }`}
+              {/* Upload Foto Sisi Mockup */}
+              <button
+                type="button"
+                onClick={() => triggerUploadForSide(selectedSide)}
+                className="h-8 px-2.5 text-[12px] font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                title={`Upload foto asli untuk ${selectedSide === 'front' ? 'Tampak Depan' : selectedSide === 'back' ? 'Tampak Belakang' : selectedSide === 'left' ? 'Lengan Kiri' : 'Lengan Kanan'}`}
+              >
+                <Upload className="w-3.5 h-3.5 text-slate-500" />
+                <span>Foto Sisi Ini</span>
+              </button>
+              {!!editFormData[selectedSide === 'front' ? 'frontImg' : selectedSide === 'back' ? 'backImg' : selectedSide === 'left' ? 'leftImg' : 'rightImg'] && (
+                <button
+                  type="button"
+                  onClick={() => removePhotoSide(selectedSide)}
+                  className="h-8 w-8 text-red-500 hover:bg-red-50 border border-red-200 rounded-lg flex items-center justify-center transition-colors cursor-pointer"
+                  title="Hapus foto sisi ini (kembalikan ke vector PDH)"
                 >
-                  {(() => {
-                    const currentImg =
-                      selectedSide === 'front'
-                        ? editFormData.frontImg
-                        : selectedSide === 'back'
-                        ? editFormData.backImg
-                        : selectedSide === 'left'
-                        ? editFormData.leftImg
-                        : editFormData.rightImg
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
 
-                    const currentParts = (editFormData.colorParts || []).filter(
-                      (p) => p.side === selectedSide
-                    )
+              {/* Tombol Info & Harga */}
+              <button
+                type="button"
+                onClick={() => setShowInfoModal(true)}
+                className="h-8 px-2.5 text-[12px] font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                title="Atur Nama, Kategori, Harga Dasar, dan Diskon Lusinan"
+              >
+                <Tag className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Info & Harga</span>
+              </button>
 
-                    if (!currentImg) {
-                      return (
-                        <div className="flex flex-col items-center justify-center p-8 text-center max-w-sm space-y-4">
-                          <div className="w-16 h-16 rounded-3xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-xs">
-                            <Upload className="w-8 h-8 text-[#ff5e00]" />
-                          </div>
-                          <div>
-                            <h4 className="font-black text-sm text-slate-900">
-                              Foto Tampak {selectedSide === 'front' ? 'Depan' : selectedSide === 'back' ? 'Belakang' : selectedSide === 'left' ? 'Kiri' : 'Kanan'} Belum Ada
-                            </h4>
-                            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                              Upload foto realistis seragam Anda (disarankan foto berlatar transparan atau polos) untuk mulai menandai bagian-bagian warna di atasnya.
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => triggerUploadForSide(selectedSide)}
-                            className="px-5 py-2.5 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded-xl text-xs font-extrabold shadow-md shadow-[#ff5e00]/25 flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <Upload className="w-4 h-4" />
-                            + Upload Foto Sekarang
-                          </button>
-                        </div>
-                      )
+              {/* Tombol Pratinjau Pengguna */}
+              <button
+                type="button"
+                onClick={() => handleSaveForm(true)}
+                className="h-8 px-3 text-[12px] font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                title="Simulasi tampilan kanvas di sisi customer"
+              >
+                <span className="material-symbols-outlined text-[16px] text-slate-500">visibility</span>
+                <span>Pratinjau Pengguna</span>
+              </button>
+
+              {/* Tombol Simpan Blangko */}
+              <button
+                type="button"
+                onClick={() => handleSaveForm(false)}
+                className="h-8 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-[12px] flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[16px]">save</span>
+                <span>Simpan Blangko</span>
+              </button>
+
+              {/* Tombol Tutup / Batal */}
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="h-8 w-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer ml-1"
+                title="Tutup Editor"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </header>
+
+          {/* 2. WORKSPACE BODY: 3-ZONE (TOOLBAR KIRI, CANVAS LAPANG, INSPECTOR KANAN) */}
+          <div className="flex-1 flex flex-row overflow-hidden relative">
+            {/* TOOLBAR KIRI: MINIMALIS & ESENSIAL */}
+            <aside className="w-14 bg-white border-r border-[#e2e8f0] flex flex-col items-center py-3 justify-between flex-shrink-0 z-30 select-none shadow-[1px_0_2px_rgba(0,0,0,0.02)]">
+              <div className="flex flex-col items-center gap-2 w-full px-2">
+                {/* 1. Select / Pointer */}
+                <button
+                  type="button"
+                  onClick={() => setDrawingTool('hand')}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center relative group transition-colors cursor-pointer ${
+                    drawingTool === 'hand'
+                      ? 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+                      : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80'
+                  }`}
+                  title="Pilih / Geser (V)"
+                >
+                  <span className="material-symbols-outlined text-[20px]">near_me</span>
+                  <span className="absolute left-14 px-2 py-1 bg-slate-800 text-white text-[11px] rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
+                    Pilih / Pointer (V)
+                  </span>
+                </button>
+
+                {/* 2. Pen Tool Jahitan (Aktif) */}
+                <button
+                  type="button"
+                  onClick={() => setDrawingTool('pen')}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center relative group shadow-xs transition-colors cursor-pointer ${
+                    drawingTool === 'pen'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80'
+                  }`}
+                  title="Pen Tool: Gambar Masking Bagian/Pola Kain"
+                >
+                  <span className="material-symbols-outlined text-[20px]">polyline</span>
+                  {drawingTool === 'pen' && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-cyan-400 border-2 border-white ring-1 ring-indigo-400"></span>
+                  )}
+                  <span className="absolute left-14 px-2.5 py-1.5 bg-slate-900 text-white text-[11px] rounded-lg shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity flex flex-col items-start gap-0.5">
+                    <span className="font-semibold text-cyan-300">Pen Tool: Color Mask Part</span>
+                    <span className="text-[10px] text-slate-300">Buat Zona Pewarnaan Presisi</span>
+                  </span>
+                </button>
+
+                {/* 3. Kuas / Brush */}
+                <button
+                  type="button"
+                  onClick={() => setDrawingTool('brush')}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center relative group transition-colors cursor-pointer ${
+                    drawingTool === 'brush'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80'
+                  }`}
+                  title="Kuas Masker Manual"
+                >
+                  <Paintbrush className="w-4 h-4" />
+                  <span className="absolute left-14 px-2 py-1 bg-slate-800 text-white text-[11px] rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
+                    Kuas Masker (B)
+                  </span>
+                </button>
+
+                {/* 4. Penghapus */}
+                <button
+                  type="button"
+                  onClick={() => setDrawingTool('eraser')}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center relative group transition-colors cursor-pointer ${
+                    drawingTool === 'eraser'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80'
+                  }`}
+                  title="Penghapus Masker"
+                >
+                  <Eraser className="w-4 h-4" />
+                  <span className="absolute left-14 px-2 py-1 bg-slate-800 text-white text-[11px] rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
+                    Penghapus (E)
+                  </span>
+                </button>
+
+                {/* Undo Masker */}
+                <button
+                  type="button"
+                  onClick={handleUndoMask}
+                  className="w-10 h-10 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80 flex items-center justify-center relative group transition-colors cursor-pointer"
+                  title="Undo Perubahan Masker"
+                >
+                  <span className="material-symbols-outlined text-[20px]">undo</span>
+                  <span className="absolute left-14 px-2 py-1 bg-slate-800 text-white text-[11px] rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
+                    Undo Masker
+                  </span>
+                </button>
+
+                <div className="w-8 h-px bg-[#e2e8f0] my-1"></div>
+
+                {/* 5. Tambah Slot Logo */}
+                <button
+                  type="button"
+                  onClick={() => setShowLogoSlot((prev) => !prev)}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center relative group transition-colors cursor-pointer ${
+                    showLogoSlot
+                      ? 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+                      : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80'
+                  }`}
+                  title="Toggle Slot Logo Dada"
+                >
+                  <span className="material-symbols-outlined text-[20px]">crop_free</span>
+                  <span className="absolute left-14 px-2 py-1 bg-slate-800 text-white text-[11px] rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
+                    {showLogoSlot ? 'Sembunyikan Slot Logo' : 'Tampilkan Slot Logo'}
+                  </span>
+                </button>
+
+                {/* 6. Tambah Scotlight */}
+                <button
+                  type="button"
+                  onClick={() => setShowScotlight((prev) => !prev)}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center relative group transition-colors cursor-pointer ${
+                    showScotlight
+                      ? 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+                      : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80'
+                  }`}
+                  title="Tambah / Toggle Scotlight Reflektor K3"
+                >
+                  <span className="material-symbols-outlined text-[20px]">view_stream</span>
+                  <span className="absolute left-14 px-2 py-1 bg-slate-800 text-white text-[11px] rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
+                    {showScotlight ? 'Sembunyikan Scotlight' : 'Tambah Scotlight K3'}
+                  </span>
+                </button>
+
+                {/* 7. Slot Teks Monogram */}
+                <button
+                  type="button"
+                  onClick={() => setShowMonogramSlot((prev) => !prev)}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center relative group transition-colors cursor-pointer ${
+                    showMonogramSlot
+                      ? 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+                      : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80'
+                  }`}
+                  title="Slot Teks / Nama Dada"
+                >
+                  <span className="material-symbols-outlined text-[20px]">title</span>
+                  <span className="absolute left-14 px-2 py-1 bg-slate-800 text-white text-[11px] rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
+                    {showMonogramSlot ? 'Sembunyikan Monogram' : 'Slot Teks Monogram'}
+                  </span>
+                </button>
+
+                <div className="w-8 h-px bg-[#e2e8f0] my-1"></div>
+
+                {/* Panduan Grid Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowGrid((prev) => !prev)}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center relative group transition-colors cursor-pointer ${
+                    showGrid
+                      ? 'text-indigo-600 bg-indigo-50'
+                      : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                  }`}
+                  title="Toggle Panduan Grid"
+                >
+                  <span className="material-symbols-outlined text-[20px]">grid_4x4</span>
+                  <span className="absolute left-14 px-2 py-1 bg-slate-800 text-white text-[11px] rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
+                    Grid Garis Bantu ({showGrid ? 'Aktif' : 'Nonaktif'})
+                  </span>
+                </button>
+
+                {/* Center Guide Line Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowCenterGuide((prev) => !prev)}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center relative group transition-colors cursor-pointer ${
+                    showCenterGuide
+                      ? 'text-indigo-600 bg-indigo-50'
+                      : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                  }`}
+                  title="Toggle Garis Tengah Baju"
+                >
+                  <Sliders className="w-4 h-4" />
+                  <span className="absolute left-14 px-2 py-1 bg-slate-800 text-white text-[11px] rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
+                    Garis Tengah ({showCenterGuide ? 'Aktif' : 'Nonaktif'})
+                  </span>
+                </button>
+              </div>
+
+              {/* Status Indikator Bawah */}
+              <div className="flex flex-col items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-emerald-100 cursor-pointer"
+                  title="Blangko Siap: Masking Engine Aktif"
+                ></div>
+              </div>
+            </aside>
+
+            {/* KANVAS TENGAH: LAPANG DENGAN DOT GRID LEMBUT */}
+            <main
+              className="flex-1 flex flex-col relative overflow-hidden bg-[#fafbfe] select-none"
+              style={
+                showGrid
+                  ? {
+                      backgroundImage: 'radial-gradient(#d5dce6 1.2px, transparent 1.2px)',
+                      backgroundSize: '20px 20px',
                     }
+                  : undefined
+              }
+              onWheel={handleWheelZoom}
+            >
+              {/* Garis Pandu Tengah Bersih */}
+              {showCenterGuide && (
+                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-indigo-300/40 pointer-events-none z-10"></div>
+              )}
 
-                    return (
-                      <div className="relative w-full h-[540px] sm:h-[620px] flex items-center justify-center overflow-hidden">
-                        {/* TOP FLOATING ZOOM & PAN BAR (UP TO 1000% ZOOM) */}
-                        <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl px-2.5 py-1.5 shadow-md flex items-center gap-1.5 z-20 flex-wrap justify-end">
-                          <button
-                            type="button"
-                            onClick={() => handleZoomStep(-0.5)}
-                            className="p-1 rounded-lg hover:bg-slate-100 text-slate-700 cursor-pointer"
-                            title="Perkecil Zoom (-)"
-                          >
-                            <ZoomOut className="w-3.5 h-3.5" />
-                          </button>
-
-                          <input
-                            type="range"
-                            min={0.75}
-                            max={10}
-                            step={0.25}
-                            value={zoomScale}
-                            onChange={(e) => handleSetZoom(Number(e.target.value))}
-                            className="w-20 sm:w-24 accent-[#ff5e00] cursor-pointer"
-                            title="Geser Tingkat Zoom (hingga 1000%)"
-                          />
-
-                          <span className="font-mono text-xs font-black text-slate-900 w-12 text-center">
-                            {Math.round(zoomScale * 100)}%
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() => handleZoomStep(0.5)}
-                            className="p-1 rounded-lg hover:bg-slate-100 text-slate-700 cursor-pointer"
-                            title="Perbesar Zoom (+)"
-                          >
-                            <ZoomIn className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Quick Presets */}
-                          <div className="hidden sm:flex items-center gap-1 border-l border-slate-200 pl-1.5">
-                            {[
-                              { label: '100%', val: 1 },
-                              { label: '250%', val: 2.5 },
-                              { label: '500%', val: 5 },
-                              { label: '1000%', val: 10 },
-                            ].map((preset) => (
-                              <button
-                                key={preset.label}
-                                type="button"
-                                onClick={() => handleSetZoom(preset.val)}
-                                className={`px-1.5 py-0.5 rounded text-[10px] font-black transition-all cursor-pointer ${
-                                  Math.abs(zoomScale - preset.val) < 0.1
-                                    ? 'bg-[#ff5e00] text-white shadow-xs'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                }`}
-                                title={`Zoom ke ${preset.label}`}
-                              >
-                                {preset.label}
-                              </button>
-                            ))}
-                          </div>
-
-                          {/* Reset Button */}
-                          <button
-                            type="button"
-                            onClick={handleResetZoom}
-                            className="p-1 sm:px-2 py-1 rounded-lg hover:bg-slate-100 text-slate-700 border-l border-slate-200 pl-1.5 cursor-pointer flex items-center gap-1 text-[10px] font-bold"
-                            title="Reset Zoom ke 100% & Tengahkan (0)"
-                          >
-                            <Maximize2 className="w-3.5 h-3.5 text-[#ff5e00]" />
-                            <span className="hidden sm:inline">Reset</span>
-                          </button>
-
-                          {/* Master Layer Opacity / Ghosting Slider */}
-                          {currentParts.length > 0 && (
-                            <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2">
-                              <span className="text-[10px] font-bold text-slate-500 hidden md:inline" title="Atur transparansi layer untuk melihat jahitan & lipatan kain di bawahnya">
-                                Tembus:
-                              </span>
-                              <input
-                                type="range"
-                                min={15}
-                                max={100}
-                                value={layerPreviewOpacity}
-                                onChange={(e) => setLayerPreviewOpacity(Number(e.target.value))}
-                                className="w-14 sm:w-16 accent-[#ff5e00] cursor-pointer"
-                                title="Transparansi Layer Masker: rendahkan slider untuk melihat lipatan kain di bawah masker"
-                              />
-                              <span className="font-mono text-[10px] font-bold text-slate-700 w-7 text-right">
-                                {layerPreviewOpacity}%
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* TOP-LEFT STATUS BADGE */}
-                        <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-md border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs pointer-events-none flex items-center gap-2 z-20">
-                          <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
-                          <span className="text-[11px] font-bold text-slate-700">
-                            {editingExistingPartId
-                              ? `Mode Edit Masker Layer: ${newPartName}`
-                              : drawingTool === 'pen'
-                              ? 'Mode Pen Tool: Hubungkan titik sudut, klik titik awal untuk isi warna'
-                              : drawingTool === 'hand'
-                              ? 'Mode Geser: Drag kanvas untuk bernavigasi'
-                              : `Mode Penanda Aktif (${Math.round(zoomScale * 100)}% Detail)`}
-                          </span>
-                        </div>
-
-                        {/* TRANSFORMED INNER VIEWPORT CONTAINER */}
-                        <div
-                          className="relative flex items-center justify-center"
-                          style={{
-                            transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
-                            transformOrigin: 'center center',
-                            transition: isPanning ? 'none' : 'transform 0.08s ease-out',
-                          }}
-                        >
-                          {/* EXACT BOUNDING WRAPPER - MATCHES GARMENT PHOTO 1:1 WITH ZERO LETTERBOXING */}
-                          <div className="relative inline-block select-none shadow-md rounded-2xl overflow-hidden bg-white/40">
-                            {/* Garment Photo Base */}
-                            <img
-                              src={currentImg}
-                              alt="Base Mockup Angle"
-                              className="block max-h-[500px] sm:max-h-[580px] w-auto max-w-[85vw] sm:max-w-[620px] object-contain pointer-events-none select-none z-0"
-                            />
-
-                            {/* Saved Color Parts Overlays with Multiply Blend Mode & Layer Stacking Order */}
-                            {currentParts.map((part, pIdx) => {
-                              if (!part.maskImg || hiddenPartIds.includes(part.id)) return null
-                              const isHighlighted = highlightedPartId === part.id
-                              return (
-                                <div
-                                  key={part.id}
-                                  className="absolute inset-0 pointer-events-none transition-all duration-200"
-                                  style={{
-                                    zIndex: 1 + (currentParts.length - pIdx),
-                                    mixBlendMode: 'multiply',
-                                    opacity: isHighlighted ? 1 : layerPreviewOpacity / 100,
-                                    maskImage: `url(${part.maskImg})`,
-                                    WebkitMaskImage: `url(${part.maskImg})`,
-                                    maskSize: '100% 100%',
-                                    WebkitMaskSize: '100% 100%',
-                                    backgroundColor: part.defaultColor,
-                                  }}
-                                />
-                              )
-                            })}
-
-                            {/* Interactive Drawing Canvas */}
-                            <canvas
-                              ref={maskCanvasRef}
-                              width={canvasSize.width}
-                              height={canvasSize.height}
-                              onMouseDown={handleStartDrawMask}
-                              onMouseMove={handleDrawMaskMove}
-                              onMouseUp={handleEndDrawMask}
-                              onMouseLeave={handleEndDrawMask}
-                              onDoubleClick={handleDoubleClickCanvas}
-                              className="absolute inset-0 w-full h-full touch-none z-10"
-                            />
-
-                            {/* PEN TOOL VECTOR LIVE PREVIEW SVG (ZERO STROKE ON SHAPE, HAIRLINE GUIDES ONLY) */}
-                            {drawingTool === 'pen' && penPoints.length > 0 && (() => {
-                              const effectiveZoom = Math.max(0.5, zoomScale)
-                              const hairlineWidth = Math.max(0.4, 1 / effectiveZoom)
-                              const baseScale = (canvasSize.width / 600) / effectiveZoom
-                              const nodeRadius = Math.max(2, 3.5 * baseScale)
-                              const startNodeRadius = Math.max(3, 5 * baseScale)
-
-                              return (
-                                <svg
-                                  className="absolute inset-0 w-full h-full pointer-events-none z-15"
-                                  viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
-                                >
-                                  {/* Filled polygon preview if 3 or more points - ABSOLUTELY ZERO STROKE BORDER */}
-                                  {penPoints.length >= 3 && (
-                                    <polygon
-                                      points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
-                                      fill="rgba(6, 182, 212, 0.35)"
-                                      stroke="none"
-                                    />
-                                  )}
-
-                                  {/* Hairline connecting line between unclosed points */}
-                                  {penPoints.length > 1 && (
-                                    <polyline
-                                      points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
-                                      fill="none"
-                                      stroke="#06b6d4"
-                                      strokeWidth={hairlineWidth}
-                                      vectorEffect="non-scaling-stroke"
-                                    />
-                                  )}
-
-                                  {/* Hairline rubberband line to hover point */}
-                                  {penHoverPoint && (
-                                    <line
-                                      x1={penPoints[penPoints.length - 1].x}
-                                      y1={penPoints[penPoints.length - 1].y}
-                                      x2={penHoverPoint.x}
-                                      y2={penHoverPoint.y}
-                                      stroke={isPenClosing ? '#22c55e' : '#06b6d4'}
-                                      strokeWidth={hairlineWidth}
-                                      strokeDasharray="3,3"
-                                      vectorEffect="non-scaling-stroke"
-                                    />
-                                  )}
-
-                                  {/* Small crisp node dots */}
-                                  {penPoints.map((p, idx) => {
-                                    const isStart = idx === 0
-                                    const r = isStart ? startNodeRadius : nodeRadius
-                                    return (
-                                      <g key={idx}>
-                                        <circle
-                                          cx={p.x}
-                                          cy={p.y}
-                                          r={r}
-                                          fill={isStart && isPenClosing ? '#22c55e' : '#ffffff'}
-                                          stroke={isStart && isPenClosing ? '#15803d' : '#0891b2'}
-                                          strokeWidth={hairlineWidth}
-                                          vectorEffect="non-scaling-stroke"
-                                        />
-                                      </g>
-                                    )
-                                  })}
-                                </svg>
-                              )
-                            })()}
-                          </div>
-                        </div>
-
-                        {/* FLOATING TOOL BAR OVERLAY AT BOTTOM */}
-                        <div className="absolute bottom-3 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl p-2 shadow-lg flex flex-col items-center gap-1.5 z-20">
-                          {/* Pen Tool In-Progress Action Bar */}
-                          {drawingTool === 'pen' && penPoints.length > 0 && (
-                            <div className="flex items-center gap-1.5 bg-cyan-50 border border-cyan-200 px-2.5 py-1 rounded-xl">
-                              <span className="text-[10px] font-black text-cyan-900">
-                                {penPoints.length} Titik Sudut
-                              </span>
-                              <button
-                                type="button"
-                                onClick={handleCloseAndFillPen}
-                                disabled={penPoints.length < 3}
-                                className={`px-2 py-0.5 rounded-lg text-[10px] font-black flex items-center gap-1 transition-all cursor-pointer ${
-                                  penPoints.length >= 3
-                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-                                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                                }`}
-                                title="Tutup bentuk poligon dan isi warna area dalamnya (Enter)"
-                              >
-                                <Check className="w-3 h-3" />
-                                <span>Isi Area Ini (Enter)</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleUndoPenPoint}
-                                className="px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-[10px] font-bold cursor-pointer"
-                                title="Batalkan titik terakhir (Backspace)"
-                              >
-                                Urungkan Titik
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleCancelPen}
-                                className="px-2 py-0.5 bg-white hover:bg-red-50 text-red-600 border border-slate-200 rounded-lg text-[10px] font-bold cursor-pointer"
-                                title="Batalkan pen tool (Esc)"
-                              >
-                                Batal
-                              </button>
-                            </div>
-                          )}
-
-                          {/* Main Tools Row */}
-                          <div className="flex items-center gap-2 flex-wrap justify-center">
-                            {/* Tool Selector */}
-                            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl">
-                              <button
-                                type="button"
-                                onClick={() => setDrawingTool('brush')}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
-                                  drawingTool === 'brush'
-                                    ? 'bg-[#ff5e00] text-white shadow-xs'
-                                    : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                                title="Kuas Penanda Area (Bebas)"
-                              >
-                                <Paintbrush className="w-3.5 h-3.5" />
-                                <span>Kuas</span>
-                              </button>
-
-                              {/* PEN TOOL */}
-                              <button
-                                type="button"
-                                onClick={() => setDrawingTool('pen')}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
-                                  drawingTool === 'pen'
-                                    ? 'bg-[#ff5e00] text-white shadow-xs'
-                                    : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                                title="Pen Tool: Buat garis sudut-sudut rapi (kerah, saku, kancing) lalu isi warna area dalamnya"
-                              >
-                                <PenTool className="w-3.5 h-3.5" />
-                                <span>Pen Tool</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => setDrawingTool('rect')}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
-                                  drawingTool === 'rect'
-                                    ? 'bg-[#ff5e00] text-white shadow-xs'
-                                    : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                                title="Kotak Seleksi Cepat"
-                              >
-                                <Square className="w-3.5 h-3.5" />
-                                <span>Kotak</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => setDrawingTool('eraser')}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
-                                  drawingTool === 'eraser'
-                                    ? 'bg-slate-800 text-white shadow-xs'
-                                    : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                                title="Penghapus Goresan"
-                              >
-                                <Eraser className="w-3.5 h-3.5" />
-                                <span>Hapus</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => setDrawingTool('hand')}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
-                                  drawingTool === 'hand'
-                                    ? 'bg-slate-800 text-white shadow-xs'
-                                    : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                                title="Hand / Geser Kanvas (atau tahan tombol Spasi)"
-                              >
-                                <Hand className="w-3.5 h-3.5" />
-                                <span>Geser</span>
-                              </button>
-                            </div>
-
-                            {/* Brush Size Slider */}
-                            {(drawingTool === 'brush' || drawingTool === 'eraser') && (
-                              <div className="flex items-center gap-2 px-2 border-l border-slate-200">
-                                <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">
-                                  Ukuran:
-                                </span>
-                                <input
-                                  type="range"
-                                  min={2}
-                                  max={65}
-                                  value={markerBrushSize}
-                                  onChange={(e) => setMarkerBrushSize(Number(e.target.value))}
-                                  className="w-20 accent-[#ff5e00] cursor-pointer"
-                                />
-                                <span className="font-mono text-[10px] font-bold text-slate-700 w-5">
-                                  {markerBrushSize}
-                                </span>
-                              </div>
-                            )}
-
-                            {/* Pen Tool Guide Info */}
-                            {drawingTool === 'pen' && penPoints.length === 0 && (
-                              <div className="hidden sm:flex items-center gap-1 px-2 border-l border-slate-200 text-[10px] text-slate-600 font-bold">
-                                <span>Klik di foto untuk buat titik sudut</span>
-                              </div>
-                            )}
-
-                            {/* Undo & Clear */}
-                            <div className="flex items-center gap-1 border-l border-slate-200 pl-1">
-                              <button
-                                type="button"
-                                onClick={handleUndoMask}
-                                disabled={maskHistory.length === 0 && penPoints.length === 0}
-                                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                                  maskHistory.length > 0 || penPoints.length > 0
-                                    ? 'text-slate-700 hover:bg-slate-100'
-                                    : 'text-slate-300 cursor-not-allowed'
-                                }`}
-                                title="Urungkan Coretan / Titik (Undo)"
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleClearMaskDraft}
-                                disabled={!hasDrawn && penPoints.length === 0}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                                  hasDrawn || penPoints.length > 0
-                                    ? 'text-red-600 hover:bg-red-50'
-                                    : 'text-slate-300 cursor-not-allowed'
-                                }`}
-                                title="Bersihkan Coretan Ini"
-                              >
-                                Reset
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })()}
-                </div>
-
-                {/* RIGHT CONTROL PANEL: SAVE AREA & ACTIVE PARTS */}
-                <div className="lg:col-span-5 xl:col-span-4 space-y-4">
-                  {/* CARD 1: SAVE DRAWN AREA */}
-                  <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-3.5">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
-                            editingExistingPartId
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-orange-100 text-[#ff5e00]'
-                          }`}
-                        >
-                          {editingExistingPartId ? (
-                            <Edit3 className="w-4 h-4" />
-                          ) : (
-                            <CheckCircle2 className="w-4 h-4" />
-                          )}
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-extrabold text-slate-900">
-                            {editingExistingPartId
-                              ? '1. Perbarui Masker Layer'
-                              : '1. Simpan Area yang Ditandai'}
-                          </h4>
-                          <p className="text-[10px] text-slate-500">
-                            {editingExistingPartId
-                              ? `Memperbaiki coretan untuk layer "${newPartName}"`
-                              : 'Beri nama bagian yang baru saja Anda tandai di sebelah kiri.'}
-                          </p>
-                        </div>
-                      </div>
-                      {editingExistingPartId && (
-                        <button
-                          type="button"
-                          onClick={handleCancelEditingExistingPart}
-                          className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold rounded-lg cursor-pointer"
-                          title="Batalkan mode perbaikan masker layer"
-                        >
-                          Batal Edit
-                        </button>
-                      )}
+              {/* Area Kerja Mockup Kemeja */}
+              <div
+                className="flex-1 relative flex items-center justify-center p-6 overflow-hidden cursor-default"
+                onMouseDown={(e) => {
+                  if (isSpacePressed || drawingTool === 'hand' || e.button === 1) {
+                    setIsPanning(true)
+                    setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y })
+                  }
+                }}
+                onMouseMove={(e) => {
+                  if (isPanning) {
+                    setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y })
+                  }
+                }}
+                onMouseUp={() => setIsPanning(false)}
+              >
+                {/* TRANSFORM CONTAINER PAN & ZOOM */}
+                <div
+                  className="relative transition-transform duration-75 ease-out select-none"
+                  style={{
+                    transform: `scale(${zoomScale}) translate(${panOffset.x / zoomScale}px, ${
+                      panOffset.y / zoomScale
+                    }px)`,
+                    transformOrigin: 'center center',
+                  }}
+                >
+                  {/* KONTEN MOCKUP KEMEJA */}
+                  <div className="relative w-[500px] h-[600px] flex items-center justify-center drop-shadow-xl">
+                    {/* BASE MOCKUP (IMAGE OR PDH VECTOR) */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      {renderBaseMockup(selectedSide)}
                     </div>
 
-                    {/* Quick Preset Names */}
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-500 block mb-1">
-                        Pilih Cepat Nama Bagian:
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {[
-                          { name: 'Saku Dada', color: '#1e293b' },
-                          { name: 'Kerah Baju', color: '#0f172a' },
-                          { name: 'Kancing Baju', color: '#94a3b8' },
-                          { name: 'Garis Kancing', color: '#334155' },
-                          { name: 'Lidah Pundak', color: '#ea580c' },
-                          { name: 'Badan Utama', color: '#1e3a8a' },
-                          { name: 'Manset Lengan', color: '#0284c7' },
-                        ].map((preset) => (
-                          <button
-                            key={preset.name}
-                            type="button"
-                            onClick={() => {
-                              setNewPartName(preset.name)
-                              setNewPartColor(preset.color)
-                            }}
-                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[10px] font-bold transition-colors cursor-pointer border border-slate-200/80"
-                          >
-                            {preset.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Part Name, Target Slot & Color Inputs */}
-                    <div className="space-y-2">
-                      <div>
-                        <label className="block text-[10px] font-extrabold text-slate-700 mb-1">
-                          Simpan Masker ke Layer:
-                        </label>
-                        <select
-                          value={editingExistingPartId || '__new__'}
-                          onChange={(e) => {
-                            const val = e.target.value
-                            if (val === '__new__') {
-                              setEditingExistingPartId(null)
-                            } else {
-                              const targetPart = (editFormData.colorParts || []).find((p) => p.id === val)
-                              if (targetPart) {
-                                setEditingExistingPartId(targetPart.id)
-                                setNewPartName(targetPart.name)
-                                setNewPartColor(targetPart.defaultColor)
-                              }
-                            }
-                          }}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
-                        >
-                          <option value="__new__">+ Buat Bagian / Layer Baru</option>
-                          {(editFormData.colorParts || [])
-                            .filter((p) => p.side === selectedSide)
-                            .map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name} {!p.maskImg ? '(⚠️ Belum Ada Masker)' : '(Perbarui Masker)'}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-extrabold text-slate-700 mb-1">
-                          Nama Bagian:
-                        </label>
-                        <input
-                          type="text"
-                          value={newPartName}
-                          onChange={(e) => setNewPartName(e.target.value)}
-                          placeholder="Misal: Saku Dada Kanan"
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                        <span className="text-[10px] font-extrabold text-slate-700">
-                          Warna Bawaan (Default):
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={newPartColor}
-                            onChange={(e) => setNewPartColor(e.target.value)}
-                            className="w-7 h-7 rounded-lg border border-slate-300 cursor-pointer p-0 bg-transparent"
-                            title="Pilih Warna Bawaan"
-                          />
-                          <span className="font-mono text-xs font-bold text-slate-800">
-                            {newPartColor}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Submit Part Button */}
-                    <button
-                      type="button"
-                      onClick={handleSaveDrawnArea}
-                      disabled={!hasDrawn}
-                      className={`w-full py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md ${
-                        hasDrawn
-                          ? 'bg-[#ff5e00] hover:bg-[#e05300] text-white shadow-[#ff5e00]/25'
-                          : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                      }`}
-                    >
-                      <Check className="w-4 h-4" />
-                      <span>
-                        {hasDrawn
-                          ? editingExistingPartId
-                            ? `✓ Simpan Perubahan Layer '${newPartName}'`
-                            : '✓ Simpan Area Ini (Tambah Bagian)'
-                          : 'Goreskan Kuas / Pen Tool Dulu di Mockup'}
-                      </span>
-                    </button>
-                  </div>
-
-                  {/* CARD 2: ACTIVE PARTS ON THIS SIDE (REORDERABLE LAYER STACK) */}
-                  <div className="p-4 bg-white rounded-3xl border border-slate-200 shadow-2xs space-y-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-xl bg-orange-100 text-[#ff5e00] flex items-center justify-center shrink-0">
-                          <Layers className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-extrabold text-slate-900">
-                            2. Urutan Layer Sisi {selectedSide === 'front' ? 'Depan' : selectedSide === 'back' ? 'Belakang' : selectedSide === 'left' ? 'Kiri' : 'Kanan'}
-                          </h4>
-                          <span className="text-[10px] text-slate-500">
-                            Paling Atas = Tampil di Depan (Geser Naik / Turun)
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleAddColorPart('Bagian Baru', selectedSide)}
-                          className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
-                          title="Tambah slot bagian secara manual"
-                        >
-                          <Plus className="w-3 h-3 text-[#ff5e00]" />
-                          Slot Manual
-                        </button>
-                        <span className="text-[10px] bg-orange-100 text-[#ff5e00] font-black px-2 py-0.5 rounded-full">
-                          {(editFormData.colorParts || []).filter((p) => p.side === selectedSide).length} Layer
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Part List with Layer Reordering */}
-                    {(() => {
-                      const currentSideParts = (editFormData.colorParts || []).filter(
-                        (p) => p.side === selectedSide
-                      )
-                      if (currentSideParts.length === 0) {
+                    {/* MULTIPLY COLORABLE PARTS (FABRIC TEXTURE ABSORPTION) */}
+                    {(editFormData.colorParts || [])
+                      .filter((p) => p.side === selectedSide && !hiddenPartIds.includes(p.id))
+                      .map((part) => {
+                        if (!part.maskImg) return null
+                        const isPartActive =
+                          editingExistingPartId === part.id ||
+                          (!editingExistingPartId &&
+                            (editFormData.colorParts || []).filter((p) => p.side === selectedSide)[0]?.id === part.id)
+                        const displayColor = isPartActive
+                          ? simulatedPreviewColor
+                          : part.defaultColor || '#1e3a8a'
                         return (
-                          <div className="py-6 px-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center">
-                            <p className="text-xs font-bold text-slate-600">
-                              Belum ada bagian yang ditandai di sisi ini.
-                            </p>
-                            <p className="text-[10px] text-slate-400 mt-1">
-                              Gunakan Pen Tool atau Kuas di sebelah kiri untuk menandai saku, kerah, kancing, dll.
-                            </p>
+                          <div
+                            key={part.id}
+                            className="absolute inset-0 pointer-events-none transition-opacity duration-150"
+                            style={{
+                              opacity: layerPreviewOpacity / 100,
+                              mixBlendMode: 'multiply',
+                            }}
+                          >
+                            <div
+                              className="w-full h-full"
+                              style={{
+                                backgroundColor: displayColor,
+                                WebkitMaskImage: `url(${part.maskImg})`,
+                                WebkitMaskSize: 'contain',
+                                WebkitMaskRepeat: 'no-repeat',
+                                WebkitMaskPosition: 'center',
+                                maskImage: `url(${part.maskImg})`,
+                                maskSize: 'contain',
+                                maskRepeat: 'no-repeat',
+                                maskPosition: 'center',
+                              }}
+                            />
                           </div>
                         )
-                      }
+                      })}
 
-                      return (
-                        <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
-                          {/* Mini guide banner */}
-                          <div className="flex items-center justify-between text-[9px] font-bold text-slate-400 px-1 uppercase tracking-wider">
-                            <span>▲ Layer Depan (Atas)</span>
-                            <span>Layer Belakang (Bawah) ▼</span>
-                          </div>
+                    {/* SLOT AKTIF: LOGO DADA KIRI (BOUNDING BOX BERSIH) */}
+                    {showLogoSlot && selectedSide === 'front' && (
+                      <div className="absolute top-[132px] left-[148px] w-[94px] h-[62px] border-2 border-indigo-500 bg-indigo-500/10 rounded-md cursor-pointer flex flex-col items-center justify-center z-20 shadow-xs pointer-events-none">
+                        <div className="flex items-center gap-1 opacity-90">
+                          <svg className="w-5 h-5 text-amber-400 drop-shadow" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                          </svg>
+                        </div>
+                        <span className="font-tech-data font-bold text-[8px] text-white bg-slate-900/70 px-1 rounded mt-0.5">
+                          SLOT #1 LOGO
+                        </span>
+                        <div className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-white border-2 border-indigo-600 rounded-xs"></div>
+                        <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-white border-2 border-indigo-600 rounded-xs"></div>
+                        <div className="absolute -bottom-1 -left-1 w-2.5 h-2.5 bg-white border-2 border-indigo-600 rounded-xs"></div>
+                        <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-white border-2 border-indigo-600 rounded-xs"></div>
+                      </div>
+                    )}
 
-                          {currentSideParts.map((part, idx) => {
-                            const isFirst = idx === 0
-                            const isLast = idx === currentSideParts.length - 1
-                            const isDragging = draggedPartId === part.id
-                            const isDragOver = dragOverPartId === part.id
-                            const isHidden = hiddenPartIds.includes(part.id)
-                            const isBeingEdited = editingExistingPartId === part.id
+                    {/* SLOT 2: NAMA BORDIR (DADA KANAN) */}
+                    {showMonogramSlot && selectedSide === 'front' && (
+                      <div className="absolute top-[136px] right-[152px] border border-dashed border-amber-400 bg-amber-400/15 px-2.5 py-1.5 rounded text-left pointer-events-none z-20">
+                        <span className="font-tech-data font-bold text-[9px] tracking-wider text-amber-600 block leading-tight">
+                          NAMA PETUGAS
+                        </span>
+                        <span className="font-tech-data text-[7px] text-slate-500 block opacity-90 uppercase">
+                          JABATAN / DIVISI
+                        </span>
+                      </div>
+                    )}
 
-                            return (
+                    {/* MASK CANVAS (1:1 PIXEL COORDINATE LAYER) */}
+                    <canvas
+                      ref={maskCanvasRef}
+                      width={canvasSize.width}
+                      height={canvasSize.height}
+                      onMouseDown={handleStartDrawMask}
+                      onMouseMove={handleDrawMaskMove}
+                      onMouseUp={handleEndDrawMask}
+                      onDoubleClick={handleDoubleClickCanvas}
+                      className={`absolute inset-0 w-full h-full z-20 ${
+                        drawingTool === 'pen'
+                          ? 'cursor-crosshair'
+                          : isSpacePressed || drawingTool === 'hand'
+                          ? isPanning
+                            ? 'cursor-grabbing'
+                            : 'cursor-grab'
+                          : 'cursor-crosshair'
+                      }`}
+                    />
+
+                    {/* OVERLAY VECTOR PEN TOOL: ANCHOR NODES & CONNECTING LINES */}
+                    {drawingTool === 'pen' && (
+                      <div className="absolute inset-0 pointer-events-none z-30">
+                        <svg
+                          className="w-full h-full"
+                          viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
+                        >
+                          {penPoints.length > 1 && (
+                            <polyline
+                              points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
+                              fill="rgba(79, 70, 229, 0.15)"
+                              stroke="#06b6d4"
+                              strokeWidth="2.5"
+                              strokeDasharray="4 2"
+                            />
+                          )}
+                          {penPoints.length > 0 && penHoverPoint && (
+                            <line
+                              x1={penPoints[penPoints.length - 1].x}
+                              y1={penPoints[penPoints.length - 1].y}
+                              x2={penHoverPoint.x}
+                              y2={penHoverPoint.y}
+                              stroke="#06b6d4"
+                              strokeWidth="1.8"
+                              strokeDasharray="3 3"
+                            />
+                          )}
+                          {penPoints.map((p, idx) => (
+                            <g key={idx}>
+                              <circle
+                                cx={p.x}
+                                cy={p.y}
+                                r={idx === 0 && isPenClosing ? 7 : 4.5}
+                                fill={idx === 0 && isPenClosing ? '#06b6d4' : '#ffffff'}
+                                stroke="#4f46e5"
+                                strokeWidth="2"
+                              />
+                            </g>
+                          ))}
+                        </svg>
+
+                        {/* CHIP ZONA TERPILIH DI ATAS KANVAS */}
+                        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur text-white px-3 py-1.5 rounded-full text-[11px] font-medium shadow-md flex items-center gap-2 border border-cyan-400/40 pointer-events-auto whitespace-nowrap z-40">
+                          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                          <span>
+                            Zona Terpilih:{' '}
+                            <strong className="text-cyan-200 font-semibold">
+                              {editingExistingPartId
+                                ? (editFormData.colorParts || []).find(
+                                    (p) => p.id === editingExistingPartId
+                                  )?.name || 'Edit Layer'
+                                : newPartName || 'Zona Baru'}
+                            </strong>
+                          </span>
+                          <span className="text-slate-400">•</span>
+                          <span className="text-slate-300 font-mono text-[10px]">
+                            {penPoints.length} Anchor Nodes
+                          </span>
+                          {penPoints.length >= 3 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleCloseAndFillPen()
+                                handleSaveDrawnArea()
+                              }}
+                              className="ml-1 px-2.5 py-0.5 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold text-[10px] transition-colors cursor-pointer"
+                            >
+                              ✓ Tutup & Simpan
+                            </button>
+                          )}
+                          {penPoints.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={handleUndoPenPoint}
+                              className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-slate-200 text-[10px] transition-colors cursor-pointer"
+                              title="Undo Node Terakhir (Backspace)"
+                            >
+                              Undo
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleCancelPen}
+                            className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-slate-200 text-[10px] transition-colors cursor-pointer"
+                          >
+                            Batal (Esc)
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Info Footer Kanvas Sederhana */}
+              <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between pointer-events-none z-30">
+                <div className="bg-white/95 backdrop-blur border border-[#e2e8f0] px-3 py-1.5 rounded-lg text-[11px] text-[#64748b] flex items-center gap-2.5 shadow-xs pointer-events-auto">
+                  <span className="flex items-center gap-1.5 text-[#0f172a] font-semibold">
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        drawingTool === 'pen' ? 'bg-cyan-500 animate-pulse' : 'bg-emerald-500'
+                      }`}
+                    ></span>
+                    {drawingTool === 'pen'
+                      ? 'Pen Tool Active'
+                      : drawingTool === 'brush'
+                      ? 'Brush Active'
+                      : 'Pointer Ready'}
+                  </span>
+                  <span className="text-slate-300">|</span>
+                  <span className="font-medium text-slate-700">Auto-Sync 4 Sisi:</span>
+                  <span
+                    onClick={() => handleSelectSide('front')}
+                    className={`px-1.5 py-0.5 rounded font-tech-data text-[10px] font-semibold border cursor-pointer ${
+                      selectedSide === 'front'
+                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    Depan {selectedSide === 'front' ? '[Aktif]' : ''}
+                  </span>
+                  <span
+                    onClick={() => handleSelectSide('back')}
+                    className={`px-1.5 py-0.5 rounded font-tech-data text-[10px] font-semibold border cursor-pointer ${
+                      selectedSide === 'back'
+                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                        : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                    }`}
+                  >
+                    Belakang {selectedSide === 'back' ? '[Aktif]' : '[Siap Di-link]'}
+                  </span>
+                  <span
+                    onClick={() => handleSelectSide('left')}
+                    className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-tech-data text-[10px] font-semibold border border-slate-200 cursor-pointer hover:bg-slate-200"
+                  >
+                    Kiri & Kanan [Auto-Linked]
+                  </span>
+                </div>
+
+                <div className="bg-white/95 backdrop-blur border border-[#e2e8f0] px-3 py-1.5 rounded-lg text-[11px] text-[#64748b] flex items-center gap-2 shadow-xs pointer-events-auto">
+                  <span className="material-symbols-outlined text-[15px] text-cyan-600">
+                    auto_fix_high
+                  </span>
+                  <span>
+                    Snap-to-Guide: <strong>Aktif</strong> • Zoom:{' '}
+                    <strong>{Math.round(zoomScale * 100)}%</strong>
+                  </span>
+                </div>
+              </div>
+            </main>
+
+            {/* 3. PANEL KANAN: INSPECTOR BLANGKO (CLEAN, WHITE & MINIMALIS) */}
+            <aside className="w-80 bg-white border-l border-[#e2e8f0] flex flex-col justify-between flex-shrink-0 z-30 select-none overflow-y-auto shadow-[-1px_0_2px_rgba(0,0,0,0.02)]">
+              <div className="p-3.5 flex flex-col gap-3.5">
+                {/* CARD 1: PENGATURAN ZONA PEWARNAAN (COLOR MASK TOOL) */}
+                <div className="bg-white rounded-xl border border-indigo-200 bg-indigo-50/15 p-3 shadow-xs">
+                  <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-indigo-100">
+                    <div className="flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[18px] text-indigo-600">
+                        format_color_fill
+                      </span>
+                      <span className="font-title-md font-semibold text-[12px] text-[#0f172a]">
+                        Zona Masking Warna
+                      </span>
+                    </div>
+                    <span className="text-[9px] font-tech-data font-semibold bg-indigo-600 text-white px-1.5 py-0.5 rounded shadow-xs">
+                      COLOR MASK
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-3 text-[12px]">
+                    {/* Nama Bagian */}
+                    <div>
+                      <label className="block text-[11px] text-[#64748b] mb-1 font-medium">
+                        Nama Bagian / Komponen
+                      </label>
+                      <input
+                        type="text"
+                        value={newPartName}
+                        onChange={(e) => {
+                          setNewPartName(e.target.value)
+                          if (editingExistingPartId) {
+                            handleUpdateColorPart(editingExistingPartId, { name: e.target.value })
+                          }
+                        }}
+                        placeholder="Contoh: Kerah Kemeja (Collar), Saku Dada..."
+                        className="w-full h-8 px-2.5 rounded-lg border border-[#e2e8f0] bg-white text-[#0f172a] text-[12px] font-medium focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    {/* Tipe Kontrol */}
+                    <div>
+                      <label className="block text-[11px] text-[#64748b] mb-1 font-medium">
+                        Tipe Kontrol Pengunjung
+                      </label>
+                      <div className="p-2 bg-white rounded-lg border border-[#e2e8f0] flex items-center justify-between">
+                        <span className="text-[11px] font-medium text-[#0f172a] flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[15px] text-indigo-600">
+                            tune
+                          </span>
+                          Ganti Warna Kain Mandiri
+                        </span>
+                        <span className="text-[9px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 font-semibold">
+                          Interaktif
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Sinkronisasi Multi-Sisi */}
+                    <div>
+                      <label className="flex items-start justify-between p-2.5 rounded-lg bg-white border border-indigo-200 hover:border-indigo-300 cursor-pointer shadow-xs">
+                        <div className="flex flex-col gap-0.5 pr-2">
+                          <span className="text-[11px] font-semibold text-[#0f172a] flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[15px] text-indigo-600">
+                              sync
+                            </span>
+                            Sinkronisasi 4 Sisi Otomatis
+                          </span>
+                          <span className="text-[10px] text-[#64748b] leading-tight">
+                            Otomatis ganti warna bagian ini di 4 sisi mockup secara bersamaan saat
+                            dipilih pengunjung.
+                          </span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={autoSync4Sides}
+                          onChange={(e) => setAutoSync4Sides(e.target.checked)}
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-0 w-4 h-4 mt-0.5 cursor-pointer"
+                        />
+                      </label>
+                    </div>
+
+                    {/* Status Pemetaan 4 Sisi */}
+                    <div>
+                      <span className="block text-[11px] font-medium text-[#64748b] mb-1.5">
+                        Pemetaan Sudut Pandang (Mapping):
+                      </span>
+                      <div className="flex flex-col gap-1.5 font-tech-data text-[10px]">
+                        <div
+                          onClick={() => handleSelectSide('front')}
+                          className={`flex items-center justify-between p-1.5 px-2 bg-white rounded border cursor-pointer ${
+                            selectedSide === 'front'
+                              ? 'border-indigo-400 bg-indigo-50/30'
+                              : 'border-[#e2e8f0] hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="text-slate-700 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            Tampak Depan
+                          </span>
+                          <span className="text-emerald-600 font-medium">
+                            {selectedSide === 'front'
+                              ? `Path Aktif (${penPoints.length} Pts)`
+                              : 'Siap'}
+                          </span>
+                        </div>
+                        <div
+                          onClick={() => handleSelectSide('back')}
+                          className={`flex items-center justify-between p-1.5 px-2 bg-white rounded border cursor-pointer ${
+                            selectedSide === 'back'
+                              ? 'border-indigo-400 bg-indigo-50/30'
+                              : 'border-amber-200 hover:bg-amber-50/50'
+                          }`}
+                        >
+                          <span className="text-slate-700 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                            Tampak Belakang
+                          </span>
+                          <span className="text-amber-700 font-medium flex items-center gap-1">
+                            Link Sisi <span className="material-symbols-outlined text-[12px]">edit</span>
+                          </span>
+                        </div>
+                        <div
+                          onClick={() => handleSelectSide('left')}
+                          className={`flex items-center justify-between p-1.5 px-2 bg-white rounded border text-slate-500 cursor-pointer ${
+                            selectedSide === 'left' || selectedSide === 'right'
+                              ? 'border-indigo-400 bg-indigo-50/30'
+                              : 'border-[#e2e8f0]'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                            Lengan Kiri & Kanan
+                          </span>
+                          <span className="text-indigo-600 font-medium">Auto-Align</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Opsi Palet Warna Diberikan */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] font-medium text-[#64748b]">
+                          Palet Pilihan Pengunjung:
+                        </span>
+                        <label className="text-[10px] text-indigo-600 font-semibold cursor-pointer hover:underline flex items-center gap-1">
+                          + Tambah Warna
+                          <input
+                            type="color"
+                            className="hidden"
+                            onChange={(e) => {
+                              const newC = e.target.value
+                              if (!visitorPalette.includes(newC)) {
+                                setVisitorPalette((prev) => [...prev, newC])
+                              }
+                              setNewPartColor(newC)
+                            }}
+                          />
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {visitorPalette.slice(0, 8).map((color, idx) => {
+                          const isSelected = newPartColor.toLowerCase() === color.toLowerCase()
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                setNewPartColor(color)
+                                setSimulatedPreviewColor(color)
+                                if (editingExistingPartId) {
+                                  handleUpdateColorPart(editingExistingPartId, {
+                                    defaultColor: color,
+                                  })
+                                }
+                              }}
+                              className={`flex flex-col items-center p-1 rounded-md bg-white cursor-pointer transition-all ${
+                                isSelected
+                                  ? 'border-2 border-indigo-600 shadow-xs'
+                                  : 'border border-[#e2e8f0] hover:border-slate-300'
+                              }`}
+                            >
                               <div
-                                key={part.id}
-                                draggable
-                                onDragStart={(e) => handleDragStart(e, part.id)}
-                                onDragOver={(e) => handleDragOver(e, part.id)}
-                                onDrop={(e) => handleDrop(e, part.id)}
-                                onDragEnd={handleDragEnd}
-                                onMouseEnter={() => setHighlightedPartId(part.id)}
-                                onMouseLeave={() => setHighlightedPartId(null)}
-                                className={`p-2 rounded-2xl border transition-all select-none ${
-                                  isDragging
-                                    ? 'opacity-35 bg-slate-100 border-dashed border-slate-400'
-                                    : isDragOver
-                                    ? 'border-2 border-dashed border-[#ff5e00] bg-orange-50/80 scale-[1.01]'
-                                    : isBeingEdited
-                                    ? 'bg-amber-50/80 border-amber-400 ring-2 ring-amber-300/40 shadow-xs'
-                                    : highlightedPartId === part.id
-                                    ? 'bg-orange-50/70 border-[#ff5e00] shadow-xs'
-                                    : isHidden
-                                    ? 'bg-slate-100/60 border-slate-200 opacity-60'
-                                    : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                                className="w-5 h-5 rounded shadow-xs border border-black/10"
+                                style={{ backgroundColor: color }}
+                              ></div>
+                              <span className="text-[8px] font-tech-data font-medium mt-0.5 text-slate-600 truncate max-w-full">
+                                {color}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Opasitas Tekstur Kain */}
+                    <div>
+                      <div className="flex items-center justify-between text-[11px] text-[#64748b] mb-1">
+                        <span>Penyerapan Tekstur (Multiply):</span>
+                        <span className="font-tech-data text-[10px] text-slate-700">{layerPreviewOpacity}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={20}
+                        max={100}
+                        value={layerPreviewOpacity}
+                        onChange={(e) => setLayerPreviewOpacity(Number(e.target.value))}
+                        className="w-full h-1 accent-indigo-600 cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Ukuran Kuas jika mode Kuas/Penghapus */}
+                    {(drawingTool === 'brush' || drawingTool === 'eraser') && (
+                      <div>
+                        <div className="flex items-center justify-between text-[11px] text-[#64748b] mb-1">
+                          <span>Ukuran Kuas/Penghapus:</span>
+                          <span className="font-tech-data text-[10px] text-slate-700">{markerBrushSize}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={5}
+                          max={60}
+                          value={markerBrushSize}
+                          onChange={(e) => setMarkerBrushSize(Number(e.target.value))}
+                          className="w-full h-1 accent-indigo-600 cursor-pointer"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* CARD 2: SIMULASI DASHBOARD PENGUNJUNG (CUSTOMER PREVIEW) */}
+                <div className="bg-white rounded-xl border border-[#e2e8f0] p-3 shadow-xs">
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#e2e8f0]">
+                    <div className="flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[17px] text-slate-700">
+                        preview
+                      </span>
+                      <span className="font-title-md font-semibold text-[12px] text-[#0f172a]">
+                        Simulasi Sisi Pengunjung
+                      </span>
+                    </div>
+                    <span className="text-[9px] font-tech-data font-semibold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                      PREVIEW
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-[#64748b] mb-2 leading-relaxed">
+                    Tampilan widget pemilih warna yang muncul di sesi pemesan:
+                  </p>
+                  <div className="p-2.5 rounded-lg bg-[#f8fafc] border border-[#e2e8f0]">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-semibold text-[#0f172a] flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[14px] text-indigo-600">
+                          palette
+                        </span>
+                        Ubah Warna {newPartName || 'Bagian'}:
+                      </span>
+                      <span className="text-[9px] text-indigo-600 font-tech-data font-medium">
+                        Dipilih: {simulatedPreviewColor}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {visitorPalette.slice(0, 7).map((color, idx) => {
+                        const isMatch = simulatedPreviewColor.toLowerCase() === color.toLowerCase()
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              setSimulatedPreviewColor(color)
+                              setNewPartColor(color)
+                              if (editingExistingPartId) {
+                                handleUpdateColorPart(editingExistingPartId, { defaultColor: color })
+                              }
+                            }}
+                            className={`w-6 h-6 rounded-full border border-black/10 transition-transform flex items-center justify-center cursor-pointer ${
+                              isMatch ? 'ring-2 ring-indigo-600 scale-110 shadow-xs' : 'hover:scale-105'
+                            }`}
+                            style={{ backgroundColor: color }}
+                            title={`Simulasikan warna ${color}`}
+                          >
+                            {isMatch && (
+                              <Check
+                                className={`w-3.5 h-3.5 ${
+                                  color.toLowerCase() === '#ffffff'
+                                    ? 'text-slate-900'
+                                    : 'text-white'
                                 }`}
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  {/* Drag Handle */}
+                              />
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* CARD 3: DAFTAR LAYER / ZONA BLANGKO */}
+                <div className="bg-white rounded-xl border border-[#e2e8f0] p-3 shadow-xs">
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#e2e8f0]">
+                    <div className="flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[17px] text-indigo-600">
+                        layers
+                      </span>
+                      <span className="font-title-md font-semibold text-[12px] text-[#0f172a]">
+                        Daftar Zona & Layer
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-[#64748b]">
+                        {(editFormData.colorParts || []).filter((p) => p.side === selectedSide).length} Item
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleAddNewColorSlot}
+                        className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] border border-indigo-200 transition-colors cursor-pointer"
+                        title="Buat Slot Layer Baru"
+                      >
+                        + Slot Manual
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 text-[11px] max-h-56 overflow-y-auto pr-0.5">
+                    {(editFormData.colorParts || []).filter((p) => p.side === selectedSide).length === 0 ? (
+                      <div className="text-center py-4 text-slate-400 text-[11px]">
+                        Belum ada zona warna di sisi ini. Klik <strong>+ Slot Manual</strong> atau
+                        gambar dengan <strong>Pen Tool</strong> di kanvas.
+                      </div>
+                    ) : (
+                      (editFormData.colorParts || [])
+                        .filter((p) => p.side === selectedSide)
+                        .map((part, index, arr) => {
+                          const isTarget = editingExistingPartId === part.id
+                          const hasMask = !!part.maskImg
+                          const isHidden = hiddenPartIds.includes(part.id)
+                          return (
+                            <div
+                              key={part.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, part.id)}
+                              onDragOver={(e) => handleDragOver(e, part.id)}
+                              onDrop={(e) => handleDrop(e, part.id)}
+                              onDragEnd={handleDragEnd}
+                              className={`p-2 rounded-lg border transition-all ${
+                                isTarget
+                                  ? 'bg-indigo-50/90 border-indigo-400 shadow-xs'
+                                  : 'bg-[#f8fafc] border-[#e2e8f0] hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <GripVertical className="w-3.5 h-3.5 text-slate-400 cursor-grab shrink-0" />
                                   <div
-                                    className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-700 p-0.5 shrink-0"
-                                    title="Tahan & Drag untuk memindahkan posisi layer"
-                                  >
-                                    <GripVertical className="w-4 h-4" />
-                                  </div>
-
-                                  {/* Visibility Toggle (Eye / EyeOff) */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleTogglePartVisibility(part.id)}
-                                    className={`p-1 rounded-md transition-colors cursor-pointer shrink-0 ${
-                                      isHidden
-                                        ? 'text-slate-400 hover:text-slate-700'
-                                        : 'text-slate-700 hover:text-slate-900'
-                                    }`}
-                                    title={
-                                      isHidden
-                                        ? 'Tampilkan layer ini di kanvas'
-                                        : 'Sembunyikan sementara layer ini agar mudah menggambar bagian lain'
-                                    }
-                                  >
-                                    {isHidden ? (
-                                      <EyeOff className="w-3.5 h-3.5" />
-                                    ) : (
-                                      <Eye className="w-3.5 h-3.5" />
-                                    )}
-                                  </button>
-
-                                  {/* Layer Index Badge */}
-                                  <span
-                                    className={`text-[9px] font-black px-1.5 py-0.5 rounded-md shrink-0 leading-none ${
-                                      isFirst
-                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                        : isLast && currentSideParts.length > 1
-                                        ? 'bg-slate-200 text-slate-600'
-                                        : 'bg-slate-200/80 text-slate-700'
-                                    }`}
-                                    title={
-                                      isFirst
-                                        ? 'Layer paling atas (tampil paling depan)'
-                                        : isLast
-                                        ? 'Layer paling bawah (tampil paling belakang)'
-                                        : `Layer #${idx + 1}`
-                                    }
-                                  >
-                                    #{idx + 1}
-                                  </span>
-
-                                  {/* Layer Name Input */}
-                                  <input
-                                    type="text"
-                                    value={part.name}
-                                    onChange={(e) =>
-                                      handleUpdateColorPart(part.id, { name: e.target.value })
-                                    }
-                                    className={`text-xs font-extrabold bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#ff5e00] focus:outline-none px-1 py-0.5 flex-1 min-w-0 ${
-                                      isHidden ? 'text-slate-400 line-through' : 'text-slate-900'
-                                    }`}
+                                    className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0"
+                                    style={{
+                                      backgroundColor:
+                                        editingExistingPartId === part.id
+                                          ? simulatedPreviewColor
+                                          : part.defaultColor,
+                                    }}
                                   />
-
-                                  {/* Layer Shift Controls (Move Up / Down) */}
-                                  <div className="flex items-center bg-white rounded-lg border border-slate-200 p-0.5 shadow-2xs shrink-0">
-                                    <button
-                                      type="button"
-                                      disabled={isFirst}
-                                      onClick={() => handleMovePart(part.id, 'up')}
-                                      className={`p-1 rounded transition-colors ${
-                                        isFirst
-                                          ? 'text-slate-200 cursor-not-allowed'
-                                          : 'text-slate-700 hover:bg-slate-100 cursor-pointer hover:text-[#ff5e00]'
-                                      }`}
-                                      title="Geser ke Atas (Tampil Lebih di Depan)"
-                                    >
-                                      <ChevronUp className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={isLast}
-                                      onClick={() => handleMovePart(part.id, 'down')}
-                                      className={`p-1 rounded transition-colors ${
-                                        isLast
-                                          ? 'text-slate-200 cursor-not-allowed'
-                                          : 'text-slate-700 hover:bg-slate-100 cursor-pointer hover:text-[#ff5e00]'
-                                      }`}
-                                      title="Geser ke Bawah (Tampil Lebih di Belakang)"
-                                    >
-                                      <ChevronDown className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-
-                                  {/* Color & Mask Actions */}
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    <input
-                                      type="color"
-                                      value={part.defaultColor}
-                                      onChange={(e) =>
-                                        handleUpdateColorPart(part.id, {
-                                          defaultColor: e.target.value,
-                                        })
-                                      }
-                                      className="w-5 h-5 rounded border border-slate-300 cursor-pointer p-0 bg-transparent"
-                                      title="Ganti Warna Bagian"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => handleLoadPartMaskToCanvas(part)}
-                                      className={`p-1 rounded transition-colors cursor-pointer ${
-                                        isBeingEdited
-                                          ? 'text-[#ff5e00] bg-orange-100 ring-1 ring-orange-300'
-                                          : 'text-slate-400 hover:text-slate-800'
-                                      }`}
-                                      title="Muat coretan masker ke kanvas untuk diperbaiki/dihapus/ditambah"
-                                    >
-                                      <Edit3 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDuplicatePart(part.id)}
-                                      className="p-1 text-slate-400 hover:text-slate-800 transition-colors cursor-pointer"
-                                      title="Duplikat layer ini"
-                                    >
-                                      <Copy className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => triggerPartMaskUpload(part.id)}
-                                      className="p-1 text-slate-400 hover:text-[#ff5e00] transition-colors cursor-pointer"
-                                      title={part.maskImg ? 'Ganti file Mask PNG' : 'Upload file Mask PNG'}
-                                    >
-                                      <Upload className="w-3.5 h-3.5" />
-                                    </button>
-                                    {part.maskImg && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleDefringePartMask(part.id)}
-                                        className="p-1 text-amber-500 hover:text-amber-700 hover:bg-amber-50 rounded transition-colors cursor-pointer"
-                                        title="✨ Rapikan Tepi / Hilangkan Garis Stroke Tebal (Erode Outline)"
-                                      >
-                                        <Sparkles className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoveColorPart(part.id)}
-                                      className="p-1 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
-                                      title="Hapus layer bagian ini"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
+                                  <span
+                                    className={`font-semibold truncate max-w-[110px] ${
+                                      isTarget ? 'text-indigo-900' : 'text-slate-800'
+                                    }`}
+                                    title={part.name}
+                                  >
+                                    {part.name}
+                                  </span>
                                 </div>
 
-                                {/* Mask status & Quick Draw button */}
-                                {!part.maskImg ? (
-                                  <div className="mt-2 pt-2 border-t border-amber-200/80 flex items-center justify-between gap-2 bg-amber-50/80 p-2 rounded-xl">
-                                    <div className="text-[10px] text-amber-900 font-semibold leading-tight flex items-center gap-1.5">
-                                      <span className="text-amber-500 text-xs">⚠️</span>
-                                      <span>Belum ada masker (tidak akan tampil di Studio Canvas)</span>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleStartDrawingForSlot(part.id)}
-                                      className="px-2.5 py-1 bg-gradient-to-r from-[#ff5e00] to-orange-500 text-white rounded-lg text-[10px] font-black hover:opacity-95 shadow-2xs flex items-center gap-1 shrink-0 cursor-pointer"
-                                      title="Buka Pen Tool dan langsung simpan ke layer ini"
-                                    >
-                                      <PenTool className="w-3 h-3" />
-                                      <span>Gambar Masker</span>
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="mt-1 flex items-center justify-between text-[9px] text-slate-400 px-1">
-                                    <span className="text-emerald-600 font-bold flex items-center gap-1">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
-                                      Masker Aktif (Tampil di Studio Canvas)
-                                    </span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {/* Defringe / Rapikan Tepi Button */}
+                                  {hasMask && (
                                     <button
                                       type="button"
                                       onClick={() => handleDefringePartMask(part.id)}
-                                      className="text-amber-600 hover:text-amber-700 hover:underline flex items-center gap-1 font-bold cursor-pointer"
-                                      title="Klik jika shape memiliki garis tepi tebal yang ingin dihilangkan"
+                                      className="px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[9px] font-bold border border-emerald-200 transition-colors cursor-pointer"
+                                      title="Rapikan tepi masker (hilangkan sisa garis tebal stroke)"
                                     >
-                                      <Sparkles className="w-2.5 h-2.5" />
-                                      <span>Rapikan Tepi (Buang Stroke)</span>
+                                      ✨ Rapikan Tepi
                                     </button>
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )
-                    })()}
-                  </div>
+                                  )}
 
-                  {/* CARD 3: REALISTIC TEXTURE NOTE */}
-                  <div className="p-3.5 bg-gradient-to-br from-orange-50/80 to-amber-50/60 rounded-2xl border border-orange-200/80 space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-orange-950 font-black text-[11px]">
-                      <Sparkles className="w-3.5 h-3.5 text-[#ff5e00]" />
-                      <span>Otomatis Meresap ke Tekstur Kain (Multiply)</span>
-                    </div>
-                    <p className="text-[10px] text-slate-600 leading-relaxed">
-                      Warna yang dipilih pembeli di studio canvas otomatis menyatu dengan serat, kerutan, dan bayangan kain asli seragam Anda tanpa menutupi detail aslinya!
-                    </p>
+                                  {/* Status Masker / Gambar Masker */}
+                                  {!hasMask && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStartDrawingForSlot(part.id)}
+                                      className="px-1.5 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 text-[9px] font-bold border border-amber-200 transition-colors cursor-pointer"
+                                      title="Mulai gambar masker untuk slot ini"
+                                    >
+                                      ✏️ Gambar Masker
+                                    </button>
+                                  )}
+
+                                  {/* Move Up / Down */}
+                                  <button
+                                    type="button"
+                                    disabled={index === 0}
+                                    onClick={() => handleMovePart(part.id, 'up')}
+                                    className="p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
+                                    title="Geser ke Atas"
+                                  >
+                                    <ChevronUp className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={index === arr.length - 1}
+                                    onClick={() => handleMovePart(part.id, 'down')}
+                                    className="p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
+                                    title="Geser ke Bawah"
+                                  >
+                                    <ChevronDown className="w-3 h-3" />
+                                  </button>
+
+                                  {/* Visibility Toggle */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTogglePartVisibility(part.id)}
+                                    className="p-0.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+                                    title={isHidden ? 'Tampilkan Layer' : 'Sembunyikan Layer'}
+                                  >
+                                    {isHidden ? (
+                                      <EyeOff className="w-3 h-3 text-slate-400" />
+                                    ) : (
+                                      <Eye className="w-3 h-3 text-indigo-600" />
+                                    )}
+                                  </button>
+
+                                  {/* Edit Masker di Kanvas */}
+                                  {hasMask && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleLoadPartMaskToCanvas(part)}
+                                      className="p-0.5 text-slate-400 hover:text-indigo-600 cursor-pointer"
+                                      title="Load masker ke kanvas untuk diedit"
+                                    >
+                                      <Edit3 className="w-3 h-3" />
+                                    </button>
+                                  )}
+
+                                  {/* Upload File Masker PNG */}
+                                  <button
+                                    type="button"
+                                    onClick={() => triggerPartMaskUpload(part.id)}
+                                    className="p-0.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+                                    title="Upload file PNG masker transparan"
+                                  >
+                                    <Upload className="w-3 h-3" />
+                                  </button>
+
+                                  {/* Duplicate */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDuplicatePart(part.id)}
+                                    className="p-0.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+                                    title="Duplikat Layer"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                  </button>
+
+                                  {/* Delete */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveColorPart(part.id)}
+                                    className="p-0.5 text-red-400 hover:text-red-600 cursor-pointer"
+                                    title="Hapus Layer"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })
+                    )}
                   </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            /* TAB 2: INFORMASI & HARGA */
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Input Nama & Kategori */}
-                <div className="space-y-4">
+
+              {/* Bottom Action Bar di Inspector */}
+              <div className="p-3 bg-[#f8fafc] border-t border-[#e2e8f0] flex items-center justify-between text-[11px]">
+                <span className="text-[#64748b]">Draf otomatis disimpan</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (hasDrawn) {
+                      handleSaveDrawnArea()
+                    } else {
+                      handleSaveForm(false)
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium flex items-center gap-1 transition-colors cursor-pointer shadow-xs"
+                >
+                  <span>Terapkan</span>
+                  <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                </button>
+              </div>
+            </aside>
+          </div>
+
+          {/* MODAL INFORMASI & HARGA SERAGAM (INFO & HARGA) */}
+          {showInfoModal && (
+            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                      <Tag className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-sm">
+                        Pengaturan Model & Harga Seragam
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Atur identitas katalog, diskon kuantitas, dan clipping mask
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowInfoModal(false)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-3.5 text-xs">
+                  {/* Nama Model */}
                   <div>
-                    <label className="block text-xs font-extrabold text-slate-800 mb-1.5">
-                      Nama Model Seragam *
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Nama Model Seragam
                     </label>
                     <input
                       type="text"
-                      placeholder="Contoh: Kemeja PDH Mahasiswa Bahan Drill"
-                      value={editFormData.name || ''}
-                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
+                      value={editFormData.name}
+                      onChange={(e) =>
+                        setEditFormData((prev) => ({ ...prev, name: e.target.value }))
+                      }
+                      placeholder="Contoh: Kemeja PDH Ventura Lengan Pendek"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-medium"
                     />
                   </div>
 
+                  {/* Kategori & Harga Dasar */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-extrabold text-slate-800 mb-1.5">
-                        Kategori Seragam
-                      </label>
+                      <label className="block font-bold text-slate-700 mb-1">Kategori</label>
                       <select
-                        value={editFormData.category || 'Kaos'}
+                        value={editFormData.category}
                         onChange={(e) =>
-                          setEditFormData({ ...editFormData, category: e.target.value })
+                          setEditFormData((prev) => ({ ...prev, category: e.target.value }))
                         }
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-medium bg-white"
                       >
-                        <option value="Kaos">Kaos (T-Shirt)</option>
-                        <option value="PDH / PDL">PDH / PDL</option>
-                        <option value="Kemeja">Kemeja Formal / Kantor</option>
-                        <option value="Rompi">Rompi Tactical / Safety</option>
-                        <option value="Polo">Polo Shirt</option>
-                        <option value="Jaket">Jaket Bomber / Parka</option>
-                        <option value="Hoodie">Hoodie / Streetwear</option>
-                        <option value="Custom">Seragam Khusus Lainnya</option>
+                        <option value="Kemeja PDH/PDL">Kemeja PDH/PDL</option>
+                        <option value="Kemeja Formal">Kemeja Formal</option>
+                        <option value="Kaos / T-Shirt">Kaos / T-Shirt</option>
+                        <option value="Polo Shirt">Polo Shirt</option>
+                        <option value="Jaket / Hoodie">Jaket / Hoodie</option>
+                        <option value="Rompi K3">Rompi K3</option>
+                        <option value="Jas / Blazer">Jas / Blazer</option>
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-extrabold text-slate-800 mb-1.5 flex items-center gap-1">
-                        <Tag className="w-3.5 h-3.5 text-[#ff5e00]" />
-                        Harga Dasar Polos (Rp) *
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Harga Dasar Satuan (Rp)
                       </label>
                       <input
                         type="number"
-                        min="0"
-                        step="1000"
-                        placeholder="85000"
-                        value={editFormData.basePrice || ''}
+                        value={editFormData.basePrice}
                         onChange={(e) =>
-                          setEditFormData({
-                            ...editFormData,
-                            basePrice: parseInt(e.target.value) || 0,
-                          })
+                          setEditFormData((prev) => ({
+                            ...prev,
+                            basePrice: Number(e.target.value),
+                          }))
                         }
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 text-xs text-slate-900 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00]"
+                        placeholder="85000"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-medium"
                       />
                     </div>
                   </div>
 
-                  {/* Diskon Lusinan ZY */}
-                  <div className="p-4 bg-orange-50/60 rounded-2xl border border-orange-200/80 space-y-3">
-                    <span className="text-xs font-extrabold text-orange-950 flex items-center gap-1.5">
-                      <Percent className="w-3.5 h-3.5 text-[#ff5e00]" />
-                      Diskon Grosir Bertingkat (Potongan per Pcs):
+                  {/* Diskon Lusinan */}
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                    <span className="block font-bold text-slate-800 text-[11px]">
+                      Potongan Harga Satuan (Diskon Kuantitas):
                     </span>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <span className="text-[10px] text-slate-600 block mb-0.5">≥12 pcs (Lusinan)</span>
+                        <label className="text-[10px] text-slate-500 block mb-0.5">Min. 12 pcs</label>
                         <input
                           type="number"
-                          step="1000"
-                          value={editFormData.discount12 ?? 5000}
+                          value={editFormData.discount12}
                           onChange={(e) =>
-                            setEditFormData({
-                              ...editFormData,
-                              discount12: parseInt(e.target.value) || 0,
-                            })
+                            setEditFormData((prev) => ({
+                              ...prev,
+                              discount12: Number(e.target.value),
+                            }))
                           }
-                          className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold text-center"
+                          className="w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs font-mono font-bold"
+                          placeholder="5000"
                         />
                       </div>
                       <div>
-                        <span className="text-[10px] text-slate-600 block mb-0.5">≥50 pcs (Partai)</span>
+                        <label className="text-[10px] text-slate-500 block mb-0.5">Min. 50 pcs</label>
                         <input
                           type="number"
-                          step="1000"
-                          value={editFormData.discount50 ?? 10000}
+                          value={editFormData.discount50}
                           onChange={(e) =>
-                            setEditFormData({
-                              ...editFormData,
-                              discount50: parseInt(e.target.value) || 0,
-                            })
+                            setEditFormData((prev) => ({
+                              ...prev,
+                              discount50: Number(e.target.value),
+                            }))
                           }
-                          className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold text-center"
+                          className="w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs font-mono font-bold"
+                          placeholder="10000"
                         />
                       </div>
                       <div>
-                        <span className="text-[10px] text-slate-600 block mb-0.5">≥100 pcs (Grosir)</span>
+                        <label className="text-[10px] text-slate-500 block mb-0.5">Min. 100 pcs</label>
                         <input
                           type="number"
-                          step="1000"
-                          value={editFormData.discount100 ?? 15000}
+                          value={editFormData.discount100}
                           onChange={(e) =>
-                            setEditFormData({
-                              ...editFormData,
-                              discount100: parseInt(e.target.value) || 0,
-                            })
+                            setEditFormData((prev) => ({
+                              ...prev,
+                              discount100: Number(e.target.value),
+                            }))
                           }
-                          className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold text-center"
+                          className="w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs font-mono font-bold"
+                          placeholder="15000"
                         />
                       </div>
                     </div>
                   </div>
 
-                  {/* Setting Clipping Mask Otomatis */}
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-xl bg-orange-100 text-[#ff5e00] flex items-center justify-center shrink-0">
-                          <Scissors className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <span className="text-xs font-extrabold text-slate-900 block">
-                            Metode Clipping Mask Otomatis
-                          </span>
-                          <span className="text-[11px] text-slate-500">
-                            Kunci desain & warna kuas di siluet baju (tidak tembus keluar)
-                          </span>
-                        </div>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={editFormData.enableClippingMask ?? true}
-                          onChange={(e) =>
-                            setEditFormData({ ...editFormData, enableClippingMask: e.target.checked })
-                          }
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#ff5e00]"></div>
-                      </label>
-                    </div>
-                    <p className="text-[10px] text-slate-500 bg-white p-2.5 rounded-xl border border-slate-200/80 leading-relaxed">
-                      💡 <b>Tips Pro:</b> Saat clipping mask aktif, gambar sablon/bordir dan goresan kuas pewarna akan otomatis dipotong rapi mengikuti bentuk luar baju (background transparan).
-                    </p>
-                  </div>
-
+                  {/* Deskripsi & Bahan */}
                   <div>
-                    <label className="block text-xs font-extrabold text-slate-800 mb-1.5">
-                      Keterangan / Deskripsi Bahan
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Deskripsi & Karakteristik Bahan
                     </label>
                     <textarea
                       rows={2}
-                      placeholder="Contoh: Menggunakan kain Drill grade A, jahitan bartack, adem dan rapi."
-                      value={editFormData.description || ''}
+                      value={editFormData.description}
                       onChange={(e) =>
-                        setEditFormData({ ...editFormData, description: e.target.value })
+                        setEditFormData((prev) => ({ ...prev, description: e.target.value }))
                       }
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#ff5e00] resize-none"
+                      placeholder="Contoh: Bahan American Drill heavyweight 210gsm, serat rapat dan dingin."
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-medium text-xs resize-none"
                     />
                   </div>
+
+                  {/* Toggle Clipping Mask */}
+                  <label className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                    <div>
+                      <span className="font-bold text-slate-800 block text-xs">
+                        Clipping Mask Pola Baju
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        Kunci grafis atau warna agar tidak bocor keluar batas pola kain.
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={editFormData.enableClippingMask ?? true}
+                      onChange={(e) =>
+                        setEditFormData((prev) => ({
+                          ...prev,
+                          enableClippingMask: e.target.checked,
+                        }))
+                      }
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-0 w-4 h-4 cursor-pointer"
+                    />
+                  </label>
                 </div>
 
-                {/* Ringkasan 4 Sudut Foto & Tombol Akses Editor Besar */}
-                <div className="space-y-3">
-                  <label className="block text-xs font-extrabold text-slate-800 mb-1.5 flex items-center justify-between">
-                    <span>Foto Mockup Seragam (4 Sudut):</span>
-                    <span className="text-[10px] text-[#ff5e00] font-normal">Klik untuk Buka di Editor Besar</span>
-                  </label>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { id: 'front' as ViewSide, label: 'Tampak Depan (Wajib)', key: 'frontImg' as const },
-                      { id: 'back' as ViewSide, label: 'Tampak Belakang', key: 'backImg' as const },
-                      { id: 'left' as ViewSide, label: 'Tampak Sisi Kiri', key: 'leftImg' as const },
-                      { id: 'right' as ViewSide, label: 'Tampak Sisi Kanan', key: 'rightImg' as const },
-                    ].map((slot) => {
-                      const img = editFormData[slot.key]
-                      const partsCount = (editFormData.colorParts || []).filter((p) => p.side === slot.id).length
-                      return (
-                        <div
-                          key={slot.id}
-                          className="p-3 border border-slate-200 rounded-2xl bg-white shadow-2xs flex flex-col justify-between gap-2.5"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-extrabold text-slate-800 truncate">
-                              {slot.label}
-                            </span>
-                            {img && (
-                              <button
-                                type="button"
-                                onClick={() => removePhotoSide(slot.id)}
-                                className="text-red-500 hover:text-red-700"
-                                title="Hapus foto ini"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-
-                          <div
-                            onClick={() => {
-                              setSelectedSide(slot.id)
-                              setActiveEditorTab('marker')
-                            }}
-                            className="w-full h-32 rounded-xl bg-slate-50 border border-slate-200 overflow-hidden flex items-center justify-center cursor-pointer group relative"
-                          >
-                            {img ? (
-                              <>
-                                <img
-                                  src={img}
-                                  alt={slot.label}
-                                  className="w-full h-full object-contain p-1"
-                                />
-                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold text-center px-2">
-                                  Buka di Editor Penanda Area ➔
-                                </div>
-                              </>
-                            ) : (
-                              <div className="flex flex-col items-center gap-1 text-slate-400 group-hover:text-[#ff5e00] transition-colors p-2 text-center">
-                                <Upload className="w-5 h-5" />
-                                <span className="text-[10px] font-bold">+ Upload Foto</span>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-slate-500 font-bold">{partsCount} Area Ditandai</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedSide(slot.id)
-                                setActiveEditorTab('marker')
-                              }}
-                              className="text-[#ff5e00] font-bold hover:underline cursor-pointer"
-                            >
-                              Tandai Area ➔
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                <div className="pt-2 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowInfoModal(false)}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    Simpan & Tutup
+                  </button>
                 </div>
               </div>
             </div>
           )}
-
-          {/* Action buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setIsEditing(false)}
-              className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50"
-            >
-              Batal
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSaveForm(false)}
-              className="w-full sm:w-auto px-5 py-2.5 bg-black hover:bg-slate-900 text-white font-extrabold rounded-xl text-xs transition-colors shadow-xs"
-            >
-              Simpan ke Katalog
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSaveForm(true)}
-              className="w-full sm:w-auto px-6 py-2.5 bg-[#ff5e00] hover:bg-[#e05300] text-white font-extrabold rounded-xl text-xs transition-all shadow-md shadow-[#ff5e00]/25 flex items-center justify-center gap-1.5"
-            >
-              Simpan & Buka di Kanvas
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
         </div>
       )}
 
