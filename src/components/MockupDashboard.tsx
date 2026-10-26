@@ -34,6 +34,107 @@ import {
   Sliders,
 } from 'lucide-react'
 
+// CorelDRAW Style Spline & Curve Helpers (Cubic Catmull-Rom & Bézier Curves)
+function getSplineSvgPath(
+  points: { x: number; y: number }[],
+  isClosed: boolean,
+  tension: number = 0.5
+): string {
+  if (points.length === 0) return ''
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`
+  if (points.length === 2) {
+    return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`
+  }
+
+  const n = points.length
+  let d = `M ${points[0].x} ${points[0].y}`
+
+  if (isClosed) {
+    for (let i = 0; i < n; i++) {
+      const p0 = points[(i - 1 + n) % n]
+      const p1 = points[i]
+      const p2 = points[(i + 1) % n]
+      const p3 = points[(i + 2) % n]
+
+      const factor = tension
+      const cp1x = p1.x + ((p2.x - p0.x) / 3) * factor
+      const cp1y = p1.y + ((p2.y - p0.y) / 3) * factor
+
+      const cp2x = p2.x - ((p3.x - p1.x) / 3) * factor
+      const cp2y = p2.y - ((p3.y - p1.y) / 3) * factor
+
+      d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
+    }
+    d += ' Z'
+  } else {
+    for (let i = 0; i < n - 1; i++) {
+      const p0 = i > 0 ? points[i - 1] : points[i]
+      const p1 = points[i]
+      const p2 = points[i + 1]
+      const p3 = i + 2 < n ? points[i + 2] : p2
+
+      const factor = tension
+      const cp1x = p1.x + ((p2.x - p0.x) / 3) * factor
+      const cp1y = p1.y + ((p2.y - p0.y) / 3) * factor
+
+      const cp2x = p2.x - ((p3.x - p1.x) / 3) * factor
+      const cp2y = p2.y - ((p3.y - p1.y) / 3) * factor
+
+      d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
+    }
+  }
+
+  return d
+}
+
+function drawSplineToCanvas(
+  ctx: CanvasRenderingContext2D,
+  points: { x: number; y: number }[],
+  isClosed: boolean,
+  tension: number = 0.5
+) {
+  if (points.length < 2) return
+  const n = points.length
+
+  ctx.beginPath()
+  ctx.moveTo(points[0].x, points[0].y)
+
+  if (isClosed) {
+    for (let i = 0; i < n; i++) {
+      const p0 = points[(i - 1 + n) % n]
+      const p1 = points[i]
+      const p2 = points[(i + 1) % n]
+      const p3 = points[(i + 2) % n]
+
+      const factor = tension
+      const cp1x = p1.x + ((p2.x - p0.x) / 3) * factor
+      const cp1y = p1.y + ((p2.y - p0.y) / 3) * factor
+
+      const cp2x = p2.x - ((p3.x - p1.x) / 3) * factor
+      const cp2y = p2.y - ((p3.y - p1.y) / 3) * factor
+
+      ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y)
+    }
+    ctx.closePath()
+  } else {
+    for (let i = 0; i < n - 1; i++) {
+      const p0 = i > 0 ? points[i - 1] : points[i]
+      const p1 = points[i]
+      const p2 = points[i + 1]
+      const p3 = i + 2 < n ? points[i + 2] : p2
+
+      const factor = tension
+      const cp1x = p1.x + ((p2.x - p0.x) / 3) * factor
+      const cp1y = p1.y + ((p2.y - p0.y) / 3) * factor
+
+      const cp2x = p2.x - ((p3.x - p1.x) / 3) * factor
+      const cp2y = p2.y - ((p3.y - p1.y) / 3) * factor
+
+      ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y)
+    }
+  }
+}
+
 interface MockupDashboardProps {
   mockups: MockupTemplate[]
   activeMockupId: string | null
@@ -94,15 +195,17 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [isSpacePressed, setIsSpacePressed] = useState<boolean>(false)
 
-  // Pen Tool (Polygon Path with Interior Fill)
+  // Pen Tool (Polygon Path with Interior Fill & CorelDRAW Curves)
   const [penPoints, setPenPoints] = useState<{ x: number; y: number }[]>([])
+  const [penRedoPoints, setPenRedoPoints] = useState<{ x: number; y: number }[]>([])
   const [penHoverPoint, setPenHoverPoint] = useState<{ x: number; y: number } | null>(null)
   const [isPenClosing, setIsPenClosing] = useState<boolean>(false)
+  const [penCurveMode, setPenCurveMode] = useState<'straight' | 'smooth' | 'bezier'>('smooth')
 
   // Natural image dimensions for 1:1 pixel accuracy without letterboxing offset
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({
-    width: 1200,
-    height: 1400,
+    width: 540,
+    height: 640,
   })
 
   // Seragam Atelier Owner Mode UI States
@@ -127,7 +230,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
   const maskCanvasRef = useRef<HTMLCanvasElement>(null)
 
-  // Sync canvas dimensions with actual mockup photo aspect ratio
+  // Sync canvas dimensions with actual mockup photo aspect ratio (defaults to 540x640 for PDH vector)
   useEffect(() => {
     const currentImg =
       selectedSide === 'front'
@@ -138,7 +241,10 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
         ? editFormData.leftImg
         : editFormData.rightImg
 
-    if (!currentImg) return
+    if (!currentImg) {
+      setCanvasSize({ width: 540, height: 640 })
+      return
+    }
 
     const img = new Image()
     img.onload = () => {
@@ -219,6 +325,9 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   const handleAddNewColorSlot = () => {
+    if (penPoints.length >= 3 || hasDrawn) {
+      commitCurrentMaskToPart()
+    }
     handleAddColorPart(undefined, selectedSide)
   }
 
@@ -536,40 +645,30 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   // PEN TOOL METHODS (FILLABLE POLYGON AREA - ZERO STROKE BORDER)
-  const handleCloseAndFillPen = () => {
-    const canvas = maskCanvasRef.current
-    if (!canvas || penPoints.length < 3) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    setMaskHistory((prev) => [...prev.slice(-15), canvas.toDataURL()])
-
-    ctx.save()
-    ctx.fillStyle = 'rgba(6, 182, 212, 0.85)'
-
-    ctx.beginPath()
-    ctx.moveTo(penPoints[0].x, penPoints[0].y)
-    for (let i = 1; i < penPoints.length; i++) {
-      ctx.lineTo(penPoints[i].x, penPoints[i].y)
-    }
-    ctx.closePath()
-    // Fill strictly inside the polygon with ZERO outer stroke bleeding
-    ctx.fill()
-    ctx.restore()
-
-    setPenPoints([])
-    setPenHoverPoint(null)
+  const handleUndoPenPoint = () => {
+    setPenPoints((prev) => {
+      const last = prev[prev.length - 1]
+      if (last) {
+        setPenRedoPoints((r) => [...r, last])
+      }
+      return prev.slice(0, -1)
+    })
     setIsPenClosing(false)
-    setHasDrawn(true)
   }
 
-  const handleUndoPenPoint = () => {
-    setPenPoints((prev) => prev.slice(0, -1))
-    setIsPenClosing(false)
+  const handleRedoPenPoint = () => {
+    setPenRedoPoints((prev) => {
+      const last = prev[prev.length - 1]
+      if (last) {
+        setPenPoints((p) => [...p, last])
+      }
+      return prev.slice(0, -1)
+    })
   }
 
   const handleCancelPen = () => {
     setPenPoints([])
+    setPenRedoPoints([])
     setPenHoverPoint(null)
     setIsPenClosing(false)
     handleCancelEditingExistingPart()
@@ -577,7 +676,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
   const handleDoubleClickCanvas = () => {
     if (drawingTool === 'pen' && penPoints.length >= 3) {
-      handleCloseAndFillPen()
+      commitCurrentMaskToPart()
     }
   }
 
@@ -593,7 +692,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       } else if (e.key === 'Enter') {
         if (drawingTool === 'pen' && penPoints.length >= 3) {
           e.preventDefault()
-          handleCloseAndFillPen()
+          commitCurrentMaskToPart()
         }
       } else if (e.key === 'Backspace') {
         if (drawingTool === 'pen' && penPoints.length > 0) {
@@ -604,6 +703,26 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
         if (drawingTool === 'pen' && penPoints.length > 0) {
           e.preventDefault()
           handleCancelPen()
+        }
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+        if (e.shiftKey) {
+          e.preventDefault()
+          handleRedoPenPoint()
+        } else {
+          e.preventDefault()
+          if (drawingTool === 'pen' && penPoints.length > 0) {
+            handleUndoPenPoint()
+          } else {
+            handleUndoMask()
+          }
+        }
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault()
+        handleRedoPenPoint()
+      } else if (e.key === 'm' || e.key === 'M') {
+        if (drawingTool === 'pen') {
+          e.preventDefault()
+          setPenCurveMode((prev) => (prev === 'smooth' ? 'straight' : prev === 'straight' ? 'bezier' : 'smooth'))
         }
       } else if (e.key === '+' || e.key === '=') {
         e.preventDefault()
@@ -630,7 +749,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [drawingTool, penPoints, zoomScale])
+  }, [drawingTool, penPoints, penRedoPoints, zoomScale])
 
   // INTERACTIVE CANVAS ZONE MARKER METHODS (100% ACCURATE 1:1 PIXEL COORDINATES)
   const getMarkerCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -661,10 +780,11 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     // Pen tool mode
     if (drawingTool === 'pen') {
       if (isPenClosing && penPoints.length >= 3) {
-        handleCloseAndFillPen()
+        commitCurrentMaskToPart()
         return
       }
       setPenPoints((prev) => [...prev, coords])
+      setPenRedoPoints([])
       return
     }
 
@@ -822,62 +942,103 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     setHasDrawn(false)
     setMaskHistory([])
     setPenPoints([])
+    setPenRedoPoints([])
     setPenHoverPoint(null)
     setIsPenClosing(false)
   }
 
-  const handleSaveDrawnArea = () => {
+  // COMMIT MASK (FROM PEN TOOL OR CANVAS) DIRECTLY TO ACTIVE PART
+  function commitCurrentMaskToPart(
+    targetPartId?: string | null,
+    customPoints?: { x: number; y: number }[]
+  ): ColorablePart[] | null {
     const canvas = maskCanvasRef.current
-    if (!canvas || !hasDrawn) return
+    if (!canvas) return null
+
+    const pts = customPoints || (penPoints.length >= 3 ? penPoints : null)
+    let maskDataUrl: string | null = null
 
     const off = document.createElement('canvas')
     off.width = canvas.width
     off.height = canvas.height
     const offCtx = off.getContext('2d')
-    if (!offCtx) return
+    if (!offCtx) return null
 
-    // Convert cyan marked pixels to solid black silhouette mask
-    offCtx.drawImage(canvas, 0, 0)
-    offCtx.globalCompositeOperation = 'source-in'
-    offCtx.fillStyle = '#000000'
-    offCtx.fillRect(0, 0, off.width, off.height)
-
-    const maskDataUrl = off.toDataURL('image/png')
-    const partName = newPartName.trim() || 'Bagian Seragam'
-
-    if (editingExistingPartId) {
-      // Update existing layer in place
-      setEditFormData((prev) => ({
-        ...prev,
-        colorParts: (prev.colorParts || []).map((p) =>
-          p.id === editingExistingPartId
-            ? { ...p, name: partName, defaultColor: newPartColor, maskImg: maskDataUrl }
-            : p
-        ),
-      }))
-      setHiddenPartIds((prev) => prev.filter((id) => id !== editingExistingPartId))
-      setEditingExistingPartId(null)
+    if (pts && pts.length >= 3) {
+      // Draw polygon with pure black fill and ZERO outer stroke border
+      offCtx.fillStyle = '#000000'
+      if (penCurveMode === 'smooth') {
+        drawSplineToCanvas(offCtx, pts, true, 0.5)
+      } else if (penCurveMode === 'bezier') {
+        drawSplineToCanvas(offCtx, pts, true, 0.8)
+      } else {
+        offCtx.beginPath()
+        offCtx.moveTo(pts[0].x, pts[0].y)
+        for (let i = 1; i < pts.length; i++) {
+          offCtx.lineTo(pts[i].x, pts[i].y)
+        }
+        offCtx.closePath()
+      }
+      offCtx.fill()
+      maskDataUrl = off.toDataURL('image/png')
+    } else if (hasDrawn) {
+      offCtx.drawImage(canvas, 0, 0)
+      offCtx.globalCompositeOperation = 'source-in'
+      offCtx.fillStyle = '#000000'
+      offCtx.fillRect(0, 0, off.width, off.height)
+      maskDataUrl = off.toDataURL('image/png')
     } else {
-      // Create new layer on top
+      return null
+    }
+
+    const partId = targetPartId || editingExistingPartId
+    const partName = newPartName.trim() || 'Bagian Seragam'
+    let updatedParts: ColorablePart[] = []
+
+    if (partId) {
+      const exists = (editFormData.colorParts || []).some((p) => p.id === partId)
+      if (exists) {
+        updatedParts = (editFormData.colorParts || []).map((p) =>
+          p.id === partId
+            ? { ...p, name: partName, defaultColor: newPartColor, maskImg: maskDataUrl! }
+            : p
+        )
+      } else {
+        const newPart: ColorablePart = {
+          id: partId,
+          name: partName,
+          side: selectedSide,
+          defaultColor: newPartColor,
+          maskImg: maskDataUrl!,
+        }
+        const otherParts = (editFormData.colorParts || []).filter((p) => p.side !== selectedSide)
+        const thisSideParts = (editFormData.colorParts || []).filter((p) => p.side === selectedSide)
+        updatedParts = [newPart, ...thisSideParts, ...otherParts]
+      }
+    } else {
       const newPart: ColorablePart = {
         id: 'part_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
         name: partName,
         side: selectedSide,
         defaultColor: newPartColor,
-        maskImg: maskDataUrl,
+        maskImg: maskDataUrl!,
       }
-
-      setEditFormData((prev) => {
-        const otherParts = (prev.colorParts || []).filter((p) => p.side !== selectedSide)
-        const thisSideParts = (prev.colorParts || []).filter((p) => p.side === selectedSide)
-        return {
-          ...prev,
-          colorParts: [newPart, ...thisSideParts, ...otherParts],
-        }
-      })
+      const otherParts = (editFormData.colorParts || []).filter((p) => p.side !== selectedSide)
+      const thisSideParts = (editFormData.colorParts || []).filter((p) => p.side === selectedSide)
+      updatedParts = [newPart, ...thisSideParts, ...otherParts]
     }
 
+    setEditFormData((prev) => ({
+      ...prev,
+      colorParts: updatedParts,
+    }))
+    if (partId) {
+      setHiddenPartIds((prev) => prev.filter((id) => id !== partId))
+    }
+    setEditingExistingPartId(null)
     handleClearMaskDraft()
+
+    return updatedParts
   }
 
   const handleSelectSide = (side: ViewSide) => {
@@ -891,6 +1052,14 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   const handleSaveForm = (openCanvasAfter: boolean = false) => {
+    let currentColorParts = editFormData.colorParts || []
+    if (penPoints.length >= 3 || hasDrawn) {
+      const committed = commitCurrentMaskToPart()
+      if (committed) {
+        currentColorParts = committed
+      }
+    }
+
     if (!editFormData.name?.trim()) {
       alert('Mohon masukkan Nama Model Seragam terlebih dahulu!')
       return
@@ -901,7 +1070,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       return
     }
 
-    const unmasked = (editFormData.colorParts || []).filter((p) => !p.maskImg)
+    const unmasked = currentColorParts.filter((p) => !p.maskImg)
     if (unmasked.length > 0) {
       const names = unmasked.map((p) => `"${p.name}"`).join(', ')
       const proceed = confirm(
@@ -921,7 +1090,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       leftImg: editFormData.leftImg,
       rightImg: editFormData.rightImg,
       enableClippingMask: editFormData.enableClippingMask ?? true,
-      colorParts: editFormData.colorParts || [],
+      colorParts: currentColorParts,
       discount12: Number(editFormData.discount12) || 5000,
       discount50: Number(editFormData.discount50) || 10000,
       discount100: Number(editFormData.discount100) || 15000,
@@ -1003,14 +1172,14 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
         <img
           src={imgUrl}
           alt={`Mockup ${side}`}
-          className="w-full h-full object-contain pointer-events-none select-none"
+          className="w-full h-full object-fill pointer-events-none select-none block"
         />
       )
     }
 
     // High detail PDH workwear vector fallback if no photo uploaded yet
     return (
-      <svg className="w-full h-full drop-shadow-md" fill="none" viewBox="0 0 540 640" xmlns="http://www.w3.org/2000/svg">
+      <svg className="w-full h-full drop-shadow-md block" fill="none" viewBox="0 0 540 640" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
         {/* Shadow Body Base */}
         <path d="M190 40 L110 95 L40 180 L85 240 L130 190 L130 580 L410 580 L410 190 L455 240 L500 180 L430 95 L350 40 Z" fill="#1b2536" stroke="#0f172a" strokeLinejoin="round" strokeWidth="2.5" />
         {/* Fabric Body (Drill Heavyweight Navy #1E293B) */}
@@ -1059,6 +1228,17 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
         )}
       </svg>
     )
+  }
+
+  // Exact stage dimensions matching canvas aspect ratio to guarantee zero letterboxing offset
+  const stageAspectRatio = canvasSize.width / Math.max(1, canvasSize.height)
+  const MAX_STAGE_HEIGHT = 600
+  const MAX_STAGE_WIDTH = 540
+  let stageDisplayHeight = MAX_STAGE_HEIGHT
+  let stageDisplayWidth = stageDisplayHeight * stageAspectRatio
+  if (stageDisplayWidth > MAX_STAGE_WIDTH) {
+    stageDisplayWidth = MAX_STAGE_WIDTH
+    stageDisplayHeight = stageDisplayWidth / stageAspectRatio
   }
 
   return (
@@ -1343,16 +1523,40 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                   </span>
                 </button>
 
-                {/* Undo Masker */}
+                {/* Batalkan / Undo */}
                 <button
                   type="button"
-                  onClick={handleUndoMask}
+                  onClick={() => {
+                    if (drawingTool === 'pen' && penPoints.length > 0) {
+                      handleUndoPenPoint()
+                    } else {
+                      handleUndoMask()
+                    }
+                  }}
                   className="w-10 h-10 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80 flex items-center justify-center relative group transition-colors cursor-pointer"
-                  title="Undo Perubahan Masker"
+                  title="Batalkan Perubahan (Undo / Ctrl+Z)"
                 >
                   <span className="material-symbols-outlined text-[20px]">undo</span>
                   <span className="absolute left-14 px-2 py-1 bg-slate-800 text-white text-[11px] rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
-                    Undo Masker
+                    Batalkan / Undo (Ctrl+Z)
+                  </span>
+                </button>
+
+                {/* Kembalikan / Redo */}
+                <button
+                  type="button"
+                  onClick={handleRedoPenPoint}
+                  disabled={penRedoPoints.length === 0}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center relative group transition-colors cursor-pointer ${
+                    penRedoPoints.length === 0
+                      ? 'text-slate-300 opacity-40 cursor-not-allowed'
+                      : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80'
+                  }`}
+                  title="Kembalikan Perubahan (Redo / Ctrl+Y)"
+                >
+                  <span className="material-symbols-outlined text-[20px]">redo</span>
+                  <span className="absolute left-14 px-2 py-1 bg-slate-800 text-white text-[11px] rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
+                    Kembalikan / Redo (Ctrl+Y)
                   </span>
                 </button>
 
@@ -1473,6 +1677,111 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                 <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-indigo-300/40 pointer-events-none z-10"></div>
               )}
 
+              {/* FLOATING TOP CHIP FOR PEN TOOL (ALWAYS VISIBLE & NEVER OBSTRUCTS CLOTHING) */}
+              {drawingTool === 'pen' && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur text-white px-3.5 py-1.5 rounded-full text-[11px] font-medium shadow-xl flex items-center gap-2.5 border border-cyan-400/40 pointer-events-auto whitespace-nowrap z-40 animate-in fade-in duration-150">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                  <span>
+                    Zona:{' '}
+                    <strong className="text-cyan-200 font-semibold">
+                      {editingExistingPartId
+                        ? (editFormData.colorParts || []).find(
+                            (p) => p.id === editingExistingPartId
+                          )?.name || 'Edit Layer'
+                        : newPartName || 'Zona Baru'}
+                    </strong>
+                  </span>
+
+                  <span className="text-slate-500">|</span>
+
+                  {/* CorelDRAW Curve Mode Switcher */}
+                  <div className="flex items-center gap-0.5 bg-slate-800/90 p-0.5 rounded-full border border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setPenCurveMode('smooth')}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                        penCurveMode === 'smooth'
+                          ? 'bg-cyan-500 text-slate-950 font-bold shadow-xs'
+                          : 'text-slate-300 hover:text-white'
+                      }`}
+                      title="Mode Kurva B-Spline Halus (Tekan 'M' untuk ganti)"
+                    >
+                      <span>∿</span>
+                      <span>Kurva Halus</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPenCurveMode('bezier')}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                        penCurveMode === 'bezier'
+                          ? 'bg-cyan-500 text-slate-950 font-bold shadow-xs'
+                          : 'text-slate-300 hover:text-white'
+                      }`}
+                      title="Mode Kurva Bézier Dinamis"
+                    >
+                      <span>⌒</span>
+                      <span>Bézier</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPenCurveMode('straight')}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                        penCurveMode === 'straight'
+                          ? 'bg-cyan-500 text-slate-950 font-bold shadow-xs'
+                          : 'text-slate-300 hover:text-white'
+                      }`}
+                      title="Mode Sudut Lurus / Polyline"
+                    >
+                      <span>╱</span>
+                      <span>Lurus</span>
+                    </button>
+                  </div>
+
+                  <span className="text-slate-500">|</span>
+                  <span className="text-slate-300 font-mono text-[10px]">
+                    {penPoints.length} Pts
+                  </span>
+
+                  {penPoints.length >= 3 && (
+                    <button
+                      type="button"
+                      onClick={() => commitCurrentMaskToPart()}
+                      className="ml-0.5 px-3 py-1 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-[10px] transition-colors cursor-pointer shadow-sm flex items-center gap-1"
+                      title="Tutup bentuk dan simpan masker ke layer"
+                    >
+                      <span>✓ Simpan Masker</span>
+                    </button>
+                  )}
+                  {penPoints.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleUndoPenPoint}
+                      className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-slate-200 text-[10px] transition-colors cursor-pointer"
+                      title="Undo Node Terakhir (Backspace / Ctrl+Z)"
+                    >
+                      Undo
+                    </button>
+                  )}
+                  {penRedoPoints.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleRedoPenPoint}
+                      className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-slate-200 text-[10px] transition-colors cursor-pointer"
+                      title="Redo Node (Ctrl+Y)"
+                    >
+                      Redo
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleCancelPen}
+                    className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-slate-200 text-[10px] transition-colors cursor-pointer"
+                  >
+                    Batal (Esc)
+                  </button>
+                </div>
+              )}
+
               {/* Area Kerja Mockup Kemeja */}
               <div
                 className="flex-1 relative flex items-center justify-center p-6 overflow-hidden cursor-default"
@@ -1491,7 +1800,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
               >
                 {/* TRANSFORM CONTAINER PAN & ZOOM */}
                 <div
-                  className="relative transition-transform duration-75 ease-out select-none"
+                  className="relative transition-none select-none"
                   style={{
                     transform: `scale(${zoomScale}) translate(${panOffset.x / zoomScale}px, ${
                       panOffset.y / zoomScale
@@ -1499,10 +1808,16 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                     transformOrigin: 'center center',
                   }}
                 >
-                  {/* KONTEN MOCKUP KEMEJA */}
-                  <div className="relative w-[500px] h-[600px] flex items-center justify-center drop-shadow-xl">
+                  {/* KONTEN MOCKUP KEMEJA - 1:1 EXACT BOUNDING WRAPPER ZERO LETTERBOXING */}
+                  <div
+                    className="relative flex items-center justify-center drop-shadow-xl select-none"
+                    style={{
+                      width: `${Math.round(stageDisplayWidth)}px`,
+                      height: `${Math.round(stageDisplayHeight)}px`,
+                    }}
+                  >
                     {/* BASE MOCKUP (IMAGE OR PDH VECTOR) */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none select-none">
                       {renderBaseMockup(selectedSide)}
                     </div>
 
@@ -1521,55 +1836,61 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                         return (
                           <div
                             key={part.id}
-                            className="absolute inset-0 pointer-events-none transition-opacity duration-150"
+                            className="absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-150"
                             style={{
                               opacity: layerPreviewOpacity / 100,
                               mixBlendMode: 'multiply',
+                              WebkitMaskImage: `url(${part.maskImg})`,
+                              maskImage: `url(${part.maskImg})`,
+                              WebkitMaskSize: '100% 100%',
+                              maskSize: '100% 100%',
+                              WebkitMaskRepeat: 'no-repeat',
+                              maskRepeat: 'no-repeat',
+                              backgroundColor: displayColor,
                             }}
-                          >
-                            <div
-                              className="w-full h-full"
-                              style={{
-                                backgroundColor: displayColor,
-                                WebkitMaskImage: `url(${part.maskImg})`,
-                                WebkitMaskSize: 'contain',
-                                WebkitMaskRepeat: 'no-repeat',
-                                WebkitMaskPosition: 'center',
-                                maskImage: `url(${part.maskImg})`,
-                                maskSize: 'contain',
-                                maskRepeat: 'no-repeat',
-                                maskPosition: 'center',
-                              }}
-                            />
-                          </div>
+                          />
                         )
                       })}
 
                     {/* SLOT AKTIF: LOGO DADA KIRI (BOUNDING BOX BERSIH) */}
                     {showLogoSlot && selectedSide === 'front' && (
-                      <div className="absolute top-[132px] left-[148px] w-[94px] h-[62px] border-2 border-indigo-500 bg-indigo-500/10 rounded-md cursor-pointer flex flex-col items-center justify-center z-20 shadow-xs pointer-events-none">
+                      <div
+                        className="absolute border-2 border-indigo-500 bg-indigo-500/10 rounded-md cursor-pointer flex flex-col items-center justify-center z-20 shadow-xs pointer-events-none"
+                        style={{
+                          top: `${(132 / 640) * stageDisplayHeight}px`,
+                          left: `${(148 / 540) * stageDisplayWidth}px`,
+                          width: `${(94 / 540) * stageDisplayWidth}px`,
+                          height: `${(62 / 640) * stageDisplayHeight}px`,
+                        }}
+                      >
                         <div className="flex items-center gap-1 opacity-90">
-                          <svg className="w-5 h-5 text-amber-400 drop-shadow" fill="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4 text-amber-400 drop-shadow" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
                           </svg>
                         </div>
-                        <span className="font-tech-data font-bold text-[8px] text-white bg-slate-900/70 px-1 rounded mt-0.5">
+                        <span className="font-tech-data font-bold text-[7px] text-white bg-slate-900/70 px-1 rounded mt-0.5">
                           SLOT #1 LOGO
                         </span>
-                        <div className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-white border-2 border-indigo-600 rounded-xs"></div>
-                        <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-white border-2 border-indigo-600 rounded-xs"></div>
-                        <div className="absolute -bottom-1 -left-1 w-2.5 h-2.5 bg-white border-2 border-indigo-600 rounded-xs"></div>
-                        <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-white border-2 border-indigo-600 rounded-xs"></div>
+                        <div className="absolute -top-1 -left-1 w-2 h-2 bg-white border-2 border-indigo-600 rounded-xs"></div>
+                        <div className="absolute -top-1 -right-1 w-2 h-2 bg-white border-2 border-indigo-600 rounded-xs"></div>
+                        <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-white border-2 border-indigo-600 rounded-xs"></div>
+                        <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-white border-2 border-indigo-600 rounded-xs"></div>
                       </div>
                     )}
 
                     {/* SLOT 2: NAMA BORDIR (DADA KANAN) */}
                     {showMonogramSlot && selectedSide === 'front' && (
-                      <div className="absolute top-[136px] right-[152px] border border-dashed border-amber-400 bg-amber-400/15 px-2.5 py-1.5 rounded text-left pointer-events-none z-20">
-                        <span className="font-tech-data font-bold text-[9px] tracking-wider text-amber-600 block leading-tight">
+                      <div
+                        className="absolute border border-dashed border-amber-400 bg-amber-400/15 px-2 py-1 rounded text-left pointer-events-none z-20"
+                        style={{
+                          top: `${(136 / 640) * stageDisplayHeight}px`,
+                          right: `${(152 / 540) * stageDisplayWidth}px`,
+                        }}
+                      >
+                        <span className="font-tech-data font-bold text-[8px] tracking-wider text-amber-600 block leading-tight">
                           NAMA PETUGAS
                         </span>
-                        <span className="font-tech-data text-[7px] text-slate-500 block opacity-90 uppercase">
+                        <span className="font-tech-data text-[6px] text-slate-500 block opacity-90 uppercase">
                           JABATAN / DIVISI
                         </span>
                       </div>
@@ -1584,7 +1905,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                       onMouseMove={handleDrawMaskMove}
                       onMouseUp={handleEndDrawMask}
                       onDoubleClick={handleDoubleClickCanvas}
-                      className={`absolute inset-0 w-full h-full z-20 ${
+                      className={`absolute inset-0 w-full h-full z-20 touch-none ${
                         drawingTool === 'pen'
                           ? 'cursor-crosshair'
                           : isSpacePressed || drawingTool === 'hand'
@@ -1598,91 +1919,103 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                     {/* OVERLAY VECTOR PEN TOOL: ANCHOR NODES & CONNECTING LINES */}
                     {drawingTool === 'pen' && (
                       <div className="absolute inset-0 pointer-events-none z-30">
-                        <svg
-                          className="w-full h-full"
-                          viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
-                        >
-                          {penPoints.length > 1 && (
-                            <polyline
-                              points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
-                              fill="rgba(79, 70, 229, 0.15)"
-                              stroke="#06b6d4"
-                              strokeWidth="2.5"
-                              strokeDasharray="4 2"
-                            />
-                          )}
-                          {penPoints.length > 0 && penHoverPoint && (
-                            <line
-                              x1={penPoints[penPoints.length - 1].x}
-                              y1={penPoints[penPoints.length - 1].y}
-                              x2={penHoverPoint.x}
-                              y2={penHoverPoint.y}
-                              stroke="#06b6d4"
-                              strokeWidth="1.8"
-                              strokeDasharray="3 3"
-                            />
-                          )}
-                          {penPoints.map((p, idx) => (
-                            <g key={idx}>
-                              <circle
-                                cx={p.x}
-                                cy={p.y}
-                                r={idx === 0 && isPenClosing ? 7 : 4.5}
-                                fill={idx === 0 && isPenClosing ? '#06b6d4' : '#ffffff'}
-                                stroke="#4f46e5"
-                                strokeWidth="2"
-                              />
-                            </g>
-                          ))}
-                        </svg>
+                        {penPoints.length > 0 && (() => {
+                          const scaleToSvg = (canvasSize.width / stageDisplayWidth) / zoomScale
+                          const nodeRadius = 2.2 * scaleToSvg
+                          const startNodeRadius = 3.2 * scaleToSvg
+                          const strokeW = 0.75 * scaleToSvg
+                          const tension = penCurveMode === 'bezier' ? 0.8 : 0.5
 
-                        {/* CHIP ZONA TERPILIH DI ATAS KANVAS */}
-                        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur text-white px-3 py-1.5 rounded-full text-[11px] font-medium shadow-md flex items-center gap-2 border border-cyan-400/40 pointer-events-auto whitespace-nowrap z-40">
-                          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-                          <span>
-                            Zona Terpilih:{' '}
-                            <strong className="text-cyan-200 font-semibold">
-                              {editingExistingPartId
-                                ? (editFormData.colorParts || []).find(
-                                    (p) => p.id === editingExistingPartId
-                                  )?.name || 'Edit Layer'
-                                : newPartName || 'Zona Baru'}
-                            </strong>
-                          </span>
-                          <span className="text-slate-400">•</span>
-                          <span className="text-slate-300 font-mono text-[10px]">
-                            {penPoints.length} Anchor Nodes
-                          </span>
-                          {penPoints.length >= 3 && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                handleCloseAndFillPen()
-                                handleSaveDrawnArea()
-                              }}
-                              className="ml-1 px-2.5 py-0.5 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold text-[10px] transition-colors cursor-pointer"
+                          return (
+                            <svg
+                              className="w-full h-full pointer-events-none"
+                              viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
+                              preserveAspectRatio="none"
                             >
-                              ✓ Tutup & Simpan
-                            </button>
-                          )}
-                          {penPoints.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={handleUndoPenPoint}
-                              className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-slate-200 text-[10px] transition-colors cursor-pointer"
-                              title="Undo Node Terakhir (Backspace)"
-                            >
-                              Undo
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={handleCancelPen}
-                            className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-slate-200 text-[10px] transition-colors cursor-pointer"
-                          >
-                            Batal (Esc)
-                          </button>
-                        </div>
+                              {/* Spline / Curved Mode Preview (CorelDRAW Style) */}
+                              {penCurveMode !== 'straight' ? (
+                                <>
+                                  {penPoints.length >= 3 && (
+                                    <path
+                                      d={getSplineSvgPath(penPoints, true, tension)}
+                                      fill="rgba(6, 182, 212, 0.22)"
+                                      stroke="#06b6d4"
+                                      strokeWidth={strokeW}
+                                    />
+                                  )}
+                                  {penPoints.length === 2 && (
+                                    <path
+                                      d={getSplineSvgPath(penPoints, false, tension)}
+                                      fill="none"
+                                      stroke="#06b6d4"
+                                      strokeWidth={strokeW}
+                                    />
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  {penPoints.length >= 3 && (
+                                    <polygon
+                                      points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
+                                      fill="rgba(6, 182, 212, 0.22)"
+                                      stroke="#06b6d4"
+                                      strokeWidth={strokeW}
+                                    />
+                                  )}
+                                  {penPoints.length > 1 && (
+                                    <polyline
+                                      points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
+                                      fill="none"
+                                      stroke="#06b6d4"
+                                      strokeWidth={strokeW}
+                                    />
+                                  )}
+                                </>
+                              )}
+
+                              {/* Rubberband line to hover point - SOLID, NO DASHES */}
+                              {penHoverPoint && (
+                                <line
+                                  x1={penPoints[penPoints.length - 1].x}
+                                  y1={penPoints[penPoints.length - 1].y}
+                                  x2={isPenClosing ? penPoints[0].x : penHoverPoint.x}
+                                  y2={isPenClosing ? penPoints[0].y : penHoverPoint.y}
+                                  stroke={isPenClosing ? '#22c55e' : '#06b6d4'}
+                                  strokeWidth={strokeW}
+                                />
+                              )}
+
+                              {/* Anchor Node Circles - Tiny, precise & professional */}
+                              {penPoints.map((p, idx) => {
+                                const isStart = idx === 0
+                                const r = isStart && isPenClosing ? startNodeRadius * 1.3 : isStart ? startNodeRadius : nodeRadius
+                                return (
+                                  <g key={idx}>
+                                    <circle
+                                      cx={p.x}
+                                      cy={p.y}
+                                      r={r}
+                                      fill={isStart && isPenClosing ? '#22c55e' : isStart ? '#ffffff' : '#06b6d4'}
+                                      stroke={isStart && isPenClosing ? '#15803d' : '#0891b2'}
+                                      strokeWidth={strokeW}
+                                    />
+                                    {isStart && isPenClosing && (
+                                      <circle
+                                        cx={p.x}
+                                        cy={p.y}
+                                        r={r * 1.6}
+                                        fill="none"
+                                        stroke="#22c55e"
+                                        strokeWidth={strokeW}
+                                        className="animate-ping"
+                                      />
+                                    )}
+                                  </g>
+                                )
+                              })}
+                            </svg>
+                          )
+                        })()}
                       </div>
                     )}
                   </div>
@@ -1784,6 +2117,69 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                         className="w-full h-8 px-2.5 rounded-lg border border-[#e2e8f0] bg-white text-[#0f172a] text-[12px] font-medium focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
+
+                    {/* Mode Pen Tool: CorelDRAW Curves vs Straight */}
+                    {drawingTool === 'pen' && (
+                      <div className="bg-slate-50 p-2.5 rounded-lg border border-indigo-100">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[15px] text-indigo-600">polyline</span>
+                            Mode Pen Tool (CorelDRAW)
+                          </label>
+                          <span className="text-[9px] font-tech-data font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-200">
+                            {penCurveMode === 'smooth' ? 'B-SPLINE HALUS' : penCurveMode === 'bezier' ? 'BÉZIER LENGKUNG' : 'LURUS'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1 text-[10px]">
+                          <button
+                            type="button"
+                            onClick={() => setPenCurveMode('smooth')}
+                            className={`py-1.5 px-1 rounded-md transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer text-center ${
+                              penCurveMode === 'smooth'
+                                ? 'bg-indigo-600 text-white font-bold shadow-xs'
+                                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 font-medium'
+                            }`}
+                            title="Mode B-Spline: Kurva otomatis melengkung halus alami melewati titik (Kerah, Lengan, Bahu)"
+                          >
+                            <span className="text-[13px] leading-none">∿</span>
+                            <span>B-Spline</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPenCurveMode('bezier')}
+                            className={`py-1.5 px-1 rounded-md transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer text-center ${
+                              penCurveMode === 'bezier'
+                                ? 'bg-indigo-600 text-white font-bold shadow-xs'
+                                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 font-medium'
+                            }`}
+                            title="Mode Bézier: Kurva melengkung dinamis bergradien tinggi"
+                          >
+                            <span className="text-[13px] leading-none">⌒</span>
+                            <span>Bézier</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPenCurveMode('straight')}
+                            className={`py-1.5 px-1 rounded-md transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer text-center ${
+                              penCurveMode === 'straight'
+                                ? 'bg-indigo-600 text-white font-bold shadow-xs'
+                                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 font-medium'
+                            }`}
+                            title="Mode Lurus: Garis lurus tegas antar titik (Saku, Placket, Strip)"
+                          >
+                            <span className="text-[13px] leading-none">╱</span>
+                            <span>Lurus</span>
+                          </button>
+                        </div>
+                        <p className="text-[9.5px] text-slate-400 mt-1 leading-tight">
+                          {penCurveMode === 'smooth'
+                            ? '✨ Kurva B-Spline melengkung halus alami, sangat pas untuk kerah dan lekukan seragam.'
+                            : penCurveMode === 'bezier'
+                            ? '✨ Kurva Bézier lengkung tinggi dengan kontur lentur.'
+                            : '✨ Garis lurus tegas sudut runcing untuk bagian kotak atau lurus.'}
+                        </p>
+                      </div>
+                    )}
 
                     {/* Tipe Kontrol */}
                     <div>
@@ -2233,8 +2629,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    if (hasDrawn) {
-                      handleSaveDrawnArea()
+                    if (hasDrawn || penPoints.length >= 3) {
+                      commitCurrentMaskToPart()
                     } else {
                       handleSaveForm(false)
                     }
