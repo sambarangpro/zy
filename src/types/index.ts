@@ -49,6 +49,9 @@ export interface CanvasGraphic {
   sizeCategory?: PrintSizeCategory
   calculatedPrice?: number
   zIndex?: number
+  opacity?: number // 0 to 100
+  blendMode?: 'normal' | 'multiply' | 'screen' | 'overlay'
+  isLocked?: boolean
 }
 
 export interface StudioLighting {

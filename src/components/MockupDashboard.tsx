@@ -229,6 +229,10 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const [simulatedPreviewColor, setSimulatedPreviewColor] = useState<string>('#1e293b')
 
   const maskCanvasRef = useRef<HTMLCanvasElement>(null)
+  const colorPartsRef = useRef<ColorablePart[]>(editFormData.colorParts || [])
+  useEffect(() => {
+    colorPartsRef.current = editFormData.colorParts || []
+  }, [editFormData.colorParts])
 
   // Sync canvas dimensions with actual mockup photo aspect ratio (defaults to 540x640 for PDH vector)
   useEffect(() => {
@@ -256,6 +260,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }, [selectedSide, editFormData.frontImg, editFormData.backImg, editFormData.leftImg, editFormData.rightImg])
 
   const handleOpenCreateNew = () => {
+    colorPartsRef.current = []
     setEditFormData({
       id: 'mockup_' + Date.now(),
       name: '',
@@ -275,7 +280,9 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   const handleOpenEdit = (item: MockupTemplate) => {
-    setEditFormData({ ...item, colorParts: item.colorParts ? [...item.colorParts] : [] })
+    const parts = item.colorParts ? [...item.colorParts] : []
+    colorPartsRef.current = parts
+    setEditFormData({ ...item, colorParts: parts })
     setSelectedSide('front')
     handleClearMaskDraft()
     setIsEditing(true)
@@ -296,23 +303,25 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   const handleAddColorPart = (initialName?: string, side: ViewSide = 'front', defaultColor = '#1e3a8a') => {
-    const partName = prompt('Beri nama bagian seragam baru (misal: Kerah, Tutup Saku, Garis Kancing):', initialName || 'Bagian Baru')
-    if (!partName || !partName.trim()) return
+    const currentAll = colorPartsRef.current || editFormData.colorParts || []
+    const thisSideParts = currentAll.filter((p) => p.side === side)
+    const partName = (initialName && initialName.trim()) || `Bagian ${thisSideParts.length + 1}`
 
     const newPart: ColorablePart = {
-      id: 'part_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      id: 'part_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       name: partName.trim(),
       side,
       defaultColor,
     }
-    setEditFormData((prev) => {
-      const otherParts = (prev.colorParts || []).filter((p) => p.side !== side)
-      const thisSideParts = (prev.colorParts || []).filter((p) => p.side === side)
-      return {
-        ...prev,
-        colorParts: [newPart, ...thisSideParts, ...otherParts],
-      }
-    })
+
+    const otherParts = currentAll.filter((p) => p.side !== side)
+    const updated = [newPart, ...thisSideParts, ...otherParts]
+
+    colorPartsRef.current = updated
+    setEditFormData((prev) => ({
+      ...prev,
+      colorParts: updated,
+    }))
 
     // Immediately bind this new slot as active drawing target and switch to pen tool
     setEditingExistingPartId(newPart.id)
@@ -326,13 +335,17 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
   const handleAddNewColorSlot = () => {
     if (penPoints.length >= 3 || hasDrawn) {
-      commitCurrentMaskToPart()
+      commitCurrentMaskToPart(editingExistingPartId)
     }
     handleAddColorPart(undefined, selectedSide)
   }
 
   const handleStartDrawingForSlot = (partId: string) => {
-    const part = (editFormData.colorParts || []).find((p) => p.id === partId)
+    if (penPoints.length >= 3 || hasDrawn) {
+      commitCurrentMaskToPart(editingExistingPartId)
+    }
+    const currentAll = colorPartsRef.current || editFormData.colorParts || []
+    const part = currentAll.find((p) => p.id === partId)
     if (!part) return
     setEditingExistingPartId(part.id)
     setNewPartName(part.name)
@@ -397,34 +410,34 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const [dragOverPartId, setDragOverPartId] = useState<string | null>(null)
 
   const handleReorderSideParts = (reorderedSideParts: ColorablePart[]) => {
-    setEditFormData((prev) => {
-      const allParts = prev.colorParts || []
-      let sideIdx = 0
-      const newColorParts: ColorablePart[] = []
+    const allParts = colorPartsRef.current || editFormData.colorParts || []
+    let sideIdx = 0
+    const newColorParts: ColorablePart[] = []
 
-      for (const part of allParts) {
-        if (part.side === selectedSide) {
-          if (sideIdx < reorderedSideParts.length) {
-            newColorParts.push(reorderedSideParts[sideIdx])
-            sideIdx++
-          }
-        } else {
-          newColorParts.push(part)
+    for (const part of allParts) {
+      if (part.side === selectedSide) {
+        if (sideIdx < reorderedSideParts.length) {
+          newColorParts.push(reorderedSideParts[sideIdx])
+          sideIdx++
         }
+      } else {
+        newColorParts.push(part)
       }
-      while (sideIdx < reorderedSideParts.length) {
-        newColorParts.push(reorderedSideParts[sideIdx])
-        sideIdx++
-      }
-      return {
-        ...prev,
-        colorParts: newColorParts,
-      }
-    })
+    }
+    while (sideIdx < reorderedSideParts.length) {
+      newColorParts.push(reorderedSideParts[sideIdx])
+      sideIdx++
+    }
+
+    colorPartsRef.current = newColorParts
+    setEditFormData((prev) => ({
+      ...prev,
+      colorParts: newColorParts,
+    }))
   }
 
   const handleMovePart = (partId: string, direction: 'up' | 'down') => {
-    const currentSideParts = (editFormData.colorParts || []).filter(
+    const currentSideParts = (colorPartsRef.current || editFormData.colorParts || []).filter(
       (p) => p.side === selectedSide
     )
     const index = currentSideParts.findIndex((p) => p.id === partId)
@@ -462,7 +475,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
     if (!sourcePartId || sourcePartId === targetPartId) return
 
-    const currentSideParts = (editFormData.colorParts || []).filter(
+    const currentSideParts = (colorPartsRef.current || editFormData.colorParts || []).filter(
       (p) => p.side === selectedSide
     )
     const sourceIndex = currentSideParts.findIndex((p) => p.id === sourcePartId)
@@ -550,6 +563,9 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   const handleUpdateColorPart = (id: string, updates: Partial<ColorablePart>) => {
+    colorPartsRef.current = (colorPartsRef.current || []).map((p) =>
+      p.id === id ? { ...p, ...updates } : p
+    )
     setEditFormData((prev) => ({
       ...prev,
       colorParts: (prev.colorParts || []).map((p) => (p.id === id ? { ...p, ...updates } : p)),
@@ -557,6 +573,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   const handleRemoveColorPart = (id: string) => {
+    colorPartsRef.current = (colorPartsRef.current || []).filter((p) => p.id !== id)
     setEditFormData((prev) => ({
       ...prev,
       colorParts: (prev.colorParts || []).filter((p) => p.id !== id),
@@ -991,14 +1008,20 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       return null
     }
 
+    const currentAll = colorPartsRef.current || editFormData.colorParts || []
     const partId = targetPartId || editingExistingPartId
-    const partName = newPartName.trim() || 'Bagian Seragam'
+    const thisSideParts = currentAll.filter((p) => p.side === selectedSide)
+    const partName =
+      (newPartName && newPartName !== 'Bagian Baru' ? newPartName.trim() : '') ||
+      (partId ? currentAll.find((p) => p.id === partId)?.name : null) ||
+      `Bagian ${thisSideParts.length + 1}`
+
     let updatedParts: ColorablePart[] = []
 
     if (partId) {
-      const exists = (editFormData.colorParts || []).some((p) => p.id === partId)
+      const exists = currentAll.some((p) => p.id === partId)
       if (exists) {
-        updatedParts = (editFormData.colorParts || []).map((p) =>
+        updatedParts = currentAll.map((p) =>
           p.id === partId
             ? { ...p, name: partName, defaultColor: newPartColor, maskImg: maskDataUrl! }
             : p
@@ -1011,50 +1034,57 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
           defaultColor: newPartColor,
           maskImg: maskDataUrl!,
         }
-        const otherParts = (editFormData.colorParts || []).filter((p) => p.side !== selectedSide)
-        const thisSideParts = (editFormData.colorParts || []).filter((p) => p.side === selectedSide)
+        const otherParts = currentAll.filter((p) => p.side !== selectedSide)
         updatedParts = [newPart, ...thisSideParts, ...otherParts]
       }
     } else {
       const newPart: ColorablePart = {
-        id: 'part_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        id: 'part_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
         name: partName,
         side: selectedSide,
         defaultColor: newPartColor,
         maskImg: maskDataUrl!,
       }
-      const otherParts = (editFormData.colorParts || []).filter((p) => p.side !== selectedSide)
-      const thisSideParts = (editFormData.colorParts || []).filter((p) => p.side === selectedSide)
+      const otherParts = currentAll.filter((p) => p.side !== selectedSide)
       updatedParts = [newPart, ...thisSideParts, ...otherParts]
     }
 
+    colorPartsRef.current = updatedParts
     setEditFormData((prev) => ({
       ...prev,
       colorParts: updatedParts,
     }))
+
     if (partId) {
       setHiddenPartIds((prev) => prev.filter((id) => id !== partId))
     }
     setEditingExistingPartId(null)
+    setNewPartName('Bagian Baru')
     handleClearMaskDraft()
 
     return updatedParts
   }
 
   const handleSelectSide = (side: ViewSide) => {
-    if (editingExistingPartId) {
+    if (side === selectedSide) return
+
+    // Auto-commit any active drawing or slot before switching angles!
+    if (penPoints.length >= 3 || hasDrawn) {
+      commitCurrentMaskToPart(editingExistingPartId)
+    } else if (editingExistingPartId) {
       setHiddenPartIds((prev) => prev.filter((id) => id !== editingExistingPartId))
       setEditingExistingPartId(null)
     }
+
     handleClearMaskDraft()
     handleResetZoom()
     setSelectedSide(side)
   }
 
   const handleSaveForm = (openCanvasAfter: boolean = false) => {
-    let currentColorParts = editFormData.colorParts || []
+    let currentColorParts = colorPartsRef.current || editFormData.colorParts || []
     if (penPoints.length >= 3 || hasDrawn) {
-      const committed = commitCurrentMaskToPart()
+      const committed = commitCurrentMaskToPart(editingExistingPartId)
       if (committed) {
         currentColorParts = committed
       }
@@ -1070,14 +1100,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       return
     }
 
-    const unmasked = currentColorParts.filter((p) => !p.maskImg)
-    if (unmasked.length > 0) {
-      const names = unmasked.map((p) => `"${p.name}"`).join(', ')
-      const proceed = confirm(
-        `Perhatian:\nBagian ${names} belum memiliki masker gambar.\n\nJika disimpan sekarang, bagian tersebut tidak akan tampil di baju pada Studio Canvas sampai maskernya digambar menggunakan Pen Tool / Kuas.\n\nApakah Anda ingin tetap menyimpan sekarang?`
-      )
-      if (!proceed) return
-    }
+    // Keep all parts that have valid masks (prune empty unmasked placeholder slots if any)
+    const validColorParts = currentColorParts.filter((p) => p.maskImg && p.maskImg.length > 50)
 
     const newMockup: MockupTemplate = {
       id: editFormData.id || 'mockup_' + Date.now(),
@@ -1090,7 +1114,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       leftImg: editFormData.leftImg,
       rightImg: editFormData.rightImg,
       enableClippingMask: editFormData.enableClippingMask ?? true,
-      colorParts: currentColorParts,
+      colorParts: validColorParts,
       discount12: Number(editFormData.discount12) || 5000,
       discount50: Number(editFormData.discount50) || 10000,
       discount100: Number(editFormData.discount100) || 15000,
@@ -1098,11 +1122,12 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     }
 
     const updated = saveMockup(newMockup)
+    colorPartsRef.current = validColorParts
     onMockupsChange(updated)
     // Automatically set this newly created/updated mockup as active and open Studio Canvas
     onSelectAndOpenCanvas(newMockup.id)
     if (!openCanvasAfter) {
-      alert(`Blangko seragam "${newMockup.name}" berhasil disimpan! Foto dan seluruh zona pewarnaan aktif di Studio Canvas.`)
+      alert(`Blangko seragam "${newMockup.name}" berhasil disimpan! Foto dan ${validColorParts.length} zona pewarnaan aktif di Studio Canvas.`)
     }
     setIsEditing(false)
   }
@@ -1855,7 +1880,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                     {/* MULTIPLY COLORABLE PARTS (FABRIC TEXTURE ABSORPTION) */}
                     {(editFormData.colorParts || [])
                       .filter((p) => p.side === selectedSide && !hiddenPartIds.includes(p.id))
-                      .map((part) => {
+                      .map((part, pIdx, arr) => {
                         if (!part.maskImg) return null
                         const isPartActive =
                           editingExistingPartId === part.id ||
@@ -1869,6 +1894,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                             key={part.id}
                             className="absolute inset-0 w-full h-full pointer-events-none transition-opacity duration-150"
                             style={{
+                              zIndex: 10 + (arr.length - pIdx),
                               opacity: layerPreviewOpacity / 100,
                               mixBlendMode: 'multiply',
                               WebkitMaskImage: `url(${part.maskImg})`,
@@ -1963,15 +1989,14 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                               viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
                               preserveAspectRatio="none"
                             >
-                              {/* Spline / Curved Mode Preview (CorelDRAW Style) */}
+                              {/* Spline / Curved Mode Preview (CorelDRAW Style) - ZERO STROKE BORDER ON FILLED SHAPES */}
                               {penCurveMode !== 'straight' ? (
                                 <>
                                   {penPoints.length >= 3 && (
                                     <path
                                       d={getSplineSvgPath(penPoints, true, tension)}
-                                      fill="rgba(6, 182, 212, 0.22)"
-                                      stroke="#06b6d4"
-                                      strokeWidth={strokeW}
+                                      fill="rgba(6, 182, 212, 0.25)"
+                                      stroke="none"
                                     />
                                   )}
                                   {penPoints.length === 2 && (
@@ -1979,7 +2004,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                       d={getSplineSvgPath(penPoints, false, tension)}
                                       fill="none"
                                       stroke="#06b6d4"
-                                      strokeWidth={strokeW}
+                                      strokeWidth={0.5 * scaleToSvg}
                                     />
                                   )}
                                 </>
@@ -1988,23 +2013,22 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                   {penPoints.length >= 3 && (
                                     <polygon
                                       points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
-                                      fill="rgba(6, 182, 212, 0.22)"
-                                      stroke="#06b6d4"
-                                      strokeWidth={strokeW}
+                                      fill="rgba(6, 182, 212, 0.25)"
+                                      stroke="none"
                                     />
                                   )}
-                                  {penPoints.length > 1 && (
+                                  {penPoints.length > 1 && penPoints.length < 3 && (
                                     <polyline
                                       points={penPoints.map((p) => `${p.x},${p.y}`).join(' ')}
                                       fill="none"
                                       stroke="#06b6d4"
-                                      strokeWidth={strokeW}
+                                      strokeWidth={0.5 * scaleToSvg}
                                     />
                                   )}
                                 </>
                               )}
 
-                              {/* Rubberband line to hover point - SOLID, NO DASHES */}
+                              {/* Rubberband line to hover point - Hairline, no dash, no thick stroke */}
                               {penHoverPoint && (
                                 <line
                                   x1={penPoints[penPoints.length - 1].x}
@@ -2012,7 +2036,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                   x2={isPenClosing ? penPoints[0].x : penHoverPoint.x}
                                   y2={isPenClosing ? penPoints[0].y : penHoverPoint.y}
                                   stroke={isPenClosing ? '#22c55e' : '#06b6d4'}
-                                  strokeWidth={strokeW}
+                                  strokeWidth={0.5 * scaleToSvg}
                                 />
                               )}
 

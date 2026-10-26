@@ -38,6 +38,11 @@ import {
   Wand2,
   Scissors,
   Palette,
+  Lock,
+  Unlock,
+  Eye,
+  EyeOff,
+  GripVertical,
 } from 'lucide-react'
 
 interface CanvasCustomizerProps {
@@ -128,7 +133,12 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const [inputText, setInputText] = useState('')
   const [textFont, setTextFont] = useState('Montserrat, sans-serif')
   const [textColor, setTextColor] = useState('#ffffff')
+  // Global active technique preference for uploads & new graphics (Bordir vs Sablon)
+  const [activeTechnique, setActiveTechnique] = useState<'bordir' | 'sablon'>('bordir')
   const [textTechnique, setTextTechnique] = useState<'bordir' | 'sablon'>('bordir')
+  const [hiddenGraphicIds, setHiddenGraphicIds] = useState<string[]>([])
+  const [draggedGraphicId, setDraggedGraphicId] = useState<string | null>(null)
+  const [dragOverGraphicId, setDragOverGraphicId] = useState<string | null>(null)
 
   // Canvas Graphic Undo/Redo History Stack (Tombol Batalkan / Kembalikan)
   const [undoStack, setUndoStack] = useState<CanvasGraphic[][]>([])
@@ -618,10 +628,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         scaleX: 1,
         scaleY: 1,
         rotation: 0,
-        technique: 'bordir', // Default to Bordir texture per user preference
+        technique: activeTechnique, // Automatically uses currently selected technique (Bordir or Sablon)
         label: file.name.slice(0, 18),
         sizeCategory: calc.sizeCategory,
         calculatedPrice: calc.price,
+        opacity: 100,
+        blendMode: 'normal',
+        isLocked: false,
       }
       updateGraphicsWithHistory([...graphics, newGraphic])
       setSelectedGraphicId(newGraphic.id)
@@ -732,17 +745,21 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     )
   }
 
-  // Align Center (Horizontal)
-  const handleAlignCenter = (id: string) => {
-    updateGraphicsWithHistory(
-      graphics.map((g) => {
-        if (g.id === id) return { ...g, x: 50 }
-        return g
-      })
-    )
+  // Layer Ordering & Management
+  const handleMoveLayer = (id: string, direction: 'up' | 'down') => {
+    const idx = graphics.findIndex((g) => g.id === id)
+    if (idx === -1) return
+    // Higher index renders in front (higher z-index).
+    // 'up' moves to higher index (in front), 'down' moves to lower index (behind)
+    const targetIdx = direction === 'up' ? idx + 1 : idx - 1
+    if (targetIdx < 0 || targetIdx >= graphics.length) return
+
+    const newGraphics = [...graphics]
+    const [moved] = newGraphics.splice(idx, 1)
+    newGraphics.splice(targetIdx, 0, moved)
+    updateGraphicsWithHistory(newGraphics)
   }
 
-  // Layer Ordering
   const handleBringToFront = (id: string) => {
     const item = graphics.find((g) => g.id === id)
     if (!item) return
@@ -757,6 +774,82 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     updateGraphicsWithHistory([item, ...rest])
   }
 
+  const handleToggleLock = (id: string) => {
+    updateGraphicsWithHistory(
+      graphics.map((g) => (g.id === id ? { ...g, isLocked: !g.isLocked } : g))
+    )
+  }
+
+  const handleToggleGraphicVisibility = (id: string) => {
+    setHiddenGraphicIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    )
+  }
+
+  const handleAlign = (
+    id: string,
+    align: 'center_h' | 'center_v' | 'left' | 'right' | 'top' | 'bottom'
+  ) => {
+    updateGraphicsWithHistory(
+      graphics.map((g) => {
+        if (g.id !== id) return g
+        switch (align) {
+          case 'center_h':
+            return { ...g, x: 50 }
+          case 'center_v':
+            return { ...g, y: 50 }
+          case 'left':
+            return { ...g, x: 32 }
+          case 'right':
+            return { ...g, x: 68 }
+          case 'top':
+            return { ...g, y: 28 }
+          case 'bottom':
+            return { ...g, y: 72 }
+          default:
+            return g
+        }
+      })
+    )
+  }
+
+  // Drag and drop reordering for Layers Panel
+  const handleGraphicDragStart = (e: React.DragEvent, id: string) => {
+    e.dataTransfer.setData('text/plain', id)
+    e.dataTransfer.effectAllowed = 'move'
+    setDraggedGraphicId(id)
+  }
+
+  const handleGraphicDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragOverGraphicId !== id) {
+      setDragOverGraphicId(id)
+    }
+  }
+
+  const handleGraphicDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault()
+    setDragOverGraphicId(null)
+    const sourceId = draggedGraphicId || e.dataTransfer.getData('text/plain')
+    setDraggedGraphicId(null)
+    if (!sourceId || sourceId === targetId) return
+
+    const srcIdx = graphics.findIndex((item) => item.id === sourceId)
+    const tgtIdx = graphics.findIndex((item) => item.id === targetId)
+    if (srcIdx === -1 || tgtIdx === -1) return
+
+    const newGraphics = [...graphics]
+    const [moved] = newGraphics.splice(srcIdx, 1)
+    newGraphics.splice(tgtIdx, 0, moved)
+    updateGraphicsWithHistory(newGraphics)
+  }
+
+  const handleGraphicDragEnd = () => {
+    setDraggedGraphicId(null)
+    setDragOverGraphicId(null)
+  }
+
   // ----------------------------------------------------
   // MOUSE DRAG / RESIZE / ROTATE ENGINE
   // ----------------------------------------------------
@@ -765,7 +858,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     e.stopPropagation()
     setSelectedGraphicId(gId)
     const g = graphics.find((item) => item.id === gId)
-    if (!g) return
+    if (!g || g.isLocked) return
 
     setUndoStack((prev) => [...prev.slice(-30), graphics])
     setRedoStack([])
@@ -784,7 +877,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const handleStartResize = (e: React.MouseEvent, gId: string, handleName: string) => {
     e.stopPropagation()
     const g = graphics.find((item) => item.id === gId)
-    if (!g) return
+    if (!g || g.isLocked) return
 
     setUndoStack((prev) => [...prev.slice(-30), graphics])
     setRedoStack([])
@@ -1420,10 +1513,51 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
               <div className="h-4 w-px bg-slate-200" />
 
-              {/* Transform Quick Buttons */}
+              {/* Transform & Photoshop-Style Controls */}
               <div className="flex items-center gap-1">
+                {/* Opacity Slider */}
+                <div className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200 text-[10px]">
+                  <span className="text-slate-500 font-semibold">Opasitas:</span>
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
+                    value={selectedGraphic.opacity !== undefined ? selectedGraphic.opacity : 100}
+                    onChange={(e) => {
+                      const op = Number(e.target.value)
+                      updateGraphicsWithHistory(
+                        graphics.map((g) => (g.id === selectedGraphic.id ? { ...g, opacity: op } : g))
+                      )
+                    }}
+                    className="w-12 accent-[#ff5e00] h-1 bg-slate-300 rounded cursor-pointer"
+                  />
+                  <span className="font-mono text-slate-700 font-bold w-6 text-right">
+                    {selectedGraphic.opacity !== undefined ? selectedGraphic.opacity : 100}%
+                  </span>
+                </div>
+
+                {/* Blend Mode */}
+                <select
+                  value={selectedGraphic.blendMode || 'normal'}
+                  onChange={(e) => {
+                    const bm = e.target.value as any
+                    updateGraphicsWithHistory(
+                      graphics.map((g) => (g.id === selectedGraphic.id ? { ...g, blendMode: bm } : g))
+                    )
+                  }}
+                  className="bg-white border border-slate-200 text-slate-700 text-[10px] rounded-lg px-1.5 py-1 font-bold cursor-pointer shadow-2xs"
+                  title="Blend Mode Serat Kain"
+                >
+                  <option value="normal">Normal</option>
+                  <option value="multiply">Multiply (Serap Kain)</option>
+                  <option value="screen">Screen (Terang)</option>
+                  <option value="overlay">Overlay</option>
+                </select>
+
+                <div className="h-4 w-px bg-slate-200" />
+
                 <button
-                  onClick={() => handleAlignCenter(selectedGraphic.id)}
+                  onClick={() => handleAlign(selectedGraphic.id, 'center_h')}
                   title="Rata Tengah Horizontal"
                   className="p-1.5 hover:bg-slate-200/80 text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer"
                 >
@@ -1442,6 +1576,17 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   className="p-1.5 hover:bg-slate-200/80 text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer"
                 >
                   <FlipVertical className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleToggleLock(selectedGraphic.id)}
+                  title={selectedGraphic.isLocked ? 'Buka Kunci Objek' : 'Kunci Posisi Objek (Cegah Tergeser)'}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    selectedGraphic.isLocked
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : 'hover:bg-slate-200/80 text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {selectedGraphic.isLocked ? <Lock className="w-3.5 h-3.5 text-amber-700" /> : <Unlock className="w-3.5 h-3.5" />}
                 </button>
                 <button
                   onClick={() => handleDuplicateGraphic(selectedGraphic.id)}
@@ -1496,31 +1641,34 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
         {/* Right: Undo/Redo, Zoom, Grid, HD Export & Order Button */}
         <div className="flex items-center gap-2">
-          {/* Global Undo & Redo (Batalkan / Kembalikan) */}
-          <div className="flex items-center bg-slate-100 rounded-xl border border-slate-200 p-0.5 shadow-2xs">
+          {/* Global Undo & Redo (Tombol Batalkan & Kembalikan yang Jelas & Profesional) */}
+          <div className="flex items-center bg-white rounded-xl border border-slate-200 p-0.5 shadow-2xs gap-0.5">
             <button
               onClick={handleUndoGraphics}
               disabled={undoStack.length === 0}
-              className={`p-1.5 rounded-lg transition-colors ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-lg transition-colors ${
                 undoStack.length === 0
                   ? 'text-slate-300 cursor-not-allowed'
-                  : 'hover:bg-white text-slate-700 hover:text-[#ff5e00] cursor-pointer'
+                  : 'hover:bg-amber-50 text-slate-700 hover:text-amber-800 cursor-pointer'
               }`}
-              title="Batalkan Perubahan / Undo (Ctrl+Z)"
+              title="Batalkan Perubahan Terakhir (Ctrl+Z)"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+              <span>Batalkan</span>
             </button>
+            <div className="h-4 w-px bg-slate-200" />
             <button
               onClick={handleRedoGraphics}
               disabled={redoStack.length === 0}
-              className={`p-1.5 rounded-lg transition-colors ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-lg transition-colors ${
                 redoStack.length === 0
                   ? 'text-slate-300 cursor-not-allowed'
-                  : 'hover:bg-white text-slate-700 hover:text-[#ff5e00] cursor-pointer'
+                  : 'hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 cursor-pointer'
               }`}
-              title="Kembalikan Perubahan / Redo (Ctrl+Y)"
+              title="Kembalikan Perubahan yang Dibatalkan (Ctrl+Y)"
             >
-              <RotateCw className="w-3.5 h-3.5" />
+              <RotateCw className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Kembalikan</span>
             </button>
           </div>
 
@@ -1687,6 +1835,37 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           </button>
 
           <div className="w-6 h-px bg-slate-200 my-0.5" />
+
+          {/* Tool: Toggle Mode Tekstur Desain (Bordir vs Sablon) */}
+          <button
+            onClick={() => {
+              const next = activeTechnique === 'bordir' ? 'sablon' : 'bordir'
+              setActiveTechnique(next)
+              if (selectedGraphic) {
+                updateGraphicsWithHistory(
+                  graphics.map((g) => (g.id === selectedGraphic.id ? { ...g, technique: next } : g))
+                )
+              }
+            }}
+            title={`Mode Tekstur: ${activeTechnique === 'bordir' ? '🧵 Bordir Komputer (Benang Timbul)' : '🎨 Sablon DTF (Plastisol Halus)'} - Klik untuk ubah mode`}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
+              activeTechnique === 'bordir'
+                ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30'
+                : 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+            }`}
+          >
+            <span className="text-base select-none">{activeTechnique === 'bordir' ? '🧵' : '🎨'}</span>
+            <span className="absolute left-14 bg-slate-900 text-white text-[11px] px-2.5 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl flex flex-col items-start gap-0.5">
+              <span className="font-bold text-amber-300">
+                {activeTechnique === 'bordir' ? 'Mode: 🧵 Bordir Komputer' : 'Mode: 🎨 Sablon DTF'}
+              </span>
+              <span className="text-[10px] text-slate-300">
+                {activeTechnique === 'bordir'
+                  ? 'Gambar/logo baru otomatis bertekstur benang timbul'
+                  : 'Gambar/logo baru otomatis bertekstur sablon halus'}
+              </span>
+            </span>
+          </button>
 
           {/* Tool: Upload Image (U) */}
           <button
@@ -2571,25 +2750,30 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                     activeTool === 'select' ? 'pointer-events-auto' : 'pointer-events-none'
                   } z-20`}
                 >
-                  {currentSideGraphics.map((g) => {
-                    const isSelected = g.id === selectedGraphicId
-                    const calc = calculateGraphicPrice(g.scale)
-                    const scaleX = (g.scaleX || 1) * g.scale
-                    const scaleY = (g.scaleY || 1) * g.scale
+                  {currentSideGraphics
+                    .filter((g) => !hiddenGraphicIds.includes(g.id))
+                    .map((g, idx) => {
+                      const isSelected = g.id === selectedGraphicId
+                      const calc = calculateGraphicPrice(g.scale)
+                      const scaleX = (g.scaleX || 1) * g.scale
+                      const scaleY = (g.scaleY || 1) * g.scale
 
-                    return (
-                      <div
-                        key={g.id}
-                        style={{
-                          left: `${g.x}%`,
-                          top: `${g.y}%`,
-                          transform: `translate(-50%, -50%) rotate(${g.rotation}deg)`,
-                          transformOrigin: 'center center',
-                        }}
-                        className={`absolute select-none pointer-events-auto cursor-move ${
-                          isSelected ? 'z-30' : 'z-10'
-                        }`}
-                      >
+                      return (
+                        <div
+                          key={g.id}
+                          style={{
+                            left: `${g.x}%`,
+                            top: `${g.y}%`,
+                            transform: `translate(-50%, -50%) rotate(${g.rotation}deg)`,
+                            transformOrigin: 'center center',
+                            zIndex: isSelected ? 40 : 10 + idx,
+                            opacity: (g.opacity !== undefined ? g.opacity : 100) / 100,
+                            mixBlendMode: g.blendMode || 'normal',
+                          }}
+                          className={`absolute select-none pointer-events-auto ${
+                            g.isLocked ? 'cursor-default' : 'cursor-move'
+                          }`}
+                        >
                         {/* Floating Action Quickbar on Top of Selected Object */}
                         {isSelected && (
                           <div
@@ -2618,7 +2802,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                               <FlipVertical className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              onClick={() => handleAlignCenter(g.id)}
+                              onClick={() => handleAlign(g.id, 'center_h')}
                               title="Rata Tengah Horizontal"
                               className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
                             >
@@ -2630,7 +2814,14 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                               title="Bawa ke Paling Depan"
                               className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
                             >
-                              <Layers className="w-3 h-3" />
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleSendToBack(g.id)}
+                              title="Kirim ke Paling Belakang"
+                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => handleDeleteGraphic(g.id)}
@@ -2828,87 +3019,117 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   </p>
                 </div>
               ) : (
-                graphics.map((g, idx) => {
-                  const isSelected = g.id === selectedGraphicId
-                  const calc = calculateGraphicPrice(g.scale)
-                  const isCurrentSide = g.side === currentSide
+                [...graphics]
+                  .map((g, origIdx) => ({ g, origIdx }))
+                  .reverse()
+                  .map(({ g, origIdx }) => {
+                    const isSelected = g.id === selectedGraphicId
+                    const calc = calculateGraphicPrice(g.scale)
+                    const isCurrentSide = g.side === currentSide
+                    const isHidden = hiddenGraphicIds.includes(g.id)
 
-                  return (
-                    <div
-                      key={g.id}
-                      onClick={() => {
-                        setActiveTool('select')
-                        setCurrentSide(g.side)
-                        setSelectedGraphicId(g.id)
-                      }}
-                      className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-2.5 ${
-                        isSelected
-                          ? 'bg-orange-50/70 border-[#ff5e00] shadow-xs'
-                          : 'bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-slate-100/70'
-                      }`}
-                    >
-                      {/* Thumbnail */}
-                      <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
-                        {g.type === 'image' ? (
-                          <img src={g.content} alt="" className="w-full h-full object-contain p-1" />
-                        ) : (
-                          <Type className="w-4 h-4 text-[#ff5e00]" />
-                        )}
-                      </div>
+                    return (
+                      <div
+                        key={g.id}
+                        draggable
+                        onDragStart={(e) => handleGraphicDragStart(e, g.id)}
+                        onDragOver={(e) => handleGraphicDragOver(e, g.id)}
+                        onDrop={(e) => handleGraphicDrop(e, g.id)}
+                        onDragEnd={handleGraphicDragEnd}
+                        onClick={() => {
+                          setActiveTool('select')
+                          setCurrentSide(g.side)
+                          setSelectedGraphicId(g.id)
+                        }}
+                        className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center gap-2 ${
+                          isSelected
+                            ? 'bg-orange-50/80 border-[#ff5e00] shadow-xs'
+                            : 'bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-slate-100/70'
+                        } ${isHidden ? 'opacity-40' : ''}`}
+                      >
+                        {/* Drag Handle */}
+                        <GripVertical className="w-3.5 h-3.5 text-slate-400 cursor-grab shrink-0" />
 
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded font-mono ${
-                              isCurrentSide
-                                ? 'bg-[#ff5e00] text-white'
-                                : 'bg-slate-200 text-slate-700'
-                            }`}
-                          >
-                            {g.side}
-                          </span>
-                          <span className="text-[10px] text-slate-500 capitalize">
-                            {g.technique}
-                          </span>
+                        {/* Thumbnail */}
+                        <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                          {g.type === 'image' ? (
+                            <img src={g.content} alt="" className="w-full h-full object-contain p-1" />
+                          ) : (
+                            <Type className="w-4 h-4 text-[#ff5e00]" />
+                          )}
                         </div>
-                        <h5 className="font-bold text-xs text-slate-900 truncate mt-0.5">
-                          {g.label || (g.type === 'text' ? g.content : 'Logo')}
-                        </h5>
-                        <div className="text-[10px] font-mono text-[#ff5e00] font-bold">
-                          {calc.sizeCategory} • Rp {calc.price.toLocaleString('id-ID')}
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded font-mono ${
+                                isCurrentSide
+                                  ? 'bg-[#ff5e00] text-white'
+                                  : 'bg-slate-200 text-slate-700'
+                              }`}
+                            >
+                              {g.side}
+                            </span>
+                            <span className="text-[10px] text-slate-500 capitalize flex items-center gap-0.5">
+                              {g.technique === 'bordir' ? '🧵 Bordir' : '🎨 Sablon'}
+                            </span>
+                          </div>
+                          <h5 className="font-bold text-xs text-slate-900 truncate mt-0.5">
+                            {g.label || (g.type === 'text' ? g.content : 'Logo')}
+                          </h5>
+                          <div className="text-[10px] font-mono text-[#ff5e00] font-bold">
+                            {calc.sizeCategory} • Rp {calc.price.toLocaleString('id-ID')}
+                          </div>
+                        </div>
+
+                        {/* Actions: Visibility, Lock, Step Up, Step Down, Delete */}
+                        <div className="flex flex-col gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-0.5">
+                            <button
+                              onClick={() => handleToggleGraphicVisibility(g.id)}
+                              title={isHidden ? 'Tampilkan Layer' : 'Sembunyikan Layer'}
+                              className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 rounded cursor-pointer"
+                            >
+                              {isHidden ? <EyeOff className="w-3 h-3 text-slate-400" /> : <Eye className="w-3 h-3 text-indigo-600" />}
+                            </button>
+                            <button
+                              onClick={() => handleToggleLock(g.id)}
+                              title={g.isLocked ? 'Buka Kunci Layer' : 'Kunci Layer (Cegah Tergeser)'}
+                              className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 rounded cursor-pointer"
+                            >
+                              {g.isLocked ? <Lock className="w-3 h-3 text-amber-600" /> : <Unlock className="w-3 h-3" />}
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            <button
+                              onClick={() => handleMoveLayer(g.id, 'up')}
+                              disabled={origIdx === graphics.length - 1}
+                              title="Naikkan Layer (Maju ke Depan)"
+                              className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 disabled:opacity-30 rounded cursor-pointer"
+                            >
+                              <ChevronUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => handleMoveLayer(g.id, 'down')}
+                              disabled={origIdx === 0}
+                              title="Turunkan Layer (Mundur ke Belakang)"
+                              className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 disabled:opacity-30 rounded cursor-pointer"
+                            >
+                              <ChevronDown className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteGraphic(g.id)}
+                              title="Hapus Layer"
+                              className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-
-                      {/* Z-Order & Delete Controls */}
-                      <div className="flex flex-col gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => handleBringToFront(g.id)}
-                          disabled={idx === graphics.length - 1}
-                          title="Naikkan Layer"
-                          className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 disabled:opacity-30 rounded cursor-pointer"
-                        >
-                          <ChevronUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleSendToBack(g.id)}
-                          disabled={idx === 0}
-                          title="Turunkan Layer"
-                          className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-800 disabled:opacity-30 rounded cursor-pointer"
-                        >
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteGraphic(g.id)}
-                          title="Hapus Layer"
-                          className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })
+                    )
+                  })
               )}
             </div>
 

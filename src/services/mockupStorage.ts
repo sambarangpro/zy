@@ -95,49 +95,69 @@ async function saveToDiskAsync(mockups: MockupTemplate[]): Promise<void> {
 
 export async function syncMockupsWithDisk(): Promise<MockupTemplate[]> {
   const localList = getMockupList()
+  const idbList = await idbGetAllMockups()
+  let diskList: MockupTemplate[] = []
+
   try {
     const res = await fetch('/api/mockups')
     if (res.ok) {
-      const diskList: MockupTemplate[] = await res.json()
-      if (Array.isArray(diskList) && diskList.length > 0) {
-        // Merge diskList and localList so no mockup is ever lost
-        const map = new Map<string, MockupTemplate>()
-        diskList.forEach((m) => {
-          if (m && m.id) map.set(m.id, m)
-        })
-        localList.forEach((m) => {
-          if (m && m.id) {
-            const existing = map.get(m.id)
-            if (!existing || (m.createdAt || 0) >= (existing.createdAt || 0)) {
-              map.set(m.id, m)
-            }
-          }
-        })
-        const merged = Array.from(map.values())
-        if (merged.length > 0) {
-          memoryMockupCache = merged
-          idbSaveAllMockups(merged)
-          try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
-          } catch {
-            // Exceeds 5MB localStorage quota; safely stored in IndexedDB & Disk API!
-          }
-          if (merged.length !== diskList.length) {
-            saveToDiskAsync(merged)
-          }
-          return merged
-        }
+      const data = await res.json()
+      if (Array.isArray(data)) {
+        diskList = data
       }
     }
   } catch (e) {
     console.warn('Could not sync with disk mockups API', e)
   }
 
-  // Fallback to IndexedDB
-  const idbList = await idbGetAllMockups()
-  if (idbList.length > 0) {
-    memoryMockupCache = idbList
-    return idbList
+  // Merge helper: always preserve colorParts with actual items and all 4 photos
+  const mergeTwo = (a: MockupTemplate, b: MockupTemplate): MockupTemplate => {
+    const partsA = a.colorParts || []
+    const partsB = b.colorParts || []
+    // Pick the version that actually has colorParts
+    const bestParts = partsB.length > 0 ? partsB : partsA
+    return {
+      ...a,
+      ...b,
+      frontImg: b.frontImg || a.frontImg,
+      backImg: b.backImg || a.backImg,
+      leftImg: b.leftImg || a.leftImg,
+      rightImg: b.rightImg || a.rightImg,
+      colorParts: bestParts,
+    }
+  }
+
+  const map = new Map<string, MockupTemplate>()
+  // 1. Ingest diskList
+  diskList.forEach((m) => {
+    if (m && m.id) map.set(m.id, m)
+  })
+  // 2. Ingest idbList
+  idbList.forEach((m) => {
+    if (m && m.id) {
+      const existing = map.get(m.id)
+      map.set(m.id, existing ? mergeTwo(existing, m) : m)
+    }
+  })
+  // 3. Ingest localList
+  localList.forEach((m) => {
+    if (m && m.id) {
+      const existing = map.get(m.id)
+      map.set(m.id, existing ? mergeTwo(existing, m) : m)
+    }
+  })
+
+  const merged = Array.from(map.values())
+  if (merged.length > 0) {
+    memoryMockupCache = merged
+    idbSaveAllMockups(merged)
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+    } catch {
+      // Exceeds 5MB localStorage quota; safely stored in IndexedDB & Disk API
+    }
+    saveToDiskAsync(merged)
+    return merged
   }
 
   return localList
