@@ -206,7 +206,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const [layerPreviewOpacity, setLayerPreviewOpacity] = useState<number>(85)
   const [editingExistingPartId, setEditingExistingPartId] = useState<string | null>(null)
 
-  // Zoom & Pan for Maximum Detail Work (up to 1000% zoom!)
+  // Zoom & Pan for Maximum Detail Work (up to 2000% zoom!)
   const [zoomScale, setZoomScale] = useState<number>(1)
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState<boolean>(false)
@@ -891,14 +891,14 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     }
   }
 
-  // ZOOM & PAN CONTROLS (UP TO 1000% FOR MAXIMUM PRECISION)
+  // ZOOM & PAN CONTROLS (UP TO 2000% FOR MAXIMUM PRECISION PIXEL DETAIL)
   const handleResetZoom = () => {
     setZoomScale(1)
     setPanOffset({ x: 0, y: 0 })
   }
 
   const handleSetZoom = (newZoom: number) => {
-    const clamped = Math.min(Math.max(newZoom, 0.75), 10)
+    const clamped = Math.min(Math.max(newZoom, 0.5), 20)
     setZoomScale(clamped)
     if (clamped === 1) {
       setPanOffset({ x: 0, y: 0 })
@@ -907,17 +907,36 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
   const handleZoomStep = (delta: number) => {
     setZoomScale((prev) => {
-      const next = Math.round((prev + delta) * 10) / 10
-      return Math.min(Math.max(next, 0.75), 10)
+      let step = 0.25
+      if (delta > 0) {
+        if (prev >= 10) step = 2.0
+        else if (prev >= 5) step = 1.0
+        else if (prev >= 2) step = 0.5
+        else step = 0.25
+      } else {
+        if (prev > 10) step = 2.0
+        else if (prev > 5) step = 1.0
+        else if (prev > 2) step = 0.5
+        else step = 0.25
+      }
+      const next = delta > 0 ? prev + step : prev - step
+      const rounded = Math.round(next * 10) / 10
+      return Math.min(Math.max(rounded, 0.5), 20)
     })
   }
 
   const handleWheelZoom = (e: React.WheelEvent<HTMLDivElement>) => {
     e.preventDefault()
-    const delta = e.deltaY < 0 ? 0.25 : -0.25
     setZoomScale((prev) => {
-      const next = Math.round((prev + delta) * 100) / 100
-      return Math.min(Math.max(next, 0.75), 10)
+      let step = 0.15
+      if (prev >= 10) step = 1.5
+      else if (prev >= 5) step = 0.8
+      else if (prev >= 2) step = 0.4
+      else step = 0.2
+
+      const next = e.deltaY < 0 ? prev + step : prev - step
+      const rounded = Math.round(next * 100) / 100
+      return Math.min(Math.max(rounded, 0.5), 20)
     })
   }
 
@@ -1736,32 +1755,46 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                 </button>
               </div>
 
-              {/* Zoom Control Minimalis */}
+              {/* Zoom Control Minimalis (Hingga 2000%) */}
               <div className="flex items-center bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-2 py-1 text-[#64748b] text-[11px] font-tech-data mr-1">
                 <button
                   type="button"
-                  onClick={() => handleZoomStep(-0.25)}
-                  className="hover:text-[#0f172a] px-1 text-[13px] font-bold cursor-pointer"
+                  onClick={() => handleZoomStep(-1)}
+                  className="hover:text-[#0f172a] px-1 text-[13px] font-bold cursor-pointer disabled:opacity-30"
+                  disabled={zoomScale <= 0.5}
                   title="Zoom Out (-)"
                 >
                   -
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleSetZoom(1)}
-                  className="px-1.5 text-[#0f172a] font-medium cursor-pointer hover:underline"
-                  title="Klik untuk reset zoom (100%)"
+                  onClick={() => {
+                    // Siklus zoom praktis: 100% -> 200% -> 500% -> 1000% -> 2000% -> 100%
+                    if (zoomScale < 2) handleSetZoom(2)
+                    else if (zoomScale < 5) handleSetZoom(5)
+                    else if (zoomScale < 10) handleSetZoom(10)
+                    else if (zoomScale < 20) handleSetZoom(20)
+                    else handleSetZoom(1)
+                  }}
+                  className="px-1.5 text-[#0f172a] font-bold cursor-pointer hover:underline"
+                  title="Klik untuk ganti tingkat zoom cepat (100% → 200% → 500% → 1000% → 2000% / Reset)"
                 >
                   {Math.round(zoomScale * 100)}%
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleZoomStep(0.25)}
-                  className="hover:text-[#0f172a] px-1 text-[13px] font-bold cursor-pointer"
-                  title="Zoom In (+)"
+                  onClick={() => handleZoomStep(1)}
+                  className="hover:text-[#0f172a] px-1 text-[13px] font-bold cursor-pointer disabled:opacity-30"
+                  disabled={zoomScale >= 20}
+                  title="Zoom In (+) hingga 2000%"
                 >
                   +
                 </button>
+                {zoomScale >= 10 && (
+                  <span className="text-[9px] font-black px-1 py-0.2 rounded bg-indigo-100 text-indigo-700 ml-0.5 border border-indigo-200">
+                    {zoomScale >= 20 ? '2000% MAX' : 'ULTRA'}
+                  </span>
+                )}
               </div>
 
               {/* Upload Foto Sisi Mockup */}
