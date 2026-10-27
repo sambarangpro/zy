@@ -141,6 +141,8 @@ interface MockupDashboardProps {
   activeMockupId: string | null
   onMockupsChange: (updatedList: MockupTemplate[]) => void
   onSelectAndOpenCanvas: (mockupId: string) => void
+  initialEditTarget?: { partId?: string; side?: ViewSide } | null
+  onClearInitialEditTarget?: () => void
 }
 
 export const MockupDashboard: React.FC<MockupDashboardProps> = ({
@@ -148,6 +150,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   activeMockupId,
   onMockupsChange,
   onSelectAndOpenCanvas,
+  initialEditTarget,
+  onClearInitialEditTarget,
 }) => {
   const [isEditing, setIsEditing] = useState<boolean>(false)
   const [editFormData, setEditFormData] = useState<Partial<MockupTemplate>>({
@@ -185,6 +189,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const [rectStartPoint, setRectStartPoint] = useState<{ x: number; y: number } | null>(null)
   const [hasDrawn, setHasDrawn] = useState<boolean>(false)
   const [maskHistory, setMaskHistory] = useState<string[]>([])
+  const [maskRedoHistory, setMaskRedoHistory] = useState<string[]>([])
+  const [brushHoverCoord, setBrushHoverCoord] = useState<{ x: number; y: number } | null>(null)
   const [hiddenPartIds, setHiddenPartIds] = useState<string[]>([])
   const [layerPreviewOpacity, setLayerPreviewOpacity] = useState<number>(85)
   const [editingExistingPartId, setEditingExistingPartId] = useState<string | null>(null)
@@ -234,6 +240,35 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   useEffect(() => {
     colorPartsRef.current = editFormData.colorParts || []
   }, [editFormData.colorParts])
+
+  // Direct Shortcut: Edit spesifik masker bagian yang diklik dari studio CanvasCustomizer
+  useEffect(() => {
+    if (!initialEditTarget?.partId) return
+
+    const targetMockup =
+      mockups.find((m) => (m.colorParts || []).some((p) => p.id === initialEditTarget.partId)) ||
+      mockups.find((m) => m.id === activeMockupId) ||
+      mockups[0]
+
+    if (!targetMockup) return
+
+    const part = (targetMockup.colorParts || []).find((p) => p.id === initialEditTarget.partId)
+    if (!part) return
+
+    const parts = targetMockup.colorParts ? [...targetMockup.colorParts] : []
+    colorPartsRef.current = parts
+    setEditFormData({ ...targetMockup, colorParts: parts })
+    setSelectedSide(initialEditTarget.side || part.side || 'front')
+    setIsEditing(true)
+
+    // Buka dan muat masker ke kanvas dengan Kuas aktif
+    const timer = setTimeout(() => {
+      handleLoadPartMaskToCanvas(part)
+    }, 200)
+
+    onClearInitialEditTarget?.()
+    return () => clearTimeout(timer)
+  }, [initialEditTarget, activeMockupId, mockups])
 
   // Komponen yang telah dibuat di sisi lain untuk kemudahan tautan 4 sisi
   const otherSidesComponents = useMemo(() => {
@@ -552,9 +587,9 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     })
   }
 
-  const handleLoadPartMaskToCanvas = (part: ColorablePart) => {
+  function handleLoadPartMaskToCanvas(part: ColorablePart) {
     if (!part.maskImg) {
-      alert('Layer ini belum memiliki masker gambar untuk diedit.')
+      alert('Layer ini belum memiliki masker gambar. Silakan gunakan Kuas atau Pen Tool untuk mulai menggambar masker.')
       return
     }
 
@@ -568,18 +603,26 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     img.onload = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-      // Convert black silhouette mask pixels to cyan draft color
+      // Convert black silhouette mask pixels to cyan draft color with 90% opacity
       ctx.globalCompositeOperation = 'source-in'
-      ctx.fillStyle = 'rgba(6, 182, 212, 0.85)'
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.90)'
       ctx.fillRect(0, 0, canvas.width, canvas.height)
       ctx.globalCompositeOperation = 'source-over'
 
       setHasDrawn(true)
       setMaskHistory([canvas.toDataURL()])
+      setMaskRedoHistory([])
       setNewPartName(part.name)
       setNewPartColor(part.defaultColor)
       setEditingExistingPartId(part.id)
       setHiddenPartIds((prev) => (prev.includes(part.id) ? prev : [...prev, part.id]))
+
+      // Mode kuas otomatis aktif agar user bisa langsung mewarnai/menambahkan area!
+      setDrawingTool('brush')
+      setPenPoints([])
+      setPenRedoPoints([])
+      setPenHoverPoint(null)
+      setIsPenClosing(false)
     }
     img.src = part.maskImg
   }
@@ -772,7 +815,11 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
         if (e.shiftKey) {
           e.preventDefault()
-          handleRedoPenPoint()
+          if (drawingTool === 'pen' && penRedoPoints.length > 0) {
+            handleRedoPenPoint()
+          } else {
+            handleRedoMask()
+          }
         } else {
           e.preventDefault()
           if (drawingTool === 'pen' && penPoints.length > 0) {
@@ -783,7 +830,17 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
         }
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
         e.preventDefault()
-        handleRedoPenPoint()
+        if (drawingTool === 'pen' && penRedoPoints.length > 0) {
+          handleRedoPenPoint()
+        } else {
+          handleRedoMask()
+        }
+      } else if (e.key === 'b' || e.key === 'B') {
+        setDrawingTool('brush')
+      } else if (e.key === 'p' || e.key === 'P') {
+        setDrawingTool('pen')
+      } else if (e.key === 'e' || e.key === 'E') {
+        setDrawingTool('eraser')
       } else if (e.key === 'm' || e.key === 'M') {
         if (drawingTool === 'pen') {
           e.preventDefault()
@@ -858,6 +915,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
     setIsDrawingMask(true)
     setLastPoint(coords)
+    setMaskRedoHistory([])
     setMaskHistory((prev) => [...prev.slice(-15), canvas.toDataURL()])
 
     if (drawingTool === 'rect') {
@@ -868,7 +926,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
         ctx.globalCompositeOperation = 'destination-out'
       } else {
         ctx.globalCompositeOperation = 'source-over'
-        ctx.fillStyle = 'rgba(6, 182, 212, 0.85)'
+        ctx.fillStyle = 'rgba(6, 182, 212, 0.90)'
       }
       const scale = canvas.width / 500
       ctx.beginPath()
@@ -886,6 +944,9 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     }
 
     const coords = getMarkerCoords(e)
+    if (drawingTool === 'brush' || drawingTool === 'eraser') {
+      setBrushHoverCoord(coords)
+    }
 
     if (drawingTool === 'pen') {
       setPenHoverPoint(coords)
@@ -987,6 +1048,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     setMaskHistory(prevHistory)
 
     if (lastData) {
+      setMaskRedoHistory((r) => [...r, canvas.toDataURL()])
       const img = new Image()
       img.onload = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -999,6 +1061,69 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     }
   }
 
+  const handleRedoMask = () => {
+    if (drawingTool === 'pen' && penRedoPoints.length > 0) {
+      handleRedoPenPoint()
+      return
+    }
+
+    const canvas = maskCanvasRef.current
+    if (!canvas || maskRedoHistory.length === 0) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const prevRedo = [...maskRedoHistory]
+    const nextData = prevRedo.pop()
+    setMaskRedoHistory(prevRedo)
+
+    if (nextData) {
+      setMaskHistory((h) => [...h, canvas.toDataURL()])
+      const img = new Image()
+      img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(img, 0, 0)
+        setHasDrawn(true)
+      }
+      img.src = nextData
+    }
+  }
+
+  const handleFillPenToCanvas = () => {
+    if (penPoints.length < 3) return
+    const canvas = maskCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    setMaskHistory((prev) => [...prev.slice(-15), canvas.toDataURL()])
+    setMaskRedoHistory([])
+
+    ctx.save()
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.fillStyle = 'rgba(6, 182, 212, 0.90)'
+
+    if (penCurveMode === 'smooth') {
+      drawSplineToCanvas(ctx, penPoints, true, 0.5)
+    } else if (penCurveMode === 'bezier') {
+      drawSplineToCanvas(ctx, penPoints, true, 0.8)
+    } else {
+      ctx.beginPath()
+      ctx.moveTo(penPoints[0].x, penPoints[0].y)
+      for (let i = 1; i < penPoints.length; i++) {
+        ctx.lineTo(penPoints[i].x, penPoints[i].y)
+      }
+      ctx.closePath()
+    }
+    ctx.fill()
+    ctx.restore()
+
+    setHasDrawn(true)
+    setPenPoints([])
+    setPenRedoPoints([])
+    setPenHoverPoint(null)
+    setIsPenClosing(false)
+  }
+
   const handleClearMaskDraft = () => {
     const canvas = maskCanvasRef.current
     if (!canvas) return
@@ -1006,13 +1131,14 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     ctx?.clearRect(0, 0, canvas.width, canvas.height)
     setHasDrawn(false)
     setMaskHistory([])
+    setMaskRedoHistory([])
     setPenPoints([])
     setPenRedoPoints([])
     setPenHoverPoint(null)
     setIsPenClosing(false)
   }
 
-  // COMMIT MASK (FROM PEN TOOL OR CANVAS) DIRECTLY TO ACTIVE PART
+  // COMMIT MASK (FROM PEN TOOL OR CANVAS BRUSH) DIRECTLY TO ACTIVE PART
   function commitCurrentMaskToPart(
     targetPartId?: string | null,
     customPoints?: { x: number; y: number }[]
@@ -1029,8 +1155,16 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     const offCtx = off.getContext('2d')
     if (!offCtx) return null
 
+    let didDraw = false
+
+    // 1. Gambar konten masker kanvas saat ini (hasil kuas & masker yang sedang diedit)
+    if (hasDrawn) {
+      offCtx.drawImage(canvas, 0, 0)
+      didDraw = true
+    }
+
+    // 2. Gabungkan lekukan titik pen tool jika ada yang belum ditutup
     if (pts && pts.length >= 3) {
-      // Draw polygon with pure black fill and ZERO outer stroke border
       offCtx.fillStyle = '#000000'
       if (penCurveMode === 'smooth') {
         drawSplineToCanvas(offCtx, pts, true, 0.5)
@@ -1045,16 +1179,27 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
         offCtx.closePath()
       }
       offCtx.fill()
-      maskDataUrl = off.toDataURL('image/png')
-    } else if (hasDrawn) {
-      offCtx.drawImage(canvas, 0, 0)
-      offCtx.globalCompositeOperation = 'source-in'
-      offCtx.fillStyle = '#000000'
-      offCtx.fillRect(0, 0, off.width, off.height)
-      maskDataUrl = off.toDataURL('image/png')
-    } else {
-      return null
+      didDraw = true
     }
+
+    if (!didDraw) return null
+
+    // 3. Ubah semua piksel aktif non-transparan menjadi warna hitam pekat solid 100% (#000000, alpha 255)
+    // Menjamin masker tidak pudar atau transparan berulang saat diedit
+    const imgData = offCtx.getImageData(0, 0, off.width, off.height)
+    const data = imgData.data
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] > 20) {
+        data[i] = 0
+        data[i + 1] = 0
+        data[i + 2] = 0
+        data[i + 3] = 255
+      } else {
+        data[i + 3] = 0
+      }
+    }
+    offCtx.putImageData(imgData, 0, 0)
+    maskDataUrl = off.toDataURL('image/png')
 
     const currentAll = colorPartsRef.current || editFormData.colorParts || []
     const partId = targetPartId || editingExistingPartId
@@ -1114,12 +1259,29 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       colorParts: updatedParts,
     }))
 
+    // Simpan otomatis ke database lokal jika model mockup valid
+    if (editFormData.id && editFormData.name && editFormData.frontImg) {
+      const currentMockup = mockups.find((m) => m.id === editFormData.id)
+      if (currentMockup) {
+        const updatedMockup: MockupTemplate = {
+          ...currentMockup,
+          ...editFormData,
+          colorParts: updatedParts.filter((p) => p.maskImg && p.maskImg.length > 50),
+        }
+        const updatedList = saveMockup(updatedMockup)
+        onMockupsChange(updatedList)
+      }
+    }
+
     if (partId) {
       setHiddenPartIds((prev) => prev.filter((id) => id !== partId))
     }
     setEditingExistingPartId(null)
     setNewPartName('Bagian Baru')
     handleClearMaskDraft()
+
+    setBackupStatusMessage(`Masker "${partName}" berhasil diperbarui & disimpan!`)
+    setTimeout(() => setBackupStatusMessage(null), 4000)
 
     return updatedParts
   }
@@ -1792,18 +1954,184 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                 <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-indigo-300/40 pointer-events-none z-10"></div>
               )}
 
-              {/* FLOATING TOP CHIP FOR PEN TOOL (ALWAYS VISIBLE & NEVER OBSTRUCTS CLOTHING) */}
-              {drawingTool === 'pen' && (
+              {/* FLOATING TOP BANNER: MODE EDIT MASKER BERJALAN ATAU PEN TOOL */}
+              {editingExistingPartId ? (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-md text-white px-4 py-2 rounded-2xl text-[11px] font-medium shadow-2xl flex flex-wrap items-center justify-between gap-3 border border-cyan-400/50 pointer-events-auto z-40 animate-in fade-in slide-in-from-top-2 duration-200 max-w-[95vw]">
+                  {/* Part Name & Active Badge */}
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                    <span className="text-slate-300">
+                      Mengedit:{' '}
+                      <strong className="text-cyan-200 font-black text-xs uppercase tracking-wide">
+                        {(editFormData.colorParts || []).find((p) => p.id === editingExistingPartId)?.name ||
+                          'Masker Bagian'}
+                      </strong>
+                    </span>
+                    <span className="text-[10px] bg-cyan-500/20 text-cyan-300 font-bold px-2 py-0.5 rounded-full border border-cyan-500/30">
+                      Mode Kuas & Pen
+                    </span>
+                  </div>
+
+                  <div className="h-4 w-px bg-slate-700 hidden sm:block"></div>
+
+                  {/* Quick Tool Selector: Kuas / Pen Tool / Penghapus */}
+                  <div className="flex items-center gap-1 bg-slate-800/90 p-1 rounded-xl border border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setDrawingTool('brush')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        drawingTool === 'brush'
+                          ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-md'
+                          : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+                      }`}
+                      title="Kuas Masker (B): Usap pada gambar untuk menambahkan warna kain"
+                    >
+                      <Paintbrush className="w-3.5 h-3.5" />
+                      <span>Kuas (B)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDrawingTool('pen')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        drawingTool === 'pen'
+                          ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-md'
+                          : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+                      }`}
+                      title="Pen Tool (P): Buat lekukan kurva CorelDRAW presisi tinggi"
+                    >
+                      <span className="text-sm leading-none">✒️</span>
+                      <span>Pen Tool (P)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDrawingTool('eraser')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        drawingTool === 'eraser'
+                          ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-md'
+                          : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+                      }`}
+                      title="Penghapus (E): Hapus atau rapikan area masker yang berlebih"
+                    >
+                      <Eraser className="w-3.5 h-3.5" />
+                      <span>Penghapus (E)</span>
+                    </button>
+                  </div>
+
+                  {/* Tool Options (Brush Size or Pen Curve Modes) */}
+                  {drawingTool === 'brush' || drawingTool === 'eraser' ? (
+                    <div className="flex items-center gap-2 px-2.5 py-1 bg-slate-800/80 rounded-xl border border-slate-700/60">
+                      <span className="text-[10px] text-slate-400">Ukuran:</span>
+                      <input
+                        type="range"
+                        min={4}
+                        max={60}
+                        value={markerBrushSize}
+                        onChange={(e) => setMarkerBrushSize(Number(e.target.value))}
+                        className="w-16 h-1.5 accent-cyan-400 cursor-pointer"
+                      />
+                      <span className="font-mono text-[10px] text-cyan-300 w-8">{markerBrushSize}px</span>
+                    </div>
+                  ) : drawingTool === 'pen' ? (
+                    <div className="flex items-center gap-1 bg-slate-800/80 p-0.5 rounded-xl border border-slate-700/60">
+                      <button
+                        type="button"
+                        onClick={() => setPenCurveMode('smooth')}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold cursor-pointer ${
+                          penCurveMode === 'smooth'
+                            ? 'bg-cyan-500 text-slate-950 font-bold'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        ∿ Halus
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPenCurveMode('straight')}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold cursor-pointer ${
+                          penCurveMode === 'straight'
+                            ? 'bg-cyan-500 text-slate-950 font-bold'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        ╱ Lurus
+                      </button>
+                      {penPoints.length >= 3 && (
+                        <button
+                          type="button"
+                          onClick={handleFillPenToCanvas}
+                          className="px-2 py-0.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[10px] cursor-pointer ml-1"
+                          title="Tambahkan kurva ini ke masker cyan sekarang"
+                        >
+                          + Gabung ke Masker
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+
+                  {/* Undo & Redo Shortcuts */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (drawingTool === 'pen' && penPoints.length > 0) {
+                          handleUndoPenPoint()
+                        } else {
+                          handleUndoMask()
+                        }
+                      }}
+                      className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 text-xs transition-colors cursor-pointer"
+                      title="Undo perubahan terakhir (Ctrl+Z)"
+                    >
+                      Undo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (drawingTool === 'pen' && penRedoPoints.length > 0) {
+                          handleRedoPenPoint()
+                        } else {
+                          handleRedoMask()
+                        }
+                      }}
+                      className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 text-xs transition-colors cursor-pointer"
+                      title="Redo perubahan (Ctrl+Y)"
+                    >
+                      Redo
+                    </button>
+                  </div>
+
+                  {/* Actions: Simpan & Batal */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => commitCurrentMaskToPart()}
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-transform hover:scale-105 active:scale-95 cursor-pointer shadow-lg flex items-center gap-1.5"
+                      title="Simpan hasil pewarnaan / penambahan masker ke seragam"
+                    >
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      <span>Simpan Masker</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleCancelEditingExistingPart}
+                      className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1"
+                      title="Batal edit masker tanpa menyimpan"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Batal</span>
+                    </button>
+                  </div>
+                </div>
+              ) : drawingTool === 'pen' ? (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur text-white px-3.5 py-1.5 rounded-full text-[11px] font-medium shadow-xl flex items-center gap-2.5 border border-cyan-400/40 pointer-events-auto whitespace-nowrap z-40 animate-in fade-in duration-150">
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
                   <span>
                     Zona:{' '}
                     <strong className="text-cyan-200 font-semibold">
-                      {editingExistingPartId
-                        ? (editFormData.colorParts || []).find(
-                            (p) => p.id === editingExistingPartId
-                          )?.name || 'Edit Layer'
-                        : newPartName || 'Zona Baru'}
+                      {newPartName || 'Zona Baru'}
                     </strong>
                   </span>
 
@@ -1895,7 +2223,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                     Batal (Esc)
                   </button>
                 </div>
-              )}
+              ) : null}
 
               {/* Area Kerja Mockup Kemeja */}
               <div
@@ -2020,6 +2348,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                       onMouseDown={handleStartDrawMask}
                       onMouseMove={handleDrawMaskMove}
                       onMouseUp={handleEndDrawMask}
+                      onMouseLeave={() => setBrushHoverCoord(null)}
                       onDoubleClick={handleDoubleClickCanvas}
                       className={`absolute inset-0 w-full h-full z-20 touch-none ${
                         drawingTool === 'pen'
@@ -2031,6 +2360,26 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                           : 'cursor-crosshair'
                       }`}
                     />
+
+                    {/* DYNAMIC BRUSH & ERASER CURSOR CIRCLE INDICATOR */}
+                    {(drawingTool === 'brush' || drawingTool === 'eraser') && brushHoverCoord && (
+                      <div
+                        className="pointer-events-none absolute rounded-full border-2 z-35 -translate-x-1/2 -translate-y-1/2 transition-none"
+                        style={{
+                          left: `${(brushHoverCoord.x / canvasSize.width) * stageDisplayWidth}px`,
+                          top: `${(brushHoverCoord.y / canvasSize.height) * stageDisplayHeight}px`,
+                          width: `${(markerBrushSize / canvasSize.width) * stageDisplayWidth}px`,
+                          height: `${(markerBrushSize / canvasSize.width) * stageDisplayWidth}px`,
+                          borderColor: drawingTool === 'eraser' ? '#f43f5e' : '#06b6d4',
+                          backgroundColor:
+                            drawingTool === 'eraser' ? 'rgba(244, 63, 94, 0.25)' : 'rgba(6, 182, 212, 0.25)',
+                          boxShadow:
+                            drawingTool === 'eraser'
+                              ? '0 0 6px rgba(244, 63, 94, 0.6)'
+                              : '0 0 6px rgba(6, 182, 212, 0.6)',
+                        }}
+                      />
+                    )}
 
                     {/* OVERLAY VECTOR PEN TOOL: ANCHOR NODES & CONNECTING LINES */}
                     {drawingTool === 'pen' && (
@@ -2650,6 +2999,11 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                   >
                                     {part.name}
                                   </span>
+                                  {isTarget && (
+                                    <span className="text-[8px] px-1.5 py-0.2 rounded-full bg-cyan-100 text-cyan-800 font-extrabold border border-cyan-300 animate-pulse shrink-0">
+                                      Edit Aktif
+                                    </span>
+                                  )}
                                 </div>
 
                                 <div className="flex items-center gap-1 shrink-0">
@@ -2711,15 +3065,35 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                     )}
                                   </button>
 
-                                  {/* Edit Masker di Kanvas */}
+                                  {/* Edit / Tambah Masker di Kanvas */}
                                   {hasMask && (
                                     <button
                                       type="button"
-                                      onClick={() => handleLoadPartMaskToCanvas(part)}
-                                      className="p-0.5 text-slate-400 hover:text-indigo-600 cursor-pointer"
-                                      title="Load masker ke kanvas untuk diedit"
+                                      onClick={() => {
+                                        if (isTarget) {
+                                          commitCurrentMaskToPart()
+                                        } else {
+                                          handleLoadPartMaskToCanvas(part)
+                                        }
+                                      }}
+                                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-2xs ${
+                                        isTarget
+                                          ? 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black'
+                                          : 'bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-200 hover:border-indigo-600'
+                                      }`}
+                                      title={isTarget ? 'Simpan perubahan masker sekarang' : 'Edit dan tambah area pewarnaan masker ini (bisa pakai kuas & pen tool)'}
                                     >
-                                      <Edit3 className="w-3 h-3" />
+                                      {isTarget ? (
+                                        <>
+                                          <Check className="w-3 h-3 stroke-[3]" />
+                                          <span>Simpan</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Edit3 className="w-3 h-3" />
+                                          <span>Edit Masker</span>
+                                        </>
+                                      )}
                                     </button>
                                   )}
 

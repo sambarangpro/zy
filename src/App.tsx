@@ -4,6 +4,7 @@ import type {
   GarmentType,
   CanvasGraphic,
   MockupTemplate,
+  ViewSide,
 } from './types'
 import { GARMENTS } from './data/garments'
 import { Navbar } from './components/Navbar'
@@ -56,6 +57,9 @@ export function App() {
       calculatedPrice: 10000,
     },
   ])
+
+  // Target spesifik bagian yang ingin diedit di dashboard masker (Kerah, Saku, dll)
+  const [mockupEditTarget, setMockupEditTarget] = useState<{ partId?: string; side?: ViewSide } | null>(null)
 
   // Modals state
   const [isSizeChartOpen, setIsSizeChartOpen] = useState(false)
@@ -150,7 +154,14 @@ export function App() {
               activeMockup={activeMockup}
               graphics={graphics}
               onGraphicsChange={setGraphics}
-              onOpenDashboard={() => setActiveTab('mockups')}
+              onOpenDashboard={(targetPartId?: string, targetSide?: ViewSide) => {
+                if (targetPartId) {
+                  setMockupEditTarget({ partId: targetPartId, side: targetSide })
+                } else {
+                  setMockupEditTarget(null)
+                }
+                setActiveTab('mockups')
+              }}
               onApplyToOrder={handleApplyToOrder}
             />
           </div>
@@ -188,6 +199,8 @@ export function App() {
               activeMockupId={activeMockupId}
               onMockupsChange={handleMockupsChange}
               onSelectAndOpenCanvas={handleSelectAndOpenCanvas}
+              initialEditTarget={mockupEditTarget}
+              onClearInitialEditTarget={() => setMockupEditTarget(null)}
             />
           </div>
         )}

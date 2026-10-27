@@ -46,6 +46,7 @@ import {
   GripVertical,
   Check,
   Search,
+  Edit3,
 } from 'lucide-react'
 import {
   FABRIC_COLOR_DATABASE,
@@ -57,7 +58,7 @@ interface CanvasCustomizerProps {
   activeMockup: MockupTemplate | null
   graphics: CanvasGraphic[]
   onGraphicsChange: (graphics: CanvasGraphic[]) => void
-  onOpenDashboard: () => void
+  onOpenDashboard: (targetPartId?: string, targetSide?: ViewSide) => void
   onApplyToOrder: () => void
 }
 
@@ -1350,7 +1351,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           </p>
         </div>
         <button
-          onClick={onOpenDashboard}
+          onClick={() => onOpenDashboard()}
           className="px-6 py-3.5 bg-[#ff5e00] hover:bg-[#e05300] text-white font-extrabold rounded-2xl text-xs transition-all shadow-md shadow-[#ff5e00]/25 flex items-center gap-2 cursor-pointer"
         >
           <Layers className="w-4 h-4" />
@@ -1421,7 +1422,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
           {/* Active Mockup Indicator & Switcher */}
           <button
-            onClick={onOpenDashboard}
+            onClick={() => onOpenDashboard()}
             title="Klik untuk ganti mockup seragam"
             className="hidden sm:flex items-center gap-2 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 transition-colors cursor-pointer"
           >
@@ -2707,7 +2708,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   Anda belum meng-upload foto sisi ini untuk "{activeMockup?.name || 'Mockup'}".
                 </p>
                 <button
-                  onClick={onOpenDashboard}
+                  onClick={() => onOpenDashboard()}
                   className="px-4 py-2 bg-[#ff5e00] hover:bg-[#e05300] text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
                 >
                   Upload Foto di Dashboard
@@ -3127,8 +3128,25 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             </div>
                           </div>
 
-                          {/* Tombol Pilih Warna Katalog */}
-                          <div className="flex items-center gap-1 shrink-0">
+                          {/* Tombol Aksi: Edit Masker & Pilih Warna */}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                const currentSidePart =
+                                  group.parts.find((p) => p.side === currentSide) || group.parts[0]
+                                if (currentSidePart) {
+                                  onOpenDashboard(currentSidePart.id, currentSide)
+                                }
+                              }}
+                              className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-200 hover:border-indigo-600 text-[10px] font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
+                              title={`Edit masker / bentuk pewarnaan ${group.name} di sudut ${currentSide}`}
+                            >
+                              <Edit3 className="w-3 h-3" />
+                              <span>Edit Masker</span>
+                            </button>
+
                             <button
                               type="button"
                               onClick={(e) => {
@@ -3400,6 +3418,22 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const currentSidePart =
+                        activeGroup.parts.find((p) => p.side === currentSide) || activeGroup.parts[0]
+                      setActiveColorPickerGroupKey(null)
+                      if (currentSidePart) {
+                        onOpenDashboard(currentSidePart.id, currentSide)
+                      }
+                    }}
+                    className="text-[10px] font-bold text-indigo-700 hover:text-white flex items-center gap-1 cursor-pointer bg-indigo-50 hover:bg-indigo-600 px-2.5 py-1 rounded-lg border border-indigo-200 hover:border-indigo-600 transition-colors shadow-2xs"
+                    title={`Edit bentuk/area masker ${activeGroup.name} dengan Kuas atau Pen Tool`}
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>Edit Masker</span>
+                  </button>
                   <button
                     type="button"
                     onClick={handleResetPartColors}
