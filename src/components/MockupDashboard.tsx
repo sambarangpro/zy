@@ -8,6 +8,7 @@ import {
   exportMockupDatabase,
   importMockupDatabase,
 } from '../services/mockupStorage'
+import { findClosestFabricSwatch } from '../data/fabricColors'
 import {
   Plus,
   Upload,
@@ -2417,6 +2418,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                       <div className="grid grid-cols-4 gap-1.5">
                         {visitorPalette.slice(0, 8).map((color, idx) => {
                           const isSelected = newPartColor.toLowerCase() === color.toLowerCase()
+                          const swatch = findClosestFabricSwatch(color)
                           return (
                             <button
                               key={idx}
@@ -2430,9 +2432,10 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                   })
                                 }
                               }}
+                              title={swatch ? `${swatch.code} - ${swatch.name}` : color}
                               className={`flex flex-col items-center p-1 rounded-md bg-white cursor-pointer transition-all ${
                                 isSelected
-                                  ? 'border-2 border-indigo-600 shadow-xs'
+                                  ? 'border-2 border-indigo-600 shadow-xs ring-1 ring-indigo-200'
                                   : 'border border-[#e2e8f0] hover:border-slate-300'
                               }`}
                             >
@@ -2440,8 +2443,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                 className="w-5 h-5 rounded shadow-xs border border-black/10"
                                 style={{ backgroundColor: color }}
                               ></div>
-                              <span className="text-[8px] font-tech-data font-medium mt-0.5 text-slate-600 truncate max-w-full">
-                                {color}
+                              <span className="text-[8px] font-tech-data font-semibold mt-0.5 text-slate-700 truncate max-w-full">
+                                {swatch ? swatch.code : color}
                               </span>
                             </button>
                           )
