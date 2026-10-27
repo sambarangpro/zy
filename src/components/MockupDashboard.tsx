@@ -33,6 +33,8 @@ import {
   Copy,
   X,
   Sliders,
+  RotateCcw,
+  RotateCw,
 } from 'lucide-react'
 
 // CorelDRAW Style Spline & Curve Helpers (Cubic Catmull-Rom & Bézier Curves)
@@ -136,6 +138,16 @@ function drawSplineToCanvas(
   }
 }
 
+interface DashboardSnapshot {
+  colorParts: ColorablePart[]
+  hiddenPartIds: string[]
+  canvasDataUrl: string | null
+  hasDrawn: boolean
+  penPoints: { x: number; y: number }[]
+  editingExistingPartId: string | null
+  side: ViewSide
+}
+
 interface MockupDashboardProps {
   mockups: MockupTemplate[]
   activeMockupId: string | null
@@ -189,7 +201,6 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const [rectStartPoint, setRectStartPoint] = useState<{ x: number; y: number } | null>(null)
   const [hasDrawn, setHasDrawn] = useState<boolean>(false)
   const [maskHistory, setMaskHistory] = useState<string[]>([])
-  const [maskRedoHistory, setMaskRedoHistory] = useState<string[]>([])
   const [brushHoverCoord, setBrushHoverCoord] = useState<{ x: number; y: number } | null>(null)
   const [hiddenPartIds, setHiddenPartIds] = useState<string[]>([])
   const [layerPreviewOpacity, setLayerPreviewOpacity] = useState<number>(85)
@@ -204,7 +215,6 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
   // Pen Tool (Polygon Path with Interior Fill & CorelDRAW Curves)
   const [penPoints, setPenPoints] = useState<{ x: number; y: number }[]>([])
-  const [penRedoPoints, setPenRedoPoints] = useState<{ x: number; y: number }[]>([])
   const [penHoverPoint, setPenHoverPoint] = useState<{ x: number; y: number } | null>(null)
   const [isPenClosing, setIsPenClosing] = useState<boolean>(false)
   const [penCurveMode, setPenCurveMode] = useState<'straight' | 'smooth' | 'bezier'>('smooth')
@@ -240,6 +250,129 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   useEffect(() => {
     colorPartsRef.current = editFormData.colorParts || []
   }, [editFormData.colorParts])
+
+  // UNIFIED GLOBAL UNDO & REDO STACK FOR ALL MOCKUP DASHBOARD ACTIONS
+  const [dashboardUndoStack, setDashboardUndoStack] = useState<DashboardSnapshot[]>([])
+  const [dashboardRedoStack, setDashboardRedoStack] = useState<DashboardSnapshot[]>([])
+
+  const takeDashboardSnapshot = (): DashboardSnapshot => {
+    const canvas = maskCanvasRef.current
+    return {
+      colorParts: JSON.parse(JSON.stringify(colorPartsRef.current || editFormData.colorParts || [])),
+      hiddenPartIds: [...hiddenPartIds],
+      canvasDataUrl: canvas ? canvas.toDataURL() : null,
+      hasDrawn,
+      penPoints: [...penPoints],
+      editingExistingPartId,
+      side: selectedSide,
+    }
+  }
+
+  const pushDashboardSnapshot = () => {
+    const snap = takeDashboardSnapshot()
+    setDashboardUndoStack((prev) => [...prev.slice(-40), snap])
+    setDashboardRedoStack([])
+  }
+
+  const handleGlobalDashboardUndo = () => {
+    if (dashboardUndoStack.length === 0) return
+
+    const current = takeDashboardSnapshot()
+    const prev = dashboardUndoStack[dashboardUndoStack.length - 1]
+
+    setDashboardUndoStack((s) => s.slice(0, -1))
+    setDashboardRedoStack((s) => [...s.slice(-40), current])
+
+    colorPartsRef.current = prev.colorParts
+    setEditFormData((f) => ({ ...f, colorParts: prev.colorParts }))
+    setHiddenPartIds(prev.hiddenPartIds)
+    setPenPoints(prev.penPoints)
+    setEditingExistingPartId(prev.editingExistingPartId)
+    setHasDrawn(prev.hasDrawn)
+
+    if (prev.side !== selectedSide) {
+      setSelectedSide(prev.side)
+    }
+
+    if (editFormData.id && editFormData.name && editFormData.frontImg) {
+      const currentMockup = mockups.find((m) => m.id === editFormData.id)
+      if (currentMockup) {
+        const updatedMockup: MockupTemplate = {
+          ...currentMockup,
+          ...editFormData,
+          colorParts: prev.colorParts.filter((p) => p.maskImg && p.maskImg.length > 50),
+        }
+        const updatedList = saveMockup(updatedMockup)
+        onMockupsChange(updatedList)
+      }
+    }
+
+    const canvas = maskCanvasRef.current
+    if (canvas) {
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        if (prev.canvasDataUrl && prev.hasDrawn) {
+          const img = new Image()
+          img.onload = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height)
+            ctx.drawImage(img, 0, 0)
+          }
+          img.src = prev.canvasDataUrl
+        }
+      }
+    }
+  }
+
+  const handleGlobalDashboardRedo = () => {
+    if (dashboardRedoStack.length === 0) return
+
+    const current = takeDashboardSnapshot()
+    const next = dashboardRedoStack[dashboardRedoStack.length - 1]
+
+    setDashboardRedoStack((s) => s.slice(0, -1))
+    setDashboardUndoStack((s) => [...s.slice(-40), current])
+
+    colorPartsRef.current = next.colorParts
+    setEditFormData((f) => ({ ...f, colorParts: next.colorParts }))
+    setHiddenPartIds(next.hiddenPartIds)
+    setPenPoints(next.penPoints)
+    setEditingExistingPartId(next.editingExistingPartId)
+    setHasDrawn(next.hasDrawn)
+
+    if (next.side !== selectedSide) {
+      setSelectedSide(next.side)
+    }
+
+    if (editFormData.id && editFormData.name && editFormData.frontImg) {
+      const currentMockup = mockups.find((m) => m.id === editFormData.id)
+      if (currentMockup) {
+        const updatedMockup: MockupTemplate = {
+          ...currentMockup,
+          ...editFormData,
+          colorParts: next.colorParts.filter((p) => p.maskImg && p.maskImg.length > 50),
+        }
+        const updatedList = saveMockup(updatedMockup)
+        onMockupsChange(updatedList)
+      }
+    }
+
+    const canvas = maskCanvasRef.current
+    if (canvas) {
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        if (next.canvasDataUrl && next.hasDrawn) {
+          const img = new Image()
+          img.onload = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height)
+            ctx.drawImage(img, 0, 0)
+          }
+          img.src = next.canvasDataUrl
+        }
+      }
+    }
+  }
 
   // Direct Shortcut: Edit spesifik masker bagian yang diklik dari studio CanvasCustomizer
   useEffect(() => {
@@ -355,6 +488,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   const handleAddColorPart = (initialName?: string, side: ViewSide = 'front', defaultColor = '#1e3a8a') => {
+    pushDashboardSnapshot()
     const currentAll = colorPartsRef.current || editFormData.colorParts || []
     const thisSideParts = currentAll.filter((p) => p.side === side)
     const slotIdx = thisSideParts.length + 1
@@ -425,6 +559,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     const part = (editFormData.colorParts || []).find((p) => p.id === partId)
     if (!part || !part.maskImg) return
 
+    pushDashboardSnapshot()
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => {
@@ -475,6 +610,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const [dragOverPartId, setDragOverPartId] = useState<string | null>(null)
 
   const handleReorderSideParts = (reorderedSideParts: ColorablePart[]) => {
+    pushDashboardSnapshot()
     const allParts = colorPartsRef.current || editFormData.colorParts || []
     let sideIdx = 0
     const newColorParts: ColorablePart[] = []
@@ -561,6 +697,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   const handleTogglePartVisibility = (partId: string) => {
+    pushDashboardSnapshot()
     setHiddenPartIds((prev) =>
       prev.includes(partId) ? prev.filter((id) => id !== partId) : [...prev, partId]
     )
@@ -569,6 +706,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const handleDuplicatePart = (partId: string) => {
     const part = (editFormData.colorParts || []).find((p) => p.id === partId)
     if (!part) return
+    pushDashboardSnapshot()
     const duplicate: ColorablePart = {
       ...part,
       id: 'part_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
@@ -611,7 +749,6 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
       setHasDrawn(true)
       setMaskHistory([canvas.toDataURL()])
-      setMaskRedoHistory([])
       setNewPartName(part.name)
       setNewPartColor(part.defaultColor)
       setEditingExistingPartId(part.id)
@@ -620,7 +757,6 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       // Mode kuas otomatis aktif agar user bisa langsung mewarnai/menambahkan area!
       setDrawingTool('brush')
       setPenPoints([])
-      setPenRedoPoints([])
       setPenHoverPoint(null)
       setIsPenClosing(false)
     }
@@ -636,6 +772,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   const handleUpdateColorPart = (id: string, updates: Partial<ColorablePart>) => {
+    pushDashboardSnapshot()
     const current = colorPartsRef.current || editFormData.colorParts || []
     const target = current.find((p) => p.id === id)
 
@@ -664,6 +801,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   const handleRemoveColorPart = (id: string) => {
+    pushDashboardSnapshot()
     colorPartsRef.current = (colorPartsRef.current || []).filter((p) => p.id !== id)
     setEditFormData((prev) => ({
       ...prev,
@@ -680,6 +818,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     const file = e.target.files?.[0]
     if (!file || !uploadTargetPartId) return
 
+    pushDashboardSnapshot()
     const reader = new FileReader()
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string
@@ -753,30 +892,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }
 
   // PEN TOOL METHODS (FILLABLE POLYGON AREA - ZERO STROKE BORDER)
-  const handleUndoPenPoint = () => {
-    setPenPoints((prev) => {
-      const last = prev[prev.length - 1]
-      if (last) {
-        setPenRedoPoints((r) => [...r, last])
-      }
-      return prev.slice(0, -1)
-    })
-    setIsPenClosing(false)
-  }
-
-  const handleRedoPenPoint = () => {
-    setPenRedoPoints((prev) => {
-      const last = prev[prev.length - 1]
-      if (last) {
-        setPenPoints((p) => [...p, last])
-      }
-      return prev.slice(0, -1)
-    })
-  }
-
   const handleCancelPen = () => {
     setPenPoints([])
-    setPenRedoPoints([])
     setPenHoverPoint(null)
     setIsPenClosing(false)
     handleCancelEditingExistingPart()
@@ -805,7 +922,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       } else if (e.key === 'Backspace') {
         if (drawingTool === 'pen' && penPoints.length > 0) {
           e.preventDefault()
-          handleUndoPenPoint()
+          handleGlobalDashboardUndo()
         }
       } else if (e.key === 'Escape') {
         if (drawingTool === 'pen' && penPoints.length > 0) {
@@ -815,26 +932,14 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
         if (e.shiftKey) {
           e.preventDefault()
-          if (drawingTool === 'pen' && penRedoPoints.length > 0) {
-            handleRedoPenPoint()
-          } else {
-            handleRedoMask()
-          }
+          handleGlobalDashboardRedo()
         } else {
           e.preventDefault()
-          if (drawingTool === 'pen' && penPoints.length > 0) {
-            handleUndoPenPoint()
-          } else {
-            handleUndoMask()
-          }
+          handleGlobalDashboardUndo()
         }
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
         e.preventDefault()
-        if (drawingTool === 'pen' && penRedoPoints.length > 0) {
-          handleRedoPenPoint()
-        } else {
-          handleRedoMask()
-        }
+        handleGlobalDashboardRedo()
       } else if (e.key === 'b' || e.key === 'B') {
         setDrawingTool('brush')
       } else if (e.key === 'p' || e.key === 'P') {
@@ -871,7 +976,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [drawingTool, penPoints, penRedoPoints, zoomScale])
+  }, [drawingTool, dashboardUndoStack, dashboardRedoStack, zoomScale, penPoints])
 
   // INTERACTIVE CANVAS ZONE MARKER METHODS (100% ACCURATE 1:1 PIXEL COORDINATES)
   const getMarkerCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -905,17 +1010,17 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
         commitCurrentMaskToPart()
         return
       }
+      pushDashboardSnapshot()
       setPenPoints((prev) => [...prev, coords])
-      setPenRedoPoints([])
       return
     }
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    pushDashboardSnapshot()
     setIsDrawingMask(true)
     setLastPoint(coords)
-    setMaskRedoHistory([])
     setMaskHistory((prev) => [...prev.slice(-15), canvas.toDataURL()])
 
     if (drawingTool === 'rect') {
@@ -1032,62 +1137,6 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     setRectStartPoint(null)
   }
 
-  const handleUndoMask = () => {
-    if (drawingTool === 'pen' && penPoints.length > 0) {
-      handleUndoPenPoint()
-      return
-    }
-
-    const canvas = maskCanvasRef.current
-    if (!canvas || maskHistory.length === 0) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const prevHistory = [...maskHistory]
-    const lastData = prevHistory.pop()
-    setMaskHistory(prevHistory)
-
-    if (lastData) {
-      setMaskRedoHistory((r) => [...r, canvas.toDataURL()])
-      const img = new Image()
-      img.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        ctx.drawImage(img, 0, 0)
-      }
-      img.src = lastData
-    } else {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      setHasDrawn(false)
-    }
-  }
-
-  const handleRedoMask = () => {
-    if (drawingTool === 'pen' && penRedoPoints.length > 0) {
-      handleRedoPenPoint()
-      return
-    }
-
-    const canvas = maskCanvasRef.current
-    if (!canvas || maskRedoHistory.length === 0) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const prevRedo = [...maskRedoHistory]
-    const nextData = prevRedo.pop()
-    setMaskRedoHistory(prevRedo)
-
-    if (nextData) {
-      setMaskHistory((h) => [...h, canvas.toDataURL()])
-      const img = new Image()
-      img.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        ctx.drawImage(img, 0, 0)
-        setHasDrawn(true)
-      }
-      img.src = nextData
-    }
-  }
-
   const handleFillPenToCanvas = () => {
     if (penPoints.length < 3) return
     const canvas = maskCanvasRef.current
@@ -1095,8 +1144,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    pushDashboardSnapshot()
     setMaskHistory((prev) => [...prev.slice(-15), canvas.toDataURL()])
-    setMaskRedoHistory([])
 
     ctx.save()
     ctx.globalCompositeOperation = 'source-over'
@@ -1119,21 +1168,21 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
     setHasDrawn(true)
     setPenPoints([])
-    setPenRedoPoints([])
     setPenHoverPoint(null)
     setIsPenClosing(false)
   }
 
-  const handleClearMaskDraft = () => {
+  const handleClearMaskDraft = (skipSnapshot = false) => {
     const canvas = maskCanvasRef.current
     if (!canvas) return
+    if (!skipSnapshot && (hasDrawn || penPoints.length > 0)) {
+      pushDashboardSnapshot()
+    }
     const ctx = canvas.getContext('2d')
     ctx?.clearRect(0, 0, canvas.width, canvas.height)
     setHasDrawn(false)
     setMaskHistory([])
-    setMaskRedoHistory([])
     setPenPoints([])
-    setPenRedoPoints([])
     setPenHoverPoint(null)
     setIsPenClosing(false)
   }
@@ -1200,6 +1249,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     }
     offCtx.putImageData(imgData, 0, 0)
     maskDataUrl = off.toDataURL('image/png')
+
+    pushDashboardSnapshot()
 
     const currentAll = colorPartsRef.current || editFormData.colorParts || []
     const partId = targetPartId || editingExistingPartId
@@ -1278,7 +1329,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     }
     setEditingExistingPartId(null)
     setNewPartName('Bagian Baru')
-    handleClearMaskDraft()
+    handleClearMaskDraft(true)
 
     setBackupStatusMessage(`Masker "${partName}" berhasil diperbarui & disimpan!`)
     setTimeout(() => setBackupStatusMessage(null), 4000)
@@ -1628,8 +1679,33 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
               })}
             </div>
 
-            {/* Right: Kontrol Zoom Minimalis & Aksi Utama */}
+            {/* Right: Undo/Redo, Kontrol Zoom Minimalis & Aksi Utama */}
             <div className="flex items-center gap-2">
+              {/* Global Undo & Redo (Batalkan / Kembalikan SEMUA Tindakan) */}
+              <div className="flex items-center bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-0.5 gap-0.5 mr-1">
+                <button
+                  type="button"
+                  onClick={handleGlobalDashboardUndo}
+                  disabled={dashboardUndoStack.length === 0}
+                  className="h-7 px-2 text-[11px] font-bold text-slate-700 hover:text-indigo-600 hover:bg-white rounded disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Batalkan Tindakan Apapun (Undo / Ctrl+Z)"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-slate-600" />
+                  <span className="hidden sm:inline">Undo</span>
+                </button>
+                <div className="h-4 w-px bg-slate-200" />
+                <button
+                  type="button"
+                  onClick={handleGlobalDashboardRedo}
+                  disabled={dashboardRedoStack.length === 0}
+                  className="h-7 px-2 text-[11px] font-bold text-slate-700 hover:text-indigo-600 hover:bg-white rounded disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Kembalikan Tindakan Apapun (Redo / Ctrl+Y)"
+                >
+                  <RotateCw className="w-3.5 h-3.5 text-slate-600" />
+                  <span className="hidden sm:inline">Redo</span>
+                </button>
+              </div>
+
               {/* Zoom Control Minimalis */}
               <div className="flex items-center bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-2 py-1 text-[#64748b] text-[11px] font-tech-data mr-1">
                 <button
@@ -1803,15 +1879,14 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                 {/* Batalkan / Undo */}
                 <button
                   type="button"
-                  onClick={() => {
-                    if (drawingTool === 'pen' && penPoints.length > 0) {
-                      handleUndoPenPoint()
-                    } else {
-                      handleUndoMask()
-                    }
-                  }}
-                  className="w-10 h-10 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80 flex items-center justify-center relative group transition-colors cursor-pointer"
-                  title="Batalkan Perubahan (Undo / Ctrl+Z)"
+                  onClick={handleGlobalDashboardUndo}
+                  disabled={dashboardUndoStack.length === 0}
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center relative group transition-colors cursor-pointer ${
+                    dashboardUndoStack.length === 0
+                      ? 'text-slate-300 opacity-40 cursor-not-allowed'
+                      : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80'
+                  }`}
+                  title="Batalkan Tindakan Apapun (Undo / Ctrl+Z)"
                 >
                   <span className="material-symbols-outlined text-[20px]">undo</span>
                   <span className="absolute left-14 px-2 py-1 bg-slate-800 text-white text-[11px] rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
@@ -1822,14 +1897,14 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                 {/* Kembalikan / Redo */}
                 <button
                   type="button"
-                  onClick={handleRedoPenPoint}
-                  disabled={penRedoPoints.length === 0}
+                  onClick={handleGlobalDashboardRedo}
+                  disabled={dashboardRedoStack.length === 0}
                   className={`w-10 h-10 rounded-lg flex items-center justify-center relative group transition-colors cursor-pointer ${
-                    penRedoPoints.length === 0
+                    dashboardRedoStack.length === 0
                       ? 'text-slate-300 opacity-40 cursor-not-allowed'
                       : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80'
                   }`}
-                  title="Kembalikan Perubahan (Redo / Ctrl+Y)"
+                  title="Kembalikan Tindakan Apapun (Redo / Ctrl+Y)"
                 >
                   <span className="material-symbols-outlined text-[20px]">redo</span>
                   <span className="absolute left-14 px-2 py-1 bg-slate-800 text-white text-[11px] rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
@@ -2074,29 +2149,19 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => {
-                        if (drawingTool === 'pen' && penPoints.length > 0) {
-                          handleUndoPenPoint()
-                        } else {
-                          handleUndoMask()
-                        }
-                      }}
-                      className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 text-xs transition-colors cursor-pointer"
-                      title="Undo perubahan terakhir (Ctrl+Z)"
+                      onClick={handleGlobalDashboardUndo}
+                      disabled={dashboardUndoStack.length === 0}
+                      className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 text-xs transition-colors cursor-pointer disabled:opacity-30 disabled:hover:bg-white/10 disabled:cursor-not-allowed"
+                      title="Undo tindakan apapun (Ctrl+Z)"
                     >
                       Undo
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (drawingTool === 'pen' && penRedoPoints.length > 0) {
-                          handleRedoPenPoint()
-                        } else {
-                          handleRedoMask()
-                        }
-                      }}
-                      className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 text-xs transition-colors cursor-pointer"
-                      title="Redo perubahan (Ctrl+Y)"
+                      onClick={handleGlobalDashboardRedo}
+                      disabled={dashboardRedoStack.length === 0}
+                      className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 text-xs transition-colors cursor-pointer disabled:opacity-30 disabled:hover:bg-white/10 disabled:cursor-not-allowed"
+                      title="Redo tindakan apapun (Ctrl+Y)"
                     >
                       Redo
                     </button>
@@ -2195,22 +2260,22 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                       <span>✓ Simpan Masker</span>
                     </button>
                   )}
-                  {penPoints.length > 0 && (
+                  {dashboardUndoStack.length > 0 && (
                     <button
                       type="button"
-                      onClick={handleUndoPenPoint}
+                      onClick={handleGlobalDashboardUndo}
                       className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-slate-200 text-[10px] transition-colors cursor-pointer"
-                      title="Undo Node Terakhir (Backspace / Ctrl+Z)"
+                      title="Undo Node / Tindakan Terakhir (Backspace / Ctrl+Z)"
                     >
                       Undo
                     </button>
                   )}
-                  {penRedoPoints.length > 0 && (
+                  {dashboardRedoStack.length > 0 && (
                     <button
                       type="button"
-                      onClick={handleRedoPenPoint}
+                      onClick={handleGlobalDashboardRedo}
                       className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-slate-200 text-[10px] transition-colors cursor-pointer"
-                      title="Redo Node (Ctrl+Y)"
+                      title="Redo Node / Tindakan (Ctrl+Y)"
                     >
                       Redo
                     </button>

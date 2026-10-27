@@ -94,6 +94,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const [fabricSearchQuery, setFabricSearchQuery] = useState<string>('')
 
   const handleToggleColorPartVisibility = (groupKey: string) => {
+    pushHistorySnapshot()
     setHiddenColorPartKeys((prev) =>
       prev.includes(groupKey) ? prev.filter((k) => k !== groupKey) : [...prev, groupKey]
     )
@@ -116,12 +117,6 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     back: null,
     left: null,
     right: null,
-  })
-  const [paintHistory, setPaintHistory] = useState<Record<ViewSide, string[]>>({
-    front: [],
-    back: [],
-    left: [],
-    right: [],
   })
 
   // Studio Lighting & 3D Shadow controls
@@ -163,31 +158,79 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const [draggedGraphicId, setDraggedGraphicId] = useState<string | null>(null)
   const [dragOverGraphicId, setDragOverGraphicId] = useState<string | null>(null)
 
-  // Canvas Graphic Undo/Redo History Stack (Tombol Batalkan / Kembalikan)
-  const [undoStack, setUndoStack] = useState<CanvasGraphic[][]>([])
-  const [redoStack, setRedoStack] = useState<CanvasGraphic[][]>([])
+  // Snapshot format untuk Global Unified Undo/Redo (mencakup SEMUA tindakan di kanvas)
+  interface CustomizerSnapshot {
+    graphics: CanvasGraphic[]
+    partColors: Record<string, string>
+    hiddenColorPartKeys: string[]
+    paintLayers: Record<ViewSide, string | null>
+    hiddenGraphicIds: string[]
+    activeSide?: ViewSide
+  }
+
+  // Canvas Global Undo/Redo History Stack (Tombol Batalkan / Kembalikan SEMUA tindakan)
+  const [unifiedUndoStack, setUnifiedUndoStack] = useState<CustomizerSnapshot[]>([])
+  const [unifiedRedoStack, setUnifiedRedoStack] = useState<CustomizerSnapshot[]>([])
   const [isRemovingBg, setIsRemovingBg] = useState<boolean>(false)
 
+  // Ambil snapshot status studio kanvas saat ini
+  const takeCurrentSnapshot = (): CustomizerSnapshot => ({
+    graphics: JSON.parse(JSON.stringify(graphics)),
+    partColors: { ...partColors },
+    hiddenColorPartKeys: [...hiddenColorPartKeys],
+    paintLayers: { ...paintLayers },
+    hiddenGraphicIds: [...hiddenGraphicIds],
+    activeSide: currentSide,
+  })
+
+  // Simpan riwayat tindakan ke undo stack sebelum perubahan dilakukan
+  const pushHistorySnapshot = (customState?: Partial<CustomizerSnapshot>) => {
+    const current = customState ? { ...takeCurrentSnapshot(), ...customState } : takeCurrentSnapshot()
+    setUnifiedUndoStack((prev) => [...prev.slice(-40), current])
+    setUnifiedRedoStack([])
+  }
+
   const updateGraphicsWithHistory = (newGraphics: CanvasGraphic[]) => {
-    setUndoStack((prev) => [...prev.slice(-30), graphics])
-    setRedoStack([])
+    pushHistorySnapshot()
     onGraphicsChange(newGraphics)
   }
 
-  const handleUndoGraphics = () => {
-    if (undoStack.length === 0) return
-    const prev = undoStack[undoStack.length - 1]
-    setUndoStack((s) => s.slice(0, -1))
-    setRedoStack((s) => [...s, graphics])
-    onGraphicsChange(prev)
+  // Batalkan tindakan apapun (Undo Global)
+  const handleGlobalUndo = () => {
+    if (unifiedUndoStack.length === 0) return
+    const current = takeCurrentSnapshot()
+    const prev = unifiedUndoStack[unifiedUndoStack.length - 1]
+
+    setUnifiedUndoStack((s) => s.slice(0, -1))
+    setUnifiedRedoStack((s) => [...s.slice(-40), current])
+
+    onGraphicsChange(prev.graphics)
+    setPartColors(prev.partColors)
+    setHiddenColorPartKeys(prev.hiddenColorPartKeys)
+    setPaintLayers(prev.paintLayers)
+    setHiddenGraphicIds(prev.hiddenGraphicIds)
+    if (prev.activeSide && prev.activeSide !== currentSide) {
+      setCurrentSide(prev.activeSide)
+    }
   }
 
-  const handleRedoGraphics = () => {
-    if (redoStack.length === 0) return
-    const next = redoStack[redoStack.length - 1]
-    setRedoStack((s) => s.slice(0, -1))
-    setUndoStack((s) => [...s, graphics])
-    onGraphicsChange(next)
+  // Kembalikan tindakan apapun (Redo Global)
+  const handleGlobalRedo = () => {
+    if (unifiedRedoStack.length === 0) return
+    const current = takeCurrentSnapshot()
+    const next = unifiedRedoStack[unifiedRedoStack.length - 1]
+
+    setUnifiedRedoStack((s) => s.slice(0, -1))
+    setUnifiedUndoStack((s) => [...s.slice(-40), current])
+
+    onGraphicsChange(next.graphics)
+    setPartColors(next.partColors)
+    setHiddenColorPartKeys(next.hiddenColorPartKeys)
+    setPaintLayers(next.paintLayers)
+    setHiddenGraphicIds(next.hiddenGraphicIds)
+    if (next.activeSide && next.activeSide !== currentSide) {
+      setCurrentSide(next.activeSide)
+    }
   }
 
   // Quick Alignment standard for uniform embroidery & printing
@@ -355,6 +398,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
   // Handler ganti warna: Otomatis sinkronkan 4 sisi secara bersamaan
   const handlePartColorChange = (partId: string, color: string) => {
+    pushHistorySnapshot()
     const allParts = activeMockup?.colorParts || []
     const targetPart = allParts.find((p) => p.id === partId)
 
@@ -380,6 +424,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
   const handleResetPartColors = () => {
     if (activeMockup?.colorParts) {
+      pushHistorySnapshot()
       const resetObj: Record<string, string> = {}
       activeMockup.colorParts.forEach((p) => {
         resetObj[p.id] = p.defaultColor
@@ -466,7 +511,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       }
       img.src = currentData
     }
-  }, [currentSide])
+  }, [currentSide, paintLayers[currentSide]])
 
   // Keyboard navigation & Photoshop shortcuts
   useEffect(() => {
@@ -517,20 +562,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         setBrushSize((s) => Math.min(60, s + 2))
       }
 
-      // Ctrl + Z: Undo brush paint or graphics
+      // Ctrl + Z: Undo tindakan apapun
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault()
-        if (activeTool === 'brush' || activeTool === 'eraser') {
-          handleUndoPaint()
-        } else {
-          handleUndoGraphics()
-        }
+        handleGlobalUndo()
       } else if (
         ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') ||
         ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z')
       ) {
         e.preventDefault()
-        handleRedoGraphics()
+        handleGlobalRedo()
       }
 
       if (selectedGraphicId) {
@@ -558,7 +599,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedGraphicId, graphics, activeTool, currentSide, paintHistory, undoStack, redoStack])
+  }, [selectedGraphicId, graphics, activeTool, currentSide, unifiedUndoStack, unifiedRedoStack])
 
   const nudgeGraphic = (dx: number, dy: number) => {
     if (!selectedGraphicId) return
@@ -596,16 +637,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    pushHistorySnapshot()
     setIsDrawing(true)
     const coords = getPaintCoords(e)
     setLastPoint(coords)
-
-    // Save history before stroke
-    const currentData = canvas.toDataURL('image/png')
-    setPaintHistory((prev) => ({
-      ...prev,
-      [currentSide]: [...(prev[currentSide] || []).slice(-15), currentData],
-    }))
 
     // Draw initial dot
     ctx.save()
@@ -676,39 +711,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     }))
   }
 
-  const handleUndoPaint = () => {
-    const history = paintHistory[currentSide] || []
-    const canvas = paintCanvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    if (history.length === 0) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      setPaintLayers((prev) => ({ ...prev, [currentSide]: null }))
-      return
-    }
-
-    const previousState = history[history.length - 1]
-    const newHistory = history.slice(0, -1)
-    setPaintHistory((prev) => ({ ...prev, [currentSide]: newHistory }))
-
-    const img = new Image()
-    img.onload = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-      setPaintLayers((prev) => ({ ...prev, [currentSide]: previousState }))
-    }
-    img.src = previousState
-  }
-
   const handleClearPaint = () => {
+    pushHistorySnapshot()
     const canvas = paintCanvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     ctx?.clearRect(0, 0, canvas.width, canvas.height)
     setPaintLayers((prev) => ({ ...prev, [currentSide]: null }))
-    setPaintHistory((prev) => ({ ...prev, [currentSide]: [] }))
   }
 
   // Calculate live total print cost
@@ -1006,8 +1015,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     const g = graphics.find((item) => item.id === gId)
     if (!g || g.isLocked) return
 
-    setUndoStack((prev) => [...prev.slice(-30), graphics])
-    setRedoStack([])
+    pushHistorySnapshot()
 
     setDragState({
       mode: 'move',
@@ -1025,8 +1033,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     const g = graphics.find((item) => item.id === gId)
     if (!g || g.isLocked) return
 
-    setUndoStack((prev) => [...prev.slice(-30), graphics])
-    setRedoStack([])
+    pushHistorySnapshot()
 
     setDragState({
       mode: 'resize',
@@ -1045,8 +1052,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     const g = graphics.find((item) => item.id === gId)
     if (!g || !viewportRef.current) return
 
-    setUndoStack((prev) => [...prev.slice(-30), graphics])
-    setRedoStack([])
+    pushHistorySnapshot()
 
     setDragState({
       mode: 'rotate',
@@ -1504,16 +1510,29 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
               <div className="h-4 w-px bg-slate-200" />
 
-              {/* Undo & Clear */}
+              {/* Undo & Redo & Clear */}
               <button
-                onClick={handleUndoPaint}
-                title="Batalkan Goresan (Ctrl+Z)"
-                className="p-1 hover:bg-slate-200/80 text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                type="button"
+                onClick={handleGlobalUndo}
+                disabled={unifiedUndoStack.length === 0}
+                title="Batalkan Tindakan (Ctrl+Z)"
+                className="p-1 hover:bg-slate-200/80 disabled:opacity-40 text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span className="text-[10px] font-bold">Undo</span>
               </button>
               <button
+                type="button"
+                onClick={handleGlobalRedo}
+                disabled={unifiedRedoStack.length === 0}
+                title="Kembalikan Tindakan (Ctrl+Y)"
+                className="p-1 hover:bg-slate-200/80 disabled:opacity-40 text-slate-600 hover:text-slate-900 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold">Redo</span>
+              </button>
+              <button
+                type="button"
                 onClick={handleClearPaint}
                 title="Hapus Semua Warna di Sudut Ini"
                 className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
@@ -1792,31 +1811,33 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
         {/* Right: Undo/Redo, Zoom, Grid, HD Export & Order Button */}
         <div className="flex items-center gap-2">
-          {/* Global Undo & Redo (Tombol Batalkan & Kembalikan yang Jelas & Profesional) */}
+          {/* Global Undo & Redo (Tombol Batalkan & Kembalikan untuk SEMUA Tindakan) */}
           <div className="flex items-center bg-white rounded-xl border border-slate-200 p-0.5 shadow-2xs gap-0.5">
             <button
-              onClick={handleUndoGraphics}
-              disabled={undoStack.length === 0}
+              type="button"
+              onClick={handleGlobalUndo}
+              disabled={unifiedUndoStack.length === 0}
               className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-lg transition-colors ${
-                undoStack.length === 0
+                unifiedUndoStack.length === 0
                   ? 'text-slate-300 cursor-not-allowed'
                   : 'hover:bg-amber-50 text-slate-700 hover:text-amber-800 cursor-pointer'
               }`}
-              title="Batalkan Perubahan Terakhir (Ctrl+Z)"
+              title="Batalkan Tindakan Apapun (Warna Kain, Posisi Logo, Teks, Kuas) / Ctrl+Z"
             >
               <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
               <span>Batalkan</span>
             </button>
             <div className="h-4 w-px bg-slate-200" />
             <button
-              onClick={handleRedoGraphics}
-              disabled={redoStack.length === 0}
+              type="button"
+              onClick={handleGlobalRedo}
+              disabled={unifiedRedoStack.length === 0}
               className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-lg transition-colors ${
-                redoStack.length === 0
+                unifiedRedoStack.length === 0
                   ? 'text-slate-300 cursor-not-allowed'
                   : 'hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 cursor-pointer'
               }`}
-              title="Kembalikan Perubahan yang Dibatalkan (Ctrl+Y)"
+              title="Kembalikan Tindakan yang Dibatalkan (Redo / Ctrl+Y)"
             >
               <RotateCw className="w-3.5 h-3.5 text-emerald-600" />
               <span>Kembalikan</span>
@@ -2287,22 +2308,36 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 />
               </div>
 
-              {/* Action Buttons: Undo & Clear */}
-              <div className="pt-2 border-t border-slate-100 flex gap-2">
+              {/* Action Buttons: Undo, Redo & Reset */}
+              <div className="pt-2 border-t border-slate-100 flex gap-1.5">
                 <button
-                  onClick={handleUndoPaint}
-                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                  type="button"
+                  onClick={handleGlobalUndo}
+                  disabled={unifiedUndoStack.length === 0}
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                  title="Batalkan Tindakan (Ctrl+Z)"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  Undo (Ctrl+Z)
+                  <span>Undo</span>
                 </button>
                 <button
+                  type="button"
+                  onClick={handleGlobalRedo}
+                  disabled={unifiedRedoStack.length === 0}
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                  title="Kembalikan Tindakan (Ctrl+Y)"
+                >
+                  <RotateCw className="w-3.5 h-3.5" />
+                  <span>Redo</span>
+                </button>
+                <button
+                  type="button"
                   onClick={handleClearPaint}
-                  className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                  className="py-2 px-2.5 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer transition-colors"
                   title="Hapus semua goresan kuas di sudut ini"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  Reset
+                  <span>Reset</span>
                 </button>
               </div>
             </div>
