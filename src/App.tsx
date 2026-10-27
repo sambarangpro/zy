@@ -20,6 +20,7 @@ import {
   getActiveMockupId,
   setActiveMockupId,
   syncMockupsWithDisk,
+  saveMockup,
 } from './services/mockupStorage'
 import {
   ShieldCheck,
@@ -163,6 +164,10 @@ export function App() {
                 setActiveTab('mockups')
               }}
               onApplyToOrder={handleApplyToOrder}
+              onMockupUpdate={(updated) => {
+                const updatedList = saveMockup(updated)
+                setMockups(updatedList)
+              }}
             />
           </div>
         )}

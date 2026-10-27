@@ -800,6 +800,36 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     }))
   }
 
+  // Custom Nama Layer: Inline Rename untuk Daftar Layer / Zona
+  const [renamingPartId, setRenamingPartId] = useState<string | null>(null)
+  const [renamingPartName, setRenamingPartName] = useState<string>('')
+
+  const handleStartRenamePart = (part: ColorablePart) => {
+    setRenamingPartId(part.id)
+    setRenamingPartName(part.name)
+  }
+
+  const handleSavePartName = (partId: string) => {
+    if (!renamingPartId) return
+    const trimmed = renamingPartName.trim()
+    if (!trimmed) {
+      setRenamingPartId(null)
+      return
+    }
+
+    const currentPart = (editFormData.colorParts || []).find((p) => p.id === partId)
+    if (currentPart && currentPart.name !== trimmed) {
+      handleUpdateColorPart(partId, { name: trimmed })
+      if (editingExistingPartId === partId) {
+        setNewPartName(trimmed)
+      }
+      setBackupStatusMessage(`Nama layer berhasil diubah menjadi "${trimmed}"!`)
+      setTimeout(() => setBackupStatusMessage(null), 3000)
+    }
+
+    setRenamingPartId(null)
+  }
+
   const handleRemoveColorPart = (id: string) => {
     pushDashboardSnapshot()
     colorPartsRef.current = (colorPartsRef.current || []).filter((p) => p.id !== id)
@@ -3056,14 +3086,58 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                           : part.defaultColor,
                                     }}
                                   />
-                                  <span
-                                    className={`font-semibold truncate max-w-[110px] ${
-                                      isTarget ? 'text-indigo-900' : 'text-slate-800'
-                                    }`}
-                                    title={part.name}
-                                  >
-                                    {part.name}
-                                  </span>
+                                  {renamingPartId === part.id ? (
+                                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                      <input
+                                        type="text"
+                                        value={renamingPartName}
+                                        onChange={(e) => setRenamingPartName(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') handleSavePartName(part.id)
+                                          if (e.key === 'Escape') setRenamingPartId(null)
+                                        }}
+                                        onBlur={() => handleSavePartName(part.id)}
+                                        autoFocus
+                                        className="h-6 px-1.5 text-xs font-bold rounded border border-indigo-500 bg-white text-slate-900 focus:outline-hidden w-28 shadow-2xs"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSavePartName(part.id)}
+                                        className="p-1 hover:bg-emerald-100 text-emerald-700 rounded cursor-pointer"
+                                        title="Simpan Nama Layer"
+                                      >
+                                        <Check className="w-3 h-3 stroke-[2.5]" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setRenamingPartId(null)}
+                                        className="p-1 hover:bg-red-100 text-red-600 rounded cursor-pointer"
+                                        title="Batal"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1 group/partname min-w-0">
+                                      <span
+                                        onDoubleClick={() => handleStartRenamePart(part)}
+                                        className={`font-semibold truncate max-w-[105px] cursor-pointer hover:underline ${
+                                          isTarget ? 'text-indigo-900' : 'text-slate-800'
+                                        }`}
+                                        title={`${part.name} (Klik 2x atau pensil untuk ubah nama layer)`}
+                                      >
+                                        {part.name}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleStartRenamePart(part)}
+                                        className="opacity-0 group-hover/partname:opacity-100 p-0.5 text-slate-400 hover:text-indigo-600 rounded transition-opacity cursor-pointer shrink-0"
+                                        title="Ubah nama layer ini"
+                                      >
+                                        <Edit3 className="w-2.5 h-2.5" />
+                                      </button>
+                                    </div>
+                                  )}
                                   {isTarget && (
                                     <span className="text-[8px] px-1.5 py-0.2 rounded-full bg-cyan-100 text-cyan-800 font-extrabold border border-cyan-300 animate-pulse shrink-0">
                                       Edit Aktif

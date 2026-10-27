@@ -11,6 +11,7 @@ import {
   PRINT_ZONES,
   calculateGraphicPrice,
 } from '../data/garments'
+import { saveMockup } from '../services/mockupStorage'
 import {
   Upload,
   Type,
@@ -60,6 +61,7 @@ interface CanvasCustomizerProps {
   onGraphicsChange: (graphics: CanvasGraphic[]) => void
   onOpenDashboard: (targetPartId?: string, targetSide?: ViewSide) => void
   onApplyToOrder: () => void
+  onMockupUpdate?: (updatedMockup: MockupTemplate) => void
 }
 
 export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
@@ -68,6 +70,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   onGraphicsChange,
   onOpenDashboard,
   onApplyToOrder,
+  onMockupUpdate,
 }) => {
   // 4 Sudut Pandang
   const [currentSide, setCurrentSide] = useState<ViewSide>('front')
@@ -482,6 +485,80 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
     return Array.from(groupsMap.values())
   }, [activeMockup?.colorParts, getPartMatchKey, getPartColor, partColors])
+
+  // Custom Nama Layer: Bagian Kain
+  const [renamingGroupKey, setRenamingGroupKey] = useState<string | null>(null)
+  const [renamingGroupName, setRenamingGroupName] = useState<string>('')
+
+  const handleStartRenameGroup = (groupKey: string, currentName: string) => {
+    setRenamingGroupKey(groupKey)
+    setRenamingGroupName(currentName)
+  }
+
+  const handleSaveGroupName = (groupKey: string) => {
+    if (!renamingGroupKey) return
+    const trimmed = renamingGroupName.trim()
+    if (!trimmed || !activeMockup) {
+      setRenamingGroupKey(null)
+      return
+    }
+
+    const targetGroup = unifiedPartGroups.find((g) => g.key === groupKey)
+    if (!targetGroup || targetGroup.name === trimmed) {
+      setRenamingGroupKey(null)
+      return
+    }
+
+    pushHistorySnapshot()
+
+    const updatedColorParts = (activeMockup.colorParts || []).map((p) => {
+      if (
+        targetGroup.parts.some((gp) => gp.id === p.id) ||
+        p.groupId === groupKey ||
+        p.name === targetGroup.name
+      ) {
+        return { ...p, name: trimmed }
+      }
+      return p
+    })
+
+    const updatedMockup: MockupTemplate = {
+      ...activeMockup,
+      colorParts: updatedColorParts,
+    }
+
+    saveMockup(updatedMockup)
+    if (onMockupUpdate) {
+      onMockupUpdate(updatedMockup)
+    }
+
+    setRenamingGroupKey(null)
+  }
+
+  // Custom Nama Layer: Elemen Grafis (Logo & Teks)
+  const [renamingGraphicId, setRenamingGraphicId] = useState<string | null>(null)
+  const [renamingGraphicLabel, setRenamingGraphicLabel] = useState<string>('')
+
+  const handleStartRenameGraphic = (g: CanvasGraphic) => {
+    setRenamingGraphicId(g.id)
+    setRenamingGraphicLabel(g.label || (g.type === 'text' ? g.content : 'Logo'))
+  }
+
+  const handleSaveGraphicLabel = (id: string) => {
+    if (!renamingGraphicId) return
+    const trimmed = renamingGraphicLabel.trim()
+    const target = graphics.find((g) => g.id === id)
+    const currentName = target?.label || (target?.type === 'text' ? target.content : 'Logo')
+
+    if (trimmed && trimmed !== currentName) {
+      updateGraphicsWithHistory(
+        graphics.map((item) =>
+          item.id === id ? { ...item, label: trimmed } : item
+        )
+      )
+    }
+    setRenamingGraphicId(null)
+  }
 
   // Get current active angle image from active mockup
   const currentMockupImage = activeMockup
@@ -1548,9 +1625,56 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 <span className="text-[10px] font-black uppercase tracking-wider text-[#ff5e00] bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
                   {selectedGraphic.type === 'text' ? 'Teks' : 'Logo/Gambar'}
                 </span>
-                <span className="font-bold text-slate-800 text-xs truncate max-w-[100px]">
-                  {selectedGraphic.label || 'Elemen'}
-                </span>
+                {renamingGraphicId === selectedGraphic.id ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={renamingGraphicLabel}
+                      onChange={(e) => setRenamingGraphicLabel(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveGraphicLabel(selectedGraphic.id)
+                        if (e.key === 'Escape') setRenamingGraphicId(null)
+                      }}
+                      onBlur={() => handleSaveGraphicLabel(selectedGraphic.id)}
+                      autoFocus
+                      className="h-6 px-1.5 text-xs font-bold border border-[#ff5e00] rounded bg-white text-slate-900 w-32 focus:outline-hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSaveGraphicLabel(selectedGraphic.id)}
+                      className="p-1 hover:bg-emerald-100 text-emerald-700 rounded cursor-pointer"
+                      title="Simpan Nama"
+                    >
+                      <Check className="w-3 h-3 stroke-[2.5]" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRenamingGraphicId(null)}
+                      className="p-1 hover:bg-red-100 text-red-600 rounded cursor-pointer"
+                      title="Batal"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 group/inspname">
+                    <span
+                      onClick={() => handleStartRenameGraphic(selectedGraphic)}
+                      className="font-bold text-slate-800 text-xs truncate max-w-[120px] cursor-pointer hover:underline"
+                      title="Klik untuk ubah nama layer ini"
+                    >
+                      {selectedGraphic.label || (selectedGraphic.type === 'text' ? selectedGraphic.content : 'Logo')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleStartRenameGraphic(selectedGraphic)}
+                      className="p-0.5 text-slate-400 hover:text-[#ff5e00] rounded transition-colors cursor-pointer"
+                      title="Ubah nama layer (custom nama)"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="h-4 w-px bg-slate-200" />
@@ -2694,8 +2818,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   return (
                     <button
                       key={group.key}
-                      onClick={() => setActiveFlyout('colorParts')}
-                      title={`Klik untuk ubah warna ${group.name} (Sinkron 4 Sisi)`}
+                      onClick={() => {
+                        setShowLayersPanel(true)
+                        setActiveColorPickerGroupKey(group.key)
+                      }}
+                      title={`Klik untuk ubah warna ${group.name} di Panel Layer (Sinkron 4 Sisi)`}
                       className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-700 cursor-pointer transition-colors shadow-2xs"
                     >
                       <span
@@ -2711,7 +2838,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 })}
                 {unifiedPartGroups.length > 4 && (
                   <button
-                    onClick={() => setActiveFlyout('colorParts')}
+                    onClick={() => setShowLayersPanel(true)}
                     className="text-[10px] font-extrabold text-[#ff5e00] hover:underline cursor-pointer"
                   >
                     +{unifiedPartGroups.length - 4} lainnya
@@ -2719,10 +2846,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 )}
               </div>
               <button
-                onClick={() => setActiveFlyout('colorParts')}
+                onClick={() => setShowLayersPanel(true)}
                 className="text-[11px] font-extrabold text-[#ff5e00] hover:text-[#e05300] cursor-pointer ml-1"
               >
-                Ubah
+                Ubah di Layer
               </button>
             </div>
           )}
@@ -3137,20 +3264,73 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
                             {/* Nama Bagian & Info Kain Pabrik */}
                             <div className="min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-extrabold text-xs text-slate-900 truncate">
-                                  {group.name}
-                                </span>
-                                {group.sides.length === 4 ? (
-                                  <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 shrink-0">
-                                    4 Sisi
-                                  </span>
-                                ) : (
-                                  <span className="text-[9px] px-1 py-0.2 rounded bg-slate-200 text-slate-600 font-medium shrink-0">
-                                    {group.sides.length} Sisi
-                                  </span>
-                                )}
-                              </div>
+                              {renamingGroupKey === group.key ? (
+                                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="text"
+                                    value={renamingGroupName}
+                                    onChange={(e) => setRenamingGroupName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleSaveGroupName(group.key)
+                                      if (e.key === 'Escape') setRenamingGroupKey(null)
+                                    }}
+                                    onBlur={() => handleSaveGroupName(group.key)}
+                                    autoFocus
+                                    className="h-6 px-1.5 text-xs font-bold rounded border border-indigo-500 bg-white text-slate-900 focus:outline-hidden w-28 shadow-2xs"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveGroupName(group.key)}
+                                    className="p-1 hover:bg-emerald-100 text-emerald-700 rounded cursor-pointer"
+                                    title="Simpan Nama Layer"
+                                  >
+                                    <Check className="w-3 h-3 stroke-[2.5]" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setRenamingGroupKey(null)}
+                                    className="p-1 hover:bg-red-100 text-red-600 rounded cursor-pointer"
+                                    title="Batal"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center gap-1 group/partname min-w-0">
+                                    <span
+                                      onDoubleClick={(e) => {
+                                        e.stopPropagation()
+                                        handleStartRenameGroup(group.key, group.name)
+                                      }}
+                                      className="font-extrabold text-xs text-slate-900 truncate cursor-pointer hover:underline"
+                                      title={`${group.name} (Klik 2x atau pensil untuk ganti nama layer)`}
+                                    >
+                                      {group.name}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleStartRenameGroup(group.key, group.name)
+                                      }}
+                                      className="opacity-0 group-hover/partname:opacity-100 p-0.5 text-slate-400 hover:text-indigo-600 rounded transition-opacity cursor-pointer shrink-0"
+                                      title="Ganti nama layer bagian ini"
+                                    >
+                                      <Edit3 className="w-2.5 h-2.5" />
+                                    </button>
+                                  </div>
+                                  {group.sides.length === 4 ? (
+                                    <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 shrink-0">
+                                      4 Sisi
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] px-1 py-0.2 rounded bg-slate-200 text-slate-600 font-medium shrink-0">
+                                      {group.sides.length} Sisi
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                               <div className="text-[10px] text-slate-500 truncate flex items-center gap-1">
                                 {swatchInfo ? (
                                   <span className="font-medium text-slate-700">
@@ -3275,9 +3455,63 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                                   {g.technique === 'bordir' ? '🧵 Bordir' : '🎨 Sablon'}
                                 </span>
                               </div>
-                              <h5 className="font-bold text-xs text-slate-900 truncate mt-0.5">
-                                {g.label || (g.type === 'text' ? g.content : 'Logo')}
-                              </h5>
+                              {renamingGraphicId === g.id ? (
+                                <div className="flex items-center gap-1 mt-0.5" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="text"
+                                    value={renamingGraphicLabel}
+                                    onChange={(e) => setRenamingGraphicLabel(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleSaveGraphicLabel(g.id)
+                                      if (e.key === 'Escape') setRenamingGraphicId(null)
+                                    }}
+                                    onBlur={() => handleSaveGraphicLabel(g.id)}
+                                    autoFocus
+                                    className="h-6 px-1.5 text-xs font-bold rounded border border-[#ff5e00] bg-white text-slate-900 focus:outline-hidden w-full shadow-2xs"
+                                    placeholder="Nama layer..."
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveGraphicLabel(g.id)}
+                                    className="p-1 hover:bg-emerald-100 text-emerald-700 rounded cursor-pointer shrink-0"
+                                    title="Simpan Nama"
+                                  >
+                                    <Check className="w-3 h-3 stroke-[2.5]" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setRenamingGraphicId(null)}
+                                    className="p-1 hover:bg-red-100 text-red-600 rounded cursor-pointer shrink-0"
+                                    title="Batal"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1 group/gname min-w-0 mt-0.5">
+                                  <h5
+                                    onDoubleClick={(e) => {
+                                      e.stopPropagation()
+                                      handleStartRenameGraphic(g)
+                                    }}
+                                    className="font-bold text-xs text-slate-900 truncate cursor-pointer hover:underline"
+                                    title={`${g.label || (g.type === 'text' ? g.content : 'Logo')} (Klik 2x atau pensil untuk ganti nama layer)`}
+                                  >
+                                    {g.label || (g.type === 'text' ? g.content : 'Logo')}
+                                  </h5>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleStartRenameGraphic(g)
+                                    }}
+                                    className="opacity-0 group-hover/gname:opacity-100 p-0.5 text-slate-400 hover:text-[#ff5e00] rounded transition-opacity cursor-pointer shrink-0"
+                                    title="Ubah nama layer grafis ini"
+                                  >
+                                    <Edit3 className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
+                              )}
                               <div className="text-[10px] font-mono text-[#ff5e00] font-bold">
                                 {calc.sizeCategory} • Rp {calc.price.toLocaleString('id-ID')}
                               </div>
