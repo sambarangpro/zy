@@ -343,6 +343,7 @@ export function createDemoSampleMockup(): MockupTemplate {
     backImg: `data:image/svg+xml;utf8,${encodeURIComponent(backSvg)}`,
     leftImg: `data:image/svg+xml;utf8,${encodeURIComponent(leftSvg)}`,
     rightImg: `data:image/svg+xml;utf8,${encodeURIComponent(rightSvg)}`,
+    defaultBaseColor: '#1e3a8a',
     colorParts: [
       {
         id: 'part_collar',

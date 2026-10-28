@@ -82,11 +82,24 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     'text' | 'lighting' | 'presets' | 'brush' | 'colorParts' | null
   >(null)
 
-  // Active Tool: 'select' | 'brush' | 'eraser'
-  const [activeTool, setActiveTool] = useState<'select' | 'brush' | 'eraser'>('select')
+  // Active Tool: 'select' | 'brush' | 'eraser' | 'palette'
+  const [activeTool, setActiveTool] = useState<'select' | 'brush' | 'eraser' | 'palette'>('select')
 
   // Part Colors per defined part ID: { [partId: string]: hexColor }
   const [partColors, setPartColors] = useState<Record<string, string>>({})
+
+  // Warna Dasar Keseluruhan Seragam (Layer Paling Bawah - Menggantikan warna keseluruhan kecuali layer aktif)
+  const [baseGarmentColor, setBaseGarmentColor] = useState<string>(
+    () => activeMockup?.defaultBaseColor || '#1e3a8a'
+  )
+  const [isBaseColorHidden, setIsBaseColorHidden] = useState<boolean>(false)
+  const baseCanvasRef = useRef<HTMLCanvasElement | null>(null)
+
+  useEffect(() => {
+    if (activeMockup?.defaultBaseColor) {
+      setBaseGarmentColor(activeMockup.defaultBaseColor)
+    }
+  }, [activeMockup?.id])
 
   // Visibility layer masker bagian seragam (fungsi mata-mata setiap bagian kain)
   const [hiddenColorPartKeys, setHiddenColorPartKeys] = useState<string[]>([])
@@ -169,6 +182,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     paintLayers: Record<ViewSide, string | null>
     hiddenGraphicIds: string[]
     activeSide?: ViewSide
+    baseGarmentColor?: string
+    isBaseColorHidden?: boolean
   }
 
   // Canvas Global Undo/Redo History Stack (Tombol Batalkan / Kembalikan SEMUA tindakan)
@@ -184,6 +199,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     paintLayers: { ...paintLayers },
     hiddenGraphicIds: [...hiddenGraphicIds],
     activeSide: currentSide,
+    baseGarmentColor,
+    isBaseColorHidden,
   })
 
   // Simpan riwayat tindakan ke undo stack sebelum perubahan dilakukan
@@ -212,6 +229,12 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     setHiddenColorPartKeys(prev.hiddenColorPartKeys)
     setPaintLayers(prev.paintLayers)
     setHiddenGraphicIds(prev.hiddenGraphicIds)
+    if (prev.baseGarmentColor !== undefined) {
+      setBaseGarmentColor(prev.baseGarmentColor)
+    }
+    if (prev.isBaseColorHidden !== undefined) {
+      setIsBaseColorHidden(prev.isBaseColorHidden)
+    }
     if (prev.activeSide && prev.activeSide !== currentSide) {
       setCurrentSide(prev.activeSide)
     }
@@ -231,6 +254,12 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     setHiddenColorPartKeys(next.hiddenColorPartKeys)
     setPaintLayers(next.paintLayers)
     setHiddenGraphicIds(next.hiddenGraphicIds)
+    if (next.baseGarmentColor !== undefined) {
+      setBaseGarmentColor(next.baseGarmentColor)
+    }
+    if (next.isBaseColorHidden !== undefined) {
+      setIsBaseColorHidden(next.isBaseColorHidden)
+    }
     if (next.activeSide && next.activeSide !== currentSide) {
       setCurrentSide(next.activeSide)
     }
@@ -596,6 +625,88 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       img.src = currentData
     }
   }, [currentSide, paintLayers[currentSide]])
+
+  // Gambar Kanvas Warna Keseluruhan Seragam (Warna Dasar Paling Bawah, Tidak Menimpa Pola / Layer Aktif)
+  useEffect(() => {
+    const canvas = baseCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    if (!currentMockupImage || isBaseColorHidden || !baseGarmentColor) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      return
+    }
+
+    let isCancelled = false
+    const mockupImg = new Image()
+    mockupImg.crossOrigin = 'anonymous'
+    mockupImg.onload = () => {
+      if (isCancelled) return
+      const w = mockupImg.naturalWidth > 0 ? mockupImg.naturalWidth : 1200
+      const h = mockupImg.naturalHeight > 0 ? mockupImg.naturalHeight : 1400
+      canvas.width = w
+      canvas.height = h
+
+      ctx.clearRect(0, 0, w, h)
+
+      // 1. Gambar siluet pakaian dari foto mockup
+      ctx.drawImage(mockupImg, 0, 0, w, h)
+
+      // 2. Warnai siluet pakaian dengan warna keseluruhan seragam
+      ctx.globalCompositeOperation = 'source-in'
+      ctx.fillStyle = baseGarmentColor
+      ctx.fillRect(0, 0, w, h)
+
+      // 3. Potong / kecualikan bagian layer yang aktif (misal: Kerah warna kuning) agar warna layer tetap murni & tidak tertimpa
+      const allParts = activeMockup?.colorParts || []
+      const activePartsWithMask = currentSideColorParts.filter((p) => {
+        if (!p.maskImg) return false
+        const groupKey = getPartMatchKey(p, allParts)
+        return !hiddenColorPartKeys.includes(groupKey) && !hiddenColorPartKeys.includes(p.id)
+      })
+
+      if (activePartsWithMask.length === 0) {
+        ctx.globalCompositeOperation = 'source-over'
+        return
+      }
+
+      let loadedCount = 0
+      activePartsWithMask.forEach((part) => {
+        const maskImg = new Image()
+        maskImg.crossOrigin = 'anonymous'
+        maskImg.onload = () => {
+          if (isCancelled) return
+          ctx.save()
+          ctx.globalCompositeOperation = 'destination-out'
+          ctx.drawImage(maskImg, 0, 0, w, h)
+          ctx.restore()
+          loadedCount++
+          if (loadedCount === activePartsWithMask.length) {
+            ctx.globalCompositeOperation = 'source-over'
+          }
+        }
+        maskImg.onerror = () => {
+          loadedCount++
+        }
+        maskImg.src = part.maskImg!
+      })
+    }
+    mockupImg.src = currentMockupImage
+
+    return () => {
+      isCancelled = true
+    }
+  }, [
+    currentMockupImage,
+    baseGarmentColor,
+    isBaseColorHidden,
+    currentSideColorParts,
+    hiddenColorPartKeys,
+    activeMockup?.colorParts,
+    getPartMatchKey,
+    currentSide,
+  ])
 
   // Keyboard navigation & Photoshop shortcuts
   useEffect(() => {
@@ -1336,60 +1447,127 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         const groupKey = getPartMatchKey(p, allParts)
         return !hiddenColorPartKeys.includes(groupKey) && !hiddenColorPartKeys.includes(p.id)
       })
-      if (partsToDraw.length === 0) {
-        drawPaintLayerAndContinue()
-        return
+
+      const renderActiveParts = () => {
+        if (partsToDraw.length === 0) {
+          drawPaintLayerAndContinue()
+          return
+        }
+
+        const renderedLayers: (HTMLCanvasElement | null)[] = new Array(partsToDraw.length).fill(null)
+        let loadedParts = 0
+
+        partsToDraw.forEach((part, idx) => {
+          const maskImg = new Image()
+          maskImg.crossOrigin = 'anonymous'
+          maskImg.onload = () => {
+            const offCanvas = document.createElement('canvas')
+            offCanvas.width = canvas.width
+            offCanvas.height = canvas.height
+            const offCtx = offCanvas.getContext('2d')
+            if (offCtx) {
+              const color = getPartColor(part)
+              offCtx.fillStyle = color
+              offCtx.fillRect(0, 0, offCanvas.width, offCanvas.height)
+              offCtx.globalCompositeOperation = 'destination-in'
+              offCtx.drawImage(maskImg, 0, 0, offCanvas.width, offCanvas.height)
+              renderedLayers[idx] = offCanvas
+            }
+            loadedParts++
+            if (loadedParts === partsToDraw.length) {
+              // Draw in exact bottom-to-top sequence
+              renderedLayers.forEach((layer) => {
+                if (layer) {
+                  ctx.save()
+                  ctx.globalCompositeOperation = 'multiply'
+                  ctx.drawImage(layer, 0, 0)
+                  ctx.restore()
+                }
+              })
+              drawPaintLayerAndContinue()
+            }
+          }
+          maskImg.onerror = () => {
+            loadedParts++
+            if (loadedParts === partsToDraw.length) {
+              renderedLayers.forEach((layer) => {
+                if (layer) {
+                  ctx.save()
+                  ctx.globalCompositeOperation = 'multiply'
+                  ctx.drawImage(layer, 0, 0)
+                  ctx.restore()
+                }
+              })
+              drawPaintLayerAndContinue()
+            }
+          }
+          maskImg.src = part.maskImg!
+        })
       }
 
-      const renderedLayers: (HTMLCanvasElement | null)[] = new Array(partsToDraw.length).fill(null)
-      let loadedParts = 0
+      // Gambar warna dasar keseluruhan seragam terlebih dahulu (posisi di bawah semua layer)
+      if (baseGarmentColor && !isBaseColorHidden && currentMockupImage) {
+        const mockupImg = new Image()
+        mockupImg.crossOrigin = 'anonymous'
+        mockupImg.onload = () => {
+          const offBaseCanvas = document.createElement('canvas')
+          offBaseCanvas.width = canvas.width
+          offBaseCanvas.height = canvas.height
+          const offBaseCtx = offBaseCanvas.getContext('2d')
+          if (offBaseCtx) {
+            offBaseCtx.drawImage(mockupImg, 0, 0, canvas.width, canvas.height)
+            offBaseCtx.globalCompositeOperation = 'source-in'
+            offBaseCtx.fillStyle = baseGarmentColor
+            offBaseCtx.fillRect(0, 0, canvas.width, canvas.height)
 
-      partsToDraw.forEach((part, idx) => {
-        const maskImg = new Image()
-        maskImg.crossOrigin = 'anonymous'
-        maskImg.onload = () => {
-          const offCanvas = document.createElement('canvas')
-          offCanvas.width = canvas.width
-          offCanvas.height = canvas.height
-          const offCtx = offCanvas.getContext('2d')
-          if (offCtx) {
-            const color = getPartColor(part)
-            offCtx.fillStyle = color
-            offCtx.fillRect(0, 0, offCanvas.width, offCanvas.height)
-            offCtx.globalCompositeOperation = 'destination-in'
-            offCtx.drawImage(maskImg, 0, 0, offCanvas.width, offCanvas.height)
-            renderedLayers[idx] = offCanvas
+            if (partsToDraw.length > 0) {
+              let loadedMasks = 0
+              partsToDraw.forEach((part) => {
+                const maskImg = new Image()
+                maskImg.crossOrigin = 'anonymous'
+                maskImg.onload = () => {
+                  offBaseCtx.save()
+                  offBaseCtx.globalCompositeOperation = 'destination-out'
+                  offBaseCtx.drawImage(maskImg, 0, 0, canvas.width, canvas.height)
+                  offBaseCtx.restore()
+                  loadedMasks++
+                  if (loadedMasks === partsToDraw.length) {
+                    ctx.save()
+                    ctx.globalCompositeOperation = 'multiply'
+                    ctx.drawImage(offBaseCanvas, 0, 0)
+                    ctx.restore()
+                    renderActiveParts()
+                  }
+                }
+                maskImg.onerror = () => {
+                  loadedMasks++
+                  if (loadedMasks === partsToDraw.length) {
+                    ctx.save()
+                    ctx.globalCompositeOperation = 'multiply'
+                    ctx.drawImage(offBaseCanvas, 0, 0)
+                    ctx.restore()
+                    renderActiveParts()
+                  }
+                }
+                maskImg.src = part.maskImg!
+              })
+              return
+            } else {
+              ctx.save()
+              ctx.globalCompositeOperation = 'multiply'
+              ctx.drawImage(offBaseCanvas, 0, 0)
+              ctx.restore()
+            }
           }
-          loadedParts++
-          if (loadedParts === partsToDraw.length) {
-            // Draw in exact bottom-to-top sequence
-            renderedLayers.forEach((layer) => {
-              if (layer) {
-                ctx.save()
-                ctx.globalCompositeOperation = 'multiply'
-                ctx.drawImage(layer, 0, 0)
-                ctx.restore()
-              }
-            })
-            drawPaintLayerAndContinue()
-          }
+          renderActiveParts()
         }
-        maskImg.onerror = () => {
-          loadedParts++
-          if (loadedParts === partsToDraw.length) {
-            renderedLayers.forEach((layer) => {
-              if (layer) {
-                ctx.save()
-                ctx.globalCompositeOperation = 'multiply'
-                ctx.drawImage(layer, 0, 0)
-                ctx.restore()
-              }
-            })
-            drawPaintLayerAndContinue()
-          }
+        mockupImg.onerror = () => {
+          renderActiveParts()
         }
-        maskImg.src = part.maskImg!
-      })
+        mockupImg.src = currentMockupImage
+      } else {
+        renderActiveParts()
+      }
     }
 
     if (currentMockupImage) {
@@ -2057,30 +2235,27 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             <MousePointer className="w-5 h-5" />
           </button>
 
-          {/* Tool: Palet Warna Kain & Bagian Seragam - Pindah ke Panel Layer Kanan */}
+          {/* Tool: Warna Keseluruhan Seragam (Warna Dasar Paling Bawah) */}
           <button
             onClick={() => {
-              setShowLayersPanel(true)
+              setActiveTool('palette')
+              setActiveColorPickerGroupKey('__base__')
               setActiveFlyout(null)
-              if (unifiedPartGroups.length > 0) {
-                setActiveColorPickerGroupKey(unifiedPartGroups[0].key)
-              }
             }}
-            title="Warna Bagian Kain Seragam (Buka Panel Layer & Katalog Kain)"
+            title="Warna Keseluruhan Seragam (Warna Dasar Bawah)"
             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group ${
-              showLayersPanel && activeColorPickerGroupKey !== null
+              activeColorPickerGroupKey === '__base__' || activeTool === 'palette'
                 ? 'bg-[#ff5e00] text-white shadow-md shadow-[#ff5e00]/30'
-                : unifiedPartGroups.length > 0
-                ? 'bg-orange-50 text-[#ff5e00] hover:bg-orange-100'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                : 'bg-orange-50/80 text-[#ff5e00] hover:bg-orange-100'
             }`}
           >
             <Palette className="w-5 h-5" />
-            {unifiedPartGroups.length > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#ff5e00] ring-1.5 ring-white" />
-            )}
+            <span
+              style={{ backgroundColor: baseGarmentColor }}
+              className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full ring-1.5 ring-white border border-black/10 shadow-2xs"
+            />
             <span className="absolute left-14 bg-slate-900 text-white text-[11px] px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
-              Warna Bagian Kain ({unifiedPartGroups.length} Layer di Kanan)
+              Warna Keseluruhan Seragam (Lapisan Bawah)
             </span>
           </button>
 
@@ -2814,14 +2989,31 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           )}
 
           {/* FLOATING QUICK BAR FOR COLOR PARTS (Sinkron Lintas Sudut Pandang) */}
-          {unifiedPartGroups.length > 0 && (
+          {(unifiedPartGroups.length > 0 || baseGarmentColor) && (
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl shadow-lg px-3.5 py-1.5 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="flex items-center gap-1.5 text-xs font-black text-slate-800">
                 <Palette className="w-3.5 h-3.5 text-[#ff5e00]" />
-                <span>Warna Bagian:</span>
+                <span>Warna Seragam:</span>
               </div>
               <div className="flex items-center gap-2">
-                {unifiedPartGroups.slice(0, 4).map((group) => {
+                {/* Tombol Cepat: Warna Keseluruhan Seragam */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTool('palette')
+                    setActiveColorPickerGroupKey('__base__')
+                  }}
+                  title="Ganti warna dasar seluruh seragam (posisi di bawah semua layer)"
+                  className="flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-2.5 py-1 rounded-lg text-[10px] font-black text-[#ff5e00] cursor-pointer transition-colors shadow-2xs"
+                >
+                  <span
+                    style={{ backgroundColor: baseGarmentColor }}
+                    className="w-2.5 h-2.5 rounded-full border border-orange-400 inline-block shadow-2xs"
+                  />
+                  <span>Warna Keseluruhan</span>
+                </button>
+
+                {unifiedPartGroups.slice(0, 3).map((group) => {
                   return (
                     <button
                       key={group.key}
@@ -2843,12 +3035,12 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                     </button>
                   )
                 })}
-                {unifiedPartGroups.length > 4 && (
+                {unifiedPartGroups.length > 3 && (
                   <button
                     onClick={() => setShowLayersPanel(true)}
                     className="text-[10px] font-extrabold text-[#ff5e00] hover:underline cursor-pointer"
                   >
-                    +{unifiedPartGroups.length - 4} lainnya
+                    +{unifiedPartGroups.length - 3} lainnya
                   </button>
                 )}
               </div>
@@ -2856,7 +3048,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 onClick={() => setShowLayersPanel(true)}
                 className="text-[11px] font-extrabold text-[#ff5e00] hover:text-[#e05300] cursor-pointer ml-1"
               >
-                Ubah di Layer
+                Panel Layer
               </button>
             </div>
           )}
@@ -2896,6 +3088,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   style={filterStyle}
                   className="w-full h-full object-contain select-none pointer-events-none"
                 />
+
+                {/* 1.5 WARNA KESELURUHAN SERAGAM (BASE GARMENT COLOR - POSISI SELALU DI BAWAH LAYER-LAYER) */}
+                {baseGarmentColor && !isBaseColorHidden && (
+                  <canvas
+                    ref={baseCanvasRef}
+                    className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none transition-opacity duration-150 z-2"
+                    style={{ mixBlendMode: 'multiply' }}
+                  />
+                )}
 
                 {/* 2. AUTOMATIC COLORABLE PARTS (Kerah, Saku, Kancing, Garis Kancing - Multiply Blending absorbs directly into fabric!) */}
                 {currentSideColorParts.map((part, pIdx) => {
@@ -3355,6 +3556,91 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                         </div>
                       )
                     })}
+
+                    {/* LAYER PALING BAWAH: WARNA KESELURUHAN SERAGAM (SELALU DI BAWAH SEMUA LAYER) */}
+                    <div
+                      onClick={() => {
+                        setActiveTool('palette')
+                        setActiveColorPickerGroupKey('__base__')
+                      }}
+                      className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 group ${
+                        activeColorPickerGroupKey === '__base__'
+                          ? 'bg-orange-50/90 border-[#ff5e00] shadow-2xs'
+                          : 'bg-slate-50/90 border-slate-200 hover:border-slate-300 hover:bg-slate-100/80'
+                      } ${isBaseColorHidden ? 'opacity-40' : ''}`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        {/* Tombol Mata-mata (Visibility Warna Dasar) */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            pushHistorySnapshot()
+                            setIsBaseColorHidden((prev) => !prev)
+                          }}
+                          title={
+                            isBaseColorHidden
+                              ? 'Tampilkan warna keseluruhan seragam'
+                              : 'Sembunyikan warna keseluruhan seragam'
+                          }
+                          className="p-1 hover:bg-slate-200/80 rounded-lg text-slate-400 hover:text-slate-800 transition-colors cursor-pointer shrink-0"
+                        >
+                          {isBaseColorHidden ? (
+                            <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                          ) : (
+                            <Eye className="w-3.5 h-3.5 text-[#ff5e00]" />
+                          )}
+                        </button>
+
+                        {/* Bulatan Warna Dasar */}
+                        <div
+                          style={{ backgroundColor: baseGarmentColor }}
+                          className="w-5 h-5 rounded-full border-2 border-white ring-1 ring-slate-300 shrink-0 shadow-2xs"
+                          title={`Warna Dasar: ${baseGarmentColor}`}
+                        />
+
+                        {/* Keterangan Layer */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-black text-xs text-slate-900 truncate tracking-tight">
+                              Warna Keseluruhan Seragam
+                            </span>
+                            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-orange-100 text-[#ff5e00] font-black shrink-0">
+                              Lapisan Bawah
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 truncate flex items-center gap-1 mt-0.5">
+                            {(() => {
+                              const swatch = findClosestFabricSwatch(baseGarmentColor)
+                              return swatch ? (
+                                <span className="font-medium text-slate-700">
+                                  {swatch.code} • {swatch.name}
+                                </span>
+                              ) : (
+                                <span className="font-mono text-slate-400">{baseGarmentColor}</span>
+                              )
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Tombol Pilih Warna */}
+                      <div className="flex items-center shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setActiveTool('palette')
+                            setActiveColorPickerGroupKey('__base__')
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-white group-hover:bg-[#ff5e00] text-slate-700 group-hover:text-white border border-slate-200 group-hover:border-[#ff5e00] text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                          title="Pilih warna kain dasar untuk seluruh seragam"
+                        >
+                          <Palette className="w-3.5 h-3.5 text-[#ff5e00] group-hover:text-white transition-colors" />
+                          <span>Pilih Warna</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -3583,7 +3869,19 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
       {/* POP-UP MODAL: KATALOG WARNA KAIN RESMI (STANDAR PABRIK TEKSTIL) */}
       {activeColorPickerGroupKey && (() => {
-        const activeGroup = unifiedPartGroups.find((g) => g.key === activeColorPickerGroupKey)
+        const isBaseColor = activeColorPickerGroupKey === '__base__'
+        const activeGroup = isBaseColor
+          ? {
+              key: '__base__',
+              name: 'Warna Keseluruhan Seragam',
+              currentColor: baseGarmentColor,
+              defaultColor: activeMockup?.defaultBaseColor || '#ffffff',
+              primaryPartId: '__base__',
+              parts: [],
+              sides: ['front', 'back', 'left', 'right'] as ViewSide[],
+            }
+          : unifiedPartGroups.find((g) => g.key === activeColorPickerGroupKey)
+
         if (!activeGroup) return null
 
         const currentSwatch = findClosestFabricSwatch(activeGroup.currentColor)
@@ -3620,9 +3918,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       <span className="text-[#ff5e00] bg-orange-50 px-2 py-0.5 rounded-lg border border-orange-200 text-xs font-black">
                         {activeGroup.name}
                       </span>
+                      {isBaseColor && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-[#ff5e00] font-black">
+                          Lapisan Dasar Bawah
+                        </span>
+                      )}
                     </h3>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      Standar resmi pabrik tekstil (Nagata Drill, American Drill, Tropical & Combed). Warna otomatis tersinkron di 4 sisi.
+                      {isBaseColor
+                        ? 'Warna keseluruhan seragam (posisi selalu di bawah layer-layer sehingga tidak menimpa pola atau layer aktif seperti kerah).'
+                        : 'Standar resmi pabrik tekstil (Nagata Drill, American Drill, Tropical & Combed). Warna otomatis tersinkron di 4 sisi.'}
                     </p>
                   </div>
                 </div>
@@ -3666,9 +3971,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={handleResetPartColors}
+                    onClick={() => {
+                      if (isBaseColor) {
+                        pushHistorySnapshot()
+                        setBaseGarmentColor(activeMockup?.defaultBaseColor || '#ffffff')
+                      } else {
+                        handleResetPartColors()
+                      }
+                    }}
                     className="text-[10px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors shadow-2xs"
-                    title="Kembalikan semua bagian seragam ke warna bawaan awal"
+                    title="Kembalikan ke warna bawaan awal"
                   >
                     <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
                     <span>Reset Bawaan</span>
@@ -3746,7 +4058,14 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                         <button
                           key={swatch.id}
                           type="button"
-                          onClick={() => handlePartColorChange(activeGroup.primaryPartId, swatch.hex)}
+                          onClick={() => {
+                            pushHistorySnapshot()
+                            if (isBaseColor) {
+                              setBaseGarmentColor(swatch.hex)
+                            } else {
+                              handlePartColorChange(activeGroup.primaryPartId, swatch.hex)
+                            }
+                          }}
                           className={`p-2 rounded-2xl border text-left transition-all cursor-pointer flex flex-col gap-2 relative group hover:scale-[1.02] ${
                             isSelected
                               ? 'bg-orange-50/90 border-[#ff5e00] ring-2 ring-orange-300 shadow-sm'

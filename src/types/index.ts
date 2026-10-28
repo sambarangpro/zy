@@ -82,6 +82,7 @@ export interface MockupTemplate {
   leftImg?: string
   rightImg?: string
   enableClippingMask?: boolean // metode clipping mask otomatis
+  defaultBaseColor?: string // Warna dasar keseluruhan seragam (di bawah semua layer)
   colorParts?: ColorablePart[] // Area / bagian baju yang bisa diganti warnanya secara instan
   discount12?: number // default: 5000
   discount50?: number // default: 10000
