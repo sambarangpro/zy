@@ -2987,6 +2987,42 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                               >
                                 + Depan A3
                               </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAddPrintZone({
+                                    name: 'Bahu / Lengan Kanan (Menyamping)',
+                                    x: 18,
+                                    y: 35,
+                                    width: 14,
+                                    height: 20,
+                                    price: 15000,
+                                    maxSizeCm: '8×8 cm',
+                                    description: 'Sinkron otomatis ke Tampak Kanan & Belakang',
+                                  })
+                                }
+                                className="px-2 py-1 rounded bg-white hover:bg-orange-50 text-slate-700 hover:text-[#ff5e00] border border-slate-200 text-[10px] font-semibold cursor-pointer shadow-2xs"
+                              >
+                                + Lengan Kanan (3 Sisi)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAddPrintZone({
+                                    name: 'Bahu / Lengan Kiri (Menyamping)',
+                                    x: 82,
+                                    y: 35,
+                                    width: 14,
+                                    height: 20,
+                                    price: 15000,
+                                    maxSizeCm: '8×8 cm',
+                                    description: 'Sinkron otomatis ke Tampak Kiri & Belakang',
+                                  })
+                                }
+                                className="px-2 py-1 rounded bg-white hover:bg-orange-50 text-slate-700 hover:text-[#ff5e00] border border-slate-200 text-[10px] font-semibold cursor-pointer shadow-2xs"
+                              >
+                                + Lengan Kiri (3 Sisi)
+                              </button>
                             </>
                           ) : selectedSide === 'back' ? (
                             <>
@@ -3023,6 +3059,42 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                 className="px-2 py-1 rounded bg-white hover:bg-orange-50 text-slate-700 hover:text-[#ff5e00] border border-slate-200 text-[10px] font-semibold cursor-pointer shadow-2xs"
                               >
                                 + Tengkuk
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAddPrintZone({
+                                    name: 'Bahu / Lengan Kiri (Belakang)',
+                                    x: 18,
+                                    y: 35,
+                                    width: 14,
+                                    height: 20,
+                                    price: 15000,
+                                    maxSizeCm: '8×8 cm',
+                                    description: 'Sinkron otomatis ke Tampak Kiri & Depan',
+                                  })
+                                }
+                                className="px-2 py-1 rounded bg-white hover:bg-orange-50 text-slate-700 hover:text-[#ff5e00] border border-slate-200 text-[10px] font-semibold cursor-pointer shadow-2xs"
+                              >
+                                + Lengan Kiri (3 Sisi)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAddPrintZone({
+                                    name: 'Bahu / Lengan Kanan (Belakang)',
+                                    x: 82,
+                                    y: 35,
+                                    width: 14,
+                                    height: 20,
+                                    price: 15000,
+                                    maxSizeCm: '8×8 cm',
+                                    description: 'Sinkron otomatis ke Tampak Kanan & Depan',
+                                  })
+                                }
+                                className="px-2 py-1 rounded bg-white hover:bg-orange-50 text-slate-700 hover:text-[#ff5e00] border border-slate-200 text-[10px] font-semibold cursor-pointer shadow-2xs"
+                              >
+                                + Lengan Kanan (3 Sisi)
                               </button>
                             </>
                           ) : (

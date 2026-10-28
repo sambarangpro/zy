@@ -369,6 +369,85 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     return zones.filter((z) => z.side === currentSide)
   }, [activeMockup?.printZones, currentSide])
 
+  // Proyeksi Otomatis Lengan Kiri & Kanan Lintas Sudut Pandang (Depan, Samping, Belakang)
+  // Satu kali upload di sisi mana saja langsung otomatis tampil di tampak depan secara menyamping 3D realistis!
+  const sleeveProjectedGraphics = useMemo(() => {
+    if (currentSide !== 'front' && currentSide !== 'back') {
+      return []
+    }
+
+    const projected: Array<{
+      graphic: CanvasGraphic
+      sourceSide: 'left' | 'right'
+      isWearerLeft: boolean
+      isViewerRight: boolean
+      x: number
+      y: number
+      scale: number
+      angleY: number
+      angleZ: number
+      skewY: number
+    }> = []
+
+    graphics.forEach((g) => {
+      if (hiddenGraphicIds.includes(g.id)) return
+
+      // Jika ada logo di Lengan Kiri
+      if (g.side === 'left') {
+        // Di Tampak Depan: lengan kiri pemakai terlihat di sebelah KANAN layar
+        // Di Tampak Belakang: lengan kiri pemakai terlihat di sebelah KIRI layar
+        const isViewerRight = currentSide === 'front'
+        const matchingSleeveZone = currentPrintZones.find((z) =>
+          z.name.toLowerCase().includes('lengan kiri') || z.name.toLowerCase().includes('bahu kiri')
+        )
+        const anchorX = matchingSleeveZone ? matchingSleeveZone.x : (isViewerRight ? 82.5 : 17.5)
+        const baseY = matchingSleeveZone ? matchingSleeveZone.y : 35
+        const anchorY = Math.max(20, Math.min(56, baseY + ((g.y - 35) / 45) * 20))
+
+        projected.push({
+          graphic: g,
+          sourceSide: 'left',
+          isWearerLeft: true,
+          isViewerRight,
+          x: anchorX,
+          y: anchorY,
+          scale: g.scale * 0.72,
+          angleY: isViewerRight ? -52 : 52,
+          angleZ: isViewerRight ? 14 : -14,
+          skewY: isViewerRight ? 9 : -9,
+        })
+      }
+
+      // Jika ada logo di Lengan Kanan
+      if (g.side === 'right') {
+        // Di Tampak Depan: lengan kanan pemakai terlihat di sebelah KIRI layar
+        // Di Tampak Belakang: lengan kanan pemakai terlihat di sebelah KANAN layar
+        const isViewerRight = currentSide === 'back'
+        const matchingSleeveZone = currentPrintZones.find((z) =>
+          z.name.toLowerCase().includes('lengan kanan') || z.name.toLowerCase().includes('bahu kanan')
+        )
+        const anchorX = matchingSleeveZone ? matchingSleeveZone.x : (isViewerRight ? 82.5 : 17.5)
+        const baseY = matchingSleeveZone ? matchingSleeveZone.y : 35
+        const anchorY = Math.max(20, Math.min(56, baseY + ((g.y - 35) / 45) * 20))
+
+        projected.push({
+          graphic: g,
+          sourceSide: 'right',
+          isWearerLeft: false,
+          isViewerRight,
+          x: anchorX,
+          y: anchorY,
+          scale: g.scale * 0.72,
+          angleY: isViewerRight ? -52 : 52,
+          angleZ: isViewerRight ? 14 : -14,
+          skewY: isViewerRight ? 9 : -9,
+        })
+      }
+    })
+
+    return projected
+  }, [graphics, currentSide, hiddenGraphicIds, currentPrintZones])
+
   // Sync clipping mask when activeMockup changes
   useEffect(() => {
     if (activeMockup?.enableClippingMask !== undefined) {
@@ -1032,10 +1111,23 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     let scale = 0.8
     let price = 15000
     let sizeCat: PrintSizeCategory = 'Logo Kecil (≤10×10cm)'
+    let targetSide: ViewSide = chosenZone ? chosenZone.side : currentSide
 
     if (chosenZone) {
-      graphicX = chosenZone.x
-      graphicY = chosenZone.y
+      const zoneNameLower = chosenZone.name.toLowerCase()
+      // Jika upload ditujukan ke Bahu/Lengan Kiri (meskipun diunggah dari Tampak Depan atau Belakang)
+      if (zoneNameLower.includes('lengan kiri') || zoneNameLower.includes('bahu kiri')) {
+        targetSide = 'left'
+        graphicX = 50
+        graphicY = 35
+      } else if (zoneNameLower.includes('lengan kanan') || zoneNameLower.includes('bahu kanan')) {
+        targetSide = 'right'
+        graphicX = 50
+        graphicY = 35
+      } else {
+        graphicX = chosenZone.x
+        graphicY = chosenZone.y
+      }
       // Proportionally scale to fit neatly inside the zone
       scale = Math.min(1.2, Math.max(0.4, Number(((chosenZone.width / 24) * 0.75).toFixed(2))))
       price = chosenZone.price
@@ -1049,7 +1141,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     const newGraphic: CanvasGraphic = {
       id: 'g_' + Date.now(),
       type: 'image',
-      side: chosenZone ? chosenZone.side : currentSide,
+      side: targetSide,
       content: dataUrl,
       x: graphicX,
       y: graphicY,
@@ -1327,15 +1419,51 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
     pushHistorySnapshot()
 
+    // Ambil titik pusat piksel sebenarnya dari elemen grafik di layar
+    const el = document.getElementById(`graphic-element-${gId}`)
+    let centerX = e.clientX
+    let centerY = e.clientY
+    if (el) {
+      const elRect = el.getBoundingClientRect()
+      centerX = elRect.left + elRect.width / 2
+      centerY = elRect.top + elRect.height / 2
+    }
+
+    // Hitung sudut awal mouse terhadap titik pusat objek
+    const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI)
+
     setDragState({
       mode: 'rotate',
-      startX: e.clientX,
-      startY: e.clientY,
-      initialGraphicX: g.x,
-      initialGraphicY: g.y,
-      initialScale: g.scale,
-      initialRotation: g.rotation,
+      startX: centerX,
+      startY: centerY,
+      initialGraphicX: startAngle,
+      initialGraphicY: 0,
+      initialScale: 0,
+      initialRotation: g.rotation || 0,
     })
+  }
+
+  // Putar grafik secara instan berdasarkan derajat tertentu (+45, -45, dll.)
+  const handleRotateGraphicBy = (gId: string, deltaDeg: number) => {
+    pushHistorySnapshot()
+    onGraphicsChange(
+      graphics.map((g) => {
+        if (g.id === gId) {
+          let newRot = Math.round((g.rotation || 0) + deltaDeg) % 360
+          if (newRot < 0) newRot += 360
+          return { ...g, rotation: newRot }
+        }
+        return g
+      })
+    )
+  }
+
+  // Reset rotasi ke 0 derajat (tegak lurus)
+  const handleResetRotation = (gId: string) => {
+    pushHistorySnapshot()
+    onGraphicsChange(
+      graphics.map((g) => (g.id === gId ? { ...g, rotation: 0 } : g))
+    )
   }
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -1386,20 +1514,17 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         })
       )
     } else if (dragState.mode === 'rotate') {
-      const g = graphics.find((item) => item.id === selectedGraphicId)
-      if (!g) return
-
-      const graphicPixelCenterX = rect.left + (g.x / 100) * rect.width
-      const graphicPixelCenterY = rect.top + (g.y / 100) * rect.height
-
-      const rad = Math.atan2(e.clientY - graphicPixelCenterY, e.clientX - graphicPixelCenterX)
-      let deg = Math.round((rad * 180) / Math.PI) + 90
-      if (deg < 0) deg += 360
+      const centerX = dragState.startX
+      const centerY = dragState.startY
+      const currentAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI)
+      const angleDelta = currentAngle - dragState.initialGraphicX
+      let newRotation = Math.round((dragState.initialRotation + angleDelta) % 360)
+      if (newRotation < 0) newRotation += 360
 
       onGraphicsChange(
         graphics.map((item) => {
           if (item.id === selectedGraphicId) {
-            return { ...item, rotation: deg % 360 }
+            return { ...item, rotation: newRotation }
           }
           return item
         })
@@ -1440,7 +1565,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
     const drawGraphicsOnCanvas = () => {
       let loadedCount = 0
-      const totalItems = currentSideGraphics.length
+      const visibleCurrentGraphics = currentSideGraphics
+      const visibleProjected = sleeveProjectedGraphics
+      const totalItems = visibleCurrentGraphics.length + visibleProjected.length
 
       const finishExport = () => {
         const link = document.createElement('a')
@@ -1454,7 +1581,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         return
       }
 
-      currentSideGraphics.forEach((g) => {
+      const checkFinished = () => {
+        loadedCount++
+        if (loadedCount >= totalItems) {
+          finishExport()
+        }
+      }
+
+      // 1. Gambar Desain Tampak Sisi Aktif (Flat Direct View)
+      visibleCurrentGraphics.forEach((g) => {
         const posX = (g.x / 100) * canvas.width
         const posY = (g.y / 100) * canvas.height
         const scaleX = (g.scaleX || 1) * g.scale
@@ -1475,8 +1610,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           ctx.strokeText(g.content, 0, 0)
           ctx.fillText(g.content, 0, 0)
           ctx.restore()
-          loadedCount++
-          if (loadedCount === totalItems) finishExport()
+          checkFinished()
         } else {
           const img = new Image()
           img.crossOrigin = 'anonymous'
@@ -1485,15 +1619,77 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             const h = (img.height / img.width) * w
             ctx.drawImage(img, -w / 2, -h / 2, w, h)
             ctx.restore()
-            loadedCount++
-            if (loadedCount === totalItems) finishExport()
+            checkFinished()
           }
           img.onerror = () => {
             ctx.restore()
-            loadedCount++
-            if (loadedCount === totalItems) finishExport()
+            checkFinished()
           }
           img.src = g.content
+        }
+      })
+
+      // 2. Gambar Desain Proyeksi 3D Lengan (Menyamping Realistis di Tampak Depan / Belakang)
+      visibleProjected.forEach((proj) => {
+        const posX = (proj.x / 100) * canvas.width
+        const posY = (proj.y / 100) * canvas.height
+        const rotRad = ((proj.angleZ + (proj.graphic.rotation || 0)) * Math.PI) / 180
+        const skewRad = (proj.skewY * Math.PI) / 180
+        const scaleX = proj.scale * Math.cos((proj.angleY * Math.PI) / 180)
+        const scaleY = proj.scale
+
+        ctx.save()
+        ctx.translate(posX, posY)
+        ctx.rotate(rotRad)
+        ctx.transform(1, Math.tan(skewRad), 0, 1, 0, 0)
+        ctx.scale(scaleX, scaleY)
+
+        if (proj.graphic.type === 'text') {
+          ctx.font = `bold ${(proj.graphic.fontSize || 22) * 2.6}px ${proj.graphic.fontFamily || 'Montserrat'}`
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillStyle = proj.graphic.textColor || '#ffffff'
+          ctx.strokeStyle = '#000000'
+          ctx.lineWidth = 3
+          ctx.strokeText(proj.graphic.content, 0, 0)
+          ctx.fillText(proj.graphic.content, 0, 0)
+          ctx.restore()
+          checkFinished()
+        } else {
+          const img = new Image()
+          img.crossOrigin = 'anonymous'
+          img.onload = () => {
+            const w = 240
+            const h = (img.height / img.width) * w
+            ctx.drawImage(img, -w / 2, -h / 2, w, h)
+
+            // Efek silinder kain seragam (ambient cylindrical gradient)
+            const grad = ctx.createLinearGradient(-w / 2, 0, w / 2, 0)
+            if (proj.isViewerRight) {
+              grad.addColorStop(0, 'rgba(0,0,0,0.35)')
+              grad.addColorStop(0.3, 'rgba(0,0,0,0.05)')
+              grad.addColorStop(0.65, 'rgba(255,255,255,0.2)')
+              grad.addColorStop(1, 'rgba(0,0,0,0.3)')
+            } else {
+              grad.addColorStop(0, 'rgba(0,0,0,0.3)')
+              grad.addColorStop(0.35, 'rgba(255,255,255,0.2)')
+              grad.addColorStop(0.7, 'rgba(0,0,0,0.05)')
+              grad.addColorStop(1, 'rgba(0,0,0,0.35)')
+            }
+            ctx.save()
+            ctx.globalCompositeOperation = 'multiply'
+            ctx.fillStyle = grad
+            ctx.fillRect(-w / 2, -h / 2, w, h)
+            ctx.restore()
+
+            ctx.restore()
+            checkFinished()
+          }
+          img.onerror = () => {
+            ctx.restore()
+            checkFinished()
+          }
+          img.src = proj.graphic.content
         }
       })
     }
@@ -3136,79 +3332,81 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 </button>
               </div>
             ) : (
-              /* UNIFIED CLIPPING MASK CONTAINER: Base Image, Multiply Color Parts, and Multiply Brush Canvas in same compositing stack! */
-              <div
-                style={clippingMaskStyle}
-                className="w-full h-full relative flex items-center justify-center overflow-hidden"
-              >
-                {/* 1. The Base Shirt Mockup Photo */}
-                <img
-                  src={currentMockupImage}
-                  alt={`${activeMockup?.name || 'Mockup'} - ${currentSide}`}
-                  style={filterStyle}
-                  className="w-full h-full object-contain select-none pointer-events-none"
-                />
-
-                {/* 1.5 WARNA KESELURUHAN SERAGAM (BASE GARMENT COLOR - POSISI SELALU DI BAWAH LAYER-LAYER) */}
-                {baseGarmentColor && !isBaseColorHidden && (
-                  <canvas
-                    ref={baseCanvasRef}
-                    className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none transition-opacity duration-150 z-2"
-                    style={{ mixBlendMode: 'multiply' }}
+              <>
+                {/* 1-3. SHIRT BASE & MULTIPLY COLOR PARTS (Masked strictly to garment silhouette) */}
+                <div
+                  style={clippingMaskStyle}
+                  className="w-full h-full absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none"
+                >
+                  {/* 1. The Base Shirt Mockup Photo */}
+                  <img
+                    src={currentMockupImage}
+                    alt={`${activeMockup?.name || 'Mockup'} - ${currentSide}`}
+                    style={filterStyle}
+                    className="w-full h-full object-contain select-none pointer-events-none"
                   />
-                )}
 
-                {/* 2. AUTOMATIC COLORABLE PARTS (Kerah, Saku, Kancing, Garis Kancing - Multiply Blending absorbs directly into fabric!) */}
-                {currentSideColorParts.map((part, pIdx) => {
-                  const allParts = activeMockup?.colorParts || []
-                  const groupKey = getPartMatchKey(part, allParts)
-                  if (hiddenColorPartKeys.includes(groupKey) || hiddenColorPartKeys.includes(part.id)) {
-                    return null
-                  }
-                  const color = getPartColor(part)
-                  if (!part.maskImg || !color) return null
-                  return (
-                    <div
-                      key={part.id}
-                      style={{
-                        zIndex: 5 + (currentSideColorParts.length - pIdx),
-                        WebkitMaskImage: `url("${part.maskImg}")`,
-                        maskImage: `url("${part.maskImg}")`,
-                        WebkitMaskSize: 'contain',
-                        maskSize: 'contain',
-                        WebkitMaskRepeat: 'no-repeat',
-                        maskRepeat: 'no-repeat',
-                        WebkitMaskPosition: 'center',
-                        maskPosition: 'center',
-                        backgroundColor: color,
-                        mixBlendMode: 'multiply',
-                      }}
-                      className="absolute inset-0 w-full h-full pointer-events-none select-none transition-colors duration-150"
+                  {/* 1.5 WARNA KESELURUHAN SERAGAM (BASE GARMENT COLOR - POSISI SELALU DI BAWAH LAYER-LAYER) */}
+                  {baseGarmentColor && !isBaseColorHidden && (
+                    <canvas
+                      ref={baseCanvasRef}
+                      className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none transition-opacity duration-150 z-2"
+                      style={{ mixBlendMode: 'multiply' }}
                     />
-                  )
-                })}
+                  )}
 
-                {/* 3. INTERACTIVE PAINT CANVAS (Kuas Pewarna Saku/Kancing/Kerah - Multiply Blending preserves fabric folds & texture!) */}
-                <canvas
-                  ref={paintCanvasRef}
-                  width={1200}
-                  height={1400}
-                  onMouseDown={handlePaintMouseDown}
-                  onMouseMove={handlePaintMouseMove}
-                  onMouseUp={handlePaintMouseUp}
-                  onMouseLeave={handlePaintMouseUp}
-                  style={{
-                    mixBlendMode: brushBlendMode === 'multiply' ? 'multiply' : 'normal',
-                    opacity: brushOpacity / 100,
-                  }}
-                  className={`absolute inset-0 w-full h-full object-contain ${
-                    activeTool === 'brush' || activeTool === 'eraser'
-                      ? 'pointer-events-auto cursor-crosshair z-25'
-                      : 'pointer-events-none z-15'
-                  }`}
-                />
+                  {/* 2. AUTOMATIC COLORABLE PARTS (Kerah, Saku, Kancing, Garis Kancing - Multiply Blending absorbs directly into fabric!) */}
+                  {currentSideColorParts.map((part, pIdx) => {
+                    const allParts = activeMockup?.colorParts || []
+                    const groupKey = getPartMatchKey(part, allParts)
+                    if (hiddenColorPartKeys.includes(groupKey) || hiddenColorPartKeys.includes(part.id)) {
+                      return null
+                    }
+                    const color = getPartColor(part)
+                    if (!part.maskImg || !color) return null
+                    return (
+                      <div
+                        key={part.id}
+                        style={{
+                          zIndex: 5 + (currentSideColorParts.length - pIdx),
+                          WebkitMaskImage: `url("${part.maskImg}")`,
+                          maskImage: `url("${part.maskImg}")`,
+                          WebkitMaskSize: 'contain',
+                          maskSize: 'contain',
+                          WebkitMaskRepeat: 'no-repeat',
+                          maskRepeat: 'no-repeat',
+                          WebkitMaskPosition: 'center',
+                          maskPosition: 'center',
+                          backgroundColor: color,
+                          mixBlendMode: 'multiply',
+                        }}
+                        className="absolute inset-0 w-full h-full pointer-events-none select-none transition-colors duration-150"
+                      />
+                    )
+                  })}
 
-                {/* 4. GRAPHIC & TEXT ELEMENTS LAYER (Logos, Badges, Text) */}
+                  {/* 3. INTERACTIVE PAINT CANVAS (Kuas Pewarna Saku/Kancing/Kerah - Multiply Blending preserves fabric folds & texture!) */}
+                  <canvas
+                    ref={paintCanvasRef}
+                    width={1200}
+                    height={1400}
+                    onMouseDown={handlePaintMouseDown}
+                    onMouseMove={handlePaintMouseMove}
+                    onMouseUp={handlePaintMouseUp}
+                    onMouseLeave={handlePaintMouseUp}
+                    style={{
+                      mixBlendMode: brushBlendMode === 'multiply' ? 'multiply' : 'normal',
+                      opacity: brushOpacity / 100,
+                    }}
+                    className={`absolute inset-0 w-full h-full object-contain ${
+                      activeTool === 'brush' || activeTool === 'eraser'
+                        ? 'pointer-events-auto cursor-crosshair z-25'
+                        : 'pointer-events-none z-15'
+                    }`}
+                  />
+                </div>
+
+                {/* 4. GRAPHIC & TEXT ELEMENTS LAYER (UNMASKED - FRAME & CONTROLS NEVER CLIPPED BY SHIRT MASK!) */}
                 <div
                   className={`absolute inset-0 w-full h-full ${
                     activeTool === 'select' ? 'pointer-events-auto' : 'pointer-events-none'
@@ -3225,6 +3423,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       return (
                         <div
                           key={g.id}
+                          id={`graphic-element-${g.id}`}
                           style={{
                             left: `${g.x}%`,
                             top: `${g.y}%`,
@@ -3238,12 +3437,46 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             g.isLocked ? 'cursor-default' : 'cursor-move'
                           }`}
                         >
-                        {/* Floating Action Quickbar on Top of Selected Object */}
+                        {/* Floating Action Quickbar on Top of Selected Object (Always Stays Horizontal) */}
                         {isSelected && (
                           <div
                             onMouseDown={(e) => e.stopPropagation()}
-                            className="absolute -top-11 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-slate-900 text-white px-2 py-1 rounded-xl text-[10px] shadow-xl whitespace-nowrap z-50 border border-slate-800"
+                            style={{
+                              transform: `translate(-50%, 0) rotate(-${g.rotation || 0}deg)`,
+                              transformOrigin: 'center bottom',
+                            }}
+                            className="absolute -top-15 left-1/2 flex items-center gap-1 bg-slate-900 text-white px-2.5 py-1.5 rounded-xl text-[10px] shadow-2xl whitespace-nowrap z-50 border border-slate-800"
                           >
+                            {/* Rotasi Kiri 45° */}
+                            <button
+                              type="button"
+                              onClick={() => handleRotateGraphicBy(g.id, -45)}
+                              title="Putar Kiri 45°"
+                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                            </button>
+                            {/* Rotasi Kanan 45° */}
+                            <button
+                              type="button"
+                              onClick={() => handleRotateGraphicBy(g.id, 45)}
+                              title="Putar Kanan 45°"
+                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                            >
+                              <RotateCw className="w-3.5 h-3.5" />
+                            </button>
+                            {/* Sudut Rotasi & Tombol Reset 0° */}
+                            {g.rotation !== 0 && (
+                              <button
+                                type="button"
+                                onClick={() => handleResetRotation(g.id)}
+                                title="Klik untuk reset rotasi kembali tegak (0°)"
+                                className="px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 font-mono text-[9px] font-bold cursor-pointer transition-colors"
+                              >
+                                {g.rotation}° (Reset)
+                              </button>
+                            )}
+                            <div className="w-px h-3 bg-slate-700 mx-0.5" />
                             <button
                               onClick={() => handleDuplicateGraphic(g.id)}
                               title="Duplikat (Ctrl+D)"
@@ -3447,12 +3680,12 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                               {/* Top Rotation Handle */}
                               <div
                                 onMouseDown={(e) => handleStartRotate(e, g.id)}
-                                className="absolute -top-7 left-1/2 -translate-x-1/2 w-4 h-4 bg-[#ff5e00] border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing flex items-center justify-center hover:scale-125 transition-transform"
-                                title="Putar Objek Bebas"
+                                className="absolute -top-6 left-1/2 -translate-x-1/2 w-5 h-5 bg-[#ff5e00] border-2 border-white rounded-full shadow-md cursor-grab active:cursor-grabbing flex items-center justify-center hover:scale-125 transition-transform z-30"
+                                title="Klik & putar bebas (atau gunakan tombol rotasi di toolbar)"
                               >
-                                <div className="w-1 h-1 bg-white rounded-full" />
+                                <RotateCw className="w-2.5 h-2.5 text-white pointer-events-none" />
                               </div>
-                              <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-0.5 h-3 bg-[#ff5e00]" />
+                              <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-0.5 h-3 bg-[#ff5e00] pointer-events-none" />
 
                               {/* 4 Corner Resize Handles */}
                               <div
@@ -3482,6 +3715,171 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       </div>
                     )
                   })}
+
+                  {/* 4.5. LIVE 3D PERSPECTIVE SLEEVE PROJECTIONS (Tampak Menyamping Realistis) */}
+                  {sleeveProjectedGraphics.map((proj) => {
+                    const isSelected = proj.graphic.id === selectedGraphicId
+
+                    return (
+                      <div
+                        key={`proj-${proj.graphic.id}`}
+                        style={{
+                          left: `${proj.x}%`,
+                          top: `${proj.y}%`,
+                          transform: `translate(-50%, -50%) perspective(450px) rotateY(${proj.angleY}deg) rotateZ(${proj.angleZ + (proj.graphic.rotation || 0)}deg) skewY(${proj.skewY}deg) scale(${proj.scale})`,
+                          transformOrigin: 'center center',
+                          zIndex: isSelected ? 40 : 25,
+                          opacity: (proj.graphic.opacity !== undefined ? proj.graphic.opacity : 100) / 100,
+                          mixBlendMode: proj.graphic.blendMode || 'normal',
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedGraphicId(proj.graphic.id)
+                        }}
+                        className={`absolute select-none pointer-events-auto cursor-pointer group/proj transition-all duration-150 ${
+                          isSelected ? 'ring-2 ring-[#ff5e00] rounded-lg p-0.5 shadow-md' : 'hover:ring-1 hover:ring-orange-400/60 rounded'
+                        }`}
+                        title={`Proyeksi Lengan ${proj.isWearerLeft ? 'Kiri' : 'Kanan'} (Tampak Menyamping) - Klik untuk pilih / edit`}
+                      >
+                        {/* Floating Action Quickbar when Selected in Projected View */}
+                        {isSelected && (
+                          <div
+                            onMouseDown={(e) => e.stopPropagation()}
+                            style={{
+                              transform: `translate(-50%, 0) rotate(-${proj.angleZ + (proj.graphic.rotation || 0)}deg)`,
+                              transformOrigin: 'center bottom',
+                            }}
+                            className="absolute -top-14 left-1/2 flex items-center gap-1 bg-slate-900 text-white px-2.5 py-1.5 rounded-xl text-[10px] shadow-2xl whitespace-nowrap z-50 border border-slate-800"
+                          >
+                            <div className="flex items-center gap-1 text-[9px] font-bold text-amber-300 mr-1">
+                              <span>🔗 Lengan {proj.isWearerLeft ? 'Kiri' : 'Kanan'}</span>
+                            </div>
+                            {/* Technique Switch: Bordir vs Sablon */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextTech = proj.graphic.technique === 'bordir' ? 'sablon' : 'bordir'
+                                updateGraphicsWithHistory(
+                                  graphics.map((item) =>
+                                    item.id === proj.graphic.id ? { ...item, technique: nextTech } : item
+                                  )
+                                )
+                              }}
+                              title={`Teknik saat ini: ${proj.graphic.technique === 'bordir' ? '🪡 Bordir Komputer' : '🎨 Sablon DTF'}. Klik untuk ubah mode.`}
+                              className={`px-1.5 py-0.5 rounded font-bold text-[9px] flex items-center gap-1 cursor-pointer transition-colors ${
+                                proj.graphic.technique === 'bordir'
+                                  ? 'bg-amber-500/40 text-amber-300 hover:bg-amber-500/60'
+                                  : 'bg-indigo-500/40 text-indigo-300 hover:bg-indigo-500/60'
+                              }`}
+                            >
+                              <span>{proj.graphic.technique === 'bordir' ? '🪡 Bordir' : '🎨 Sablon'}</span>
+                            </button>
+                            <div className="w-px h-3 bg-slate-700 mx-0.5" />
+                            {/* Jump to Sleeve View to edit directly */}
+                            <button
+                              type="button"
+                              onClick={() => setCurrentSide(proj.graphic.side)}
+                              title="Buka Tampak Samping untuk edit langsung"
+                              className="px-2 py-0.5 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded font-bold text-[9px] flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>Buka Tampak Samping →</span>
+                            </button>
+                            <div className="w-px h-3 bg-slate-700 mx-0.5" />
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteGraphic(proj.graphic.id)}
+                              title="Hapus Logo"
+                              className="p-1 bg-red-600/80 hover:bg-red-600 rounded text-white ml-0.5 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Visual Content: Image with Bordir / Sablon */}
+                        <div className="relative inline-block select-none overflow-hidden rounded-xs shadow-sm">
+                          <img
+                            src={proj.graphic.content}
+                            alt="projected-sleeve-logo"
+                            className="max-w-[140px] max-h-[140px] object-contain select-none pointer-events-none block"
+                            style={{
+                              filter:
+                                proj.graphic.technique === 'bordir'
+                                  ? 'drop-shadow(0 1px 1px rgba(0,0,0,0.7)) drop-shadow(1px 3px 5px rgba(0,0,0,0.5)) drop-shadow(-1px -1px 0px rgba(255,255,255,0.85)) contrast(1.1) saturate(1.18)'
+                                  : 'drop-shadow(0 1.5px 2px rgba(0,0,0,0.35))',
+                            }}
+                          />
+
+                          {/* Realistic 3D Computer Embroidery Overlay (Bordir) */}
+                          {proj.graphic.technique === 'bordir' && (
+                            <>
+                              <div
+                                className="absolute inset-0 pointer-events-none"
+                                style={{
+                                  WebkitMaskImage: `url("${proj.graphic.content}")`,
+                                  maskImage: `url("${proj.graphic.content}")`,
+                                  WebkitMaskSize: 'contain',
+                                  maskSize: 'contain',
+                                  WebkitMaskRepeat: 'no-repeat',
+                                  maskRepeat: 'no-repeat',
+                                  WebkitMaskPosition: 'center',
+                                  maskPosition: 'center',
+                                  backgroundImage:
+                                    'repeating-linear-gradient(55deg, rgba(255,255,255,0.42) 0px, rgba(255,255,255,0.42) 1.2px, transparent 1.2px, transparent 2.4px, rgba(0,0,0,0.38) 2.4px, rgba(0,0,0,0.38) 3.6px, transparent 3.6px, transparent 4.8px)',
+                                  mixBlendMode: 'overlay',
+                                }}
+                              />
+                              <div
+                                className="absolute inset-0 pointer-events-none opacity-55"
+                                style={{
+                                  WebkitMaskImage: `url("${proj.graphic.content}")`,
+                                  maskImage: `url("${proj.graphic.content}")`,
+                                  WebkitMaskSize: 'contain',
+                                  maskSize: 'contain',
+                                  WebkitMaskRepeat: 'no-repeat',
+                                  maskRepeat: 'no-repeat',
+                                  WebkitMaskPosition: 'center',
+                                  maskPosition: 'center',
+                                  backgroundImage:
+                                    'repeating-linear-gradient(-35deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 1.5px, transparent 1.5px, transparent 6px)',
+                                  mixBlendMode: 'soft-light',
+                                }}
+                              />
+                            </>
+                          )}
+
+                          {/* Realistic 3D Cylindrical Ambient Shading (Efek Lengkungan Silinder Lengan) */}
+                          <div
+                            className="absolute inset-0 pointer-events-none"
+                            style={{
+                              background: proj.isViewerRight
+                                ? 'linear-gradient(to right, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.05) 30%, rgba(255,255,255,0.2) 65%, rgba(0,0,0,0.3) 100%)'
+                                : 'linear-gradient(to left, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.05) 30%, rgba(255,255,255,0.2) 65%, rgba(0,0,0,0.3) 100%)',
+                              mixBlendMode: 'multiply',
+                            }}
+                          />
+                          {/* Ambient Sheen Along Sleeve Ridge */}
+                          <div
+                            className="absolute inset-0 pointer-events-none opacity-30"
+                            style={{
+                              background: proj.isViewerRight
+                                ? 'linear-gradient(to right, transparent 35%, rgba(255,255,255,0.45) 55%, transparent 75%)'
+                                : 'linear-gradient(to left, transparent 35%, rgba(255,255,255,0.45) 55%, transparent 75%)',
+                              mixBlendMode: 'screen',
+                            }}
+                          />
+                        </div>
+
+                        {/* Mini Hover Pill when not selected */}
+                        {!isSelected && (
+                          <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 opacity-0 group-hover/proj:opacity-100 transition-opacity bg-slate-900/90 text-white px-2 py-0.5 rounded-full text-[8.5px] font-bold shadow-lg border border-slate-700 whitespace-nowrap pointer-events-auto flex items-center gap-1 z-30">
+                            <span className="text-[#ff5e00]">🔗 Lengan {proj.isWearerLeft ? 'Kiri' : 'Kanan'}</span>
+                            <span className="text-slate-400">• Menyamping</span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
 
                 {/* 5. GARIS PANDUAN SABLON & TITIK UPLOAD (PRINT SAFE ZONES) - DI DEPAN OBJEK SERAGAM */}
@@ -3494,7 +3892,12 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           Math.abs(g.x - zone.x) <= Math.max(zone.width / 2, 4) &&
                           Math.abs(g.y - zone.y) <= Math.max(zone.height / 2, 4)
                       )
-                      const hasGraphic = graphicsInZone.length > 0
+                      const projectedInZone = sleeveProjectedGraphics.filter(
+                        (p) =>
+                          Math.abs(p.x - zone.x) <= Math.max(zone.width / 2, 4) &&
+                          Math.abs(p.y - zone.y) <= Math.max(zone.height / 2, 4)
+                      )
+                      const hasGraphic = graphicsInZone.length > 0 || projectedInZone.length > 0
 
                       return (
                         <div
@@ -3606,7 +4009,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                     })}
                   </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         </div>
@@ -3890,6 +4293,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                         const isSelected = g.id === selectedGraphicId
                         const calc = getGraphicPriceForZoneOrScale(g, activeMockup?.printZones)
                         const isCurrentSide = g.side === currentSide
+                        const isProjectedOnCurrentView =
+                          (currentSide === 'front' || currentSide === 'back') &&
+                          (g.side === 'left' || g.side === 'right')
                         const isHidden = hiddenGraphicIds.includes(g.id)
 
                         return (
@@ -3902,12 +4308,14 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             onDragEnd={handleGraphicDragEnd}
                             onClick={() => {
                               setActiveTool('select')
-                              setCurrentSide(g.side)
+                              if (!isCurrentSide && !isProjectedOnCurrentView) {
+                                setCurrentSide(g.side)
+                              }
                               setSelectedGraphicId(g.id)
                             }}
                             className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center gap-2 ${
                               isSelected
-                                ? 'bg-orange-50/80 border-[#ff5e00] shadow-xs'
+                                ? 'bg-orange-50/80 border-[#ff5e00] shadow-xs ring-1 ring-[#ff5e00]/20'
                                 : 'bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-slate-100/70'
                             } ${isHidden ? 'opacity-40' : ''}`}
                           >
@@ -3925,16 +4333,27 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
                             {/* Info */}
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <span
-                                  className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded font-mono ${
-                                    isCurrentSide
-                                      ? 'bg-[#ff5e00] text-white'
-                                      : 'bg-slate-200 text-slate-700'
-                                  }`}
-                                >
-                                  {g.side}
-                                </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {isCurrentSide ? (
+                                  <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded font-mono bg-[#ff5e00] text-white">
+                                    {g.side}
+                                  </span>
+                                ) : isProjectedOnCurrentView ? (
+                                  <span
+                                    className="text-[9px] font-bold px-1.5 py-0.2 rounded font-mono bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1"
+                                    title="Desain ini berada di lengan dan diproyeksikan secara 3D menyamping pada sudut pandang saat ini"
+                                  >
+                                    <span>🔗 {g.side === 'left' ? 'L. Kiri' : 'L. Kanan'}</span>
+                                    <span className="bg-amber-600 text-white text-[8px] font-black px-1 rounded-xs">
+                                      3D Samping
+                                    </span>
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded font-mono bg-slate-200 text-slate-700">
+                                    {g.side}
+                                  </span>
+                                )}
+
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -3955,6 +4374,21 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                                 >
                                   {g.technique === 'bordir' ? '🪡 Bordir 3D' : '🎨 Sablon DTF'}
                                 </button>
+
+                                {isProjectedOnCurrentView && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setCurrentSide(g.side)
+                                      setSelectedGraphicId(g.id)
+                                    }}
+                                    className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 hover:bg-[#ff5e00] hover:text-white text-slate-600 transition-colors border border-slate-200 cursor-pointer"
+                                    title="Buka Tampak Samping untuk mengedit posisi & ukuran secara datar"
+                                  >
+                                    Buka Sisi →
+                                  </button>
+                                )}
                               </div>
                               {renamingGraphicId === g.id ? (
                                 <div className="flex items-center gap-1 mt-0.5" onClick={(e) => e.stopPropagation()}>
