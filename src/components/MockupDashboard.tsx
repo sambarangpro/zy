@@ -2992,8 +2992,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                 onClick={() =>
                                   handleAddPrintZone({
                                     name: 'Bahu / Lengan Kanan (Menyamping)',
-                                    x: 18,
-                                    y: 35,
+                                    x: 23,
+                                    y: 34,
                                     width: 14,
                                     height: 20,
                                     price: 15000,
@@ -3010,8 +3010,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                 onClick={() =>
                                   handleAddPrintZone({
                                     name: 'Bahu / Lengan Kiri (Menyamping)',
-                                    x: 82,
-                                    y: 35,
+                                    x: 77,
+                                    y: 34,
                                     width: 14,
                                     height: 20,
                                     price: 15000,
@@ -3065,8 +3065,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                 onClick={() =>
                                   handleAddPrintZone({
                                     name: 'Bahu / Lengan Kiri (Belakang)',
-                                    x: 18,
-                                    y: 35,
+                                    x: 23,
+                                    y: 34,
                                     width: 14,
                                     height: 20,
                                     price: 15000,
@@ -3083,8 +3083,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                 onClick={() =>
                                   handleAddPrintZone({
                                     name: 'Bahu / Lengan Kanan (Belakang)',
-                                    x: 82,
-                                    y: 35,
+                                    x: 77,
+                                    y: 34,
                                     width: 14,
                                     height: 20,
                                     price: 15000,

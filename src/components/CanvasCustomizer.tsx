@@ -21,6 +21,9 @@ import {
   Trash2,
   Download,
   ArrowRight,
+  ArrowLeft,
+  ArrowUp,
+  ArrowDown,
   Layers,
   ZoomIn,
   ZoomOut,
@@ -392,55 +395,89 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     graphics.forEach((g) => {
       if (hiddenGraphicIds.includes(g.id)) return
 
-      // Jika ada logo di Lengan Kiri
+      // 1. Jika ada logo di Lengan Kiri (Wearer's Left Arm)
       if (g.side === 'left') {
-        // Di Tampak Depan: lengan kiri pemakai terlihat di sebelah KANAN layar
-        // Di Tampak Belakang: lengan kiri pemakai terlihat di sebelah KIRI layar
+        // Di Tampak Depan: lengan kiri pemakai terlihat di sebelah KANAN layar (Viewer Right, x > 50)
+        // Di Tampak Belakang: lengan kiri pemakai terlihat di sebelah KIRI layar (Viewer Left, x < 50)
         const isViewerRight = currentSide === 'front'
-        const matchingSleeveZone = currentPrintZones.find((z) =>
-          z.name.toLowerCase().includes('lengan kiri') || z.name.toLowerCase().includes('bahu kiri')
-        )
-        const anchorX = matchingSleeveZone ? matchingSleeveZone.x : (isViewerRight ? 82.5 : 17.5)
-        const baseY = matchingSleeveZone ? matchingSleeveZone.y : 35
-        const anchorY = Math.max(20, Math.min(56, baseY + ((g.y - 35) / 45) * 20))
+        const matchingSleeveZone = currentPrintZones.find((z) => {
+          const n = z.name.toLowerCase()
+          if (isViewerRight) {
+            return (n.includes('lengan kiri') || n.includes('bahu kiri')) || (z.x > 50 && (n.includes('lengan') || n.includes('sleeve') || n.includes('bahu')))
+          } else {
+            return (n.includes('lengan kiri') || n.includes('bahu kiri')) || (z.x < 50 && (n.includes('lengan') || n.includes('sleeve') || n.includes('bahu')))
+          }
+        })
+
+        // Base anchor titik tengah kain lengan (bukan tepi terluar agar tidak menggantung di luar kain)
+        const baseX = matchingSleeveZone ? matchingSleeveZone.x : (isViewerRight ? 77 : 23)
+        const baseY = matchingSleeveZone ? matchingSleeveZone.y : 34
+
+        // Presisi offset horizontal & vertikal mengikuti pergeseran pengguna di Tampak Samping (g.x dan g.y)
+        const offsetX = ((g.x - 50) / 50) * 4.5
+        const offsetY = ((g.y - 35) / 50) * 16
+
+        // Batasi batas aman agar desain selalu berada di atas kain lengan
+        const minX = isViewerRight ? 67 : 16
+        const maxX = isViewerRight ? 84 : 31
+        const anchorX = Math.max(minX, Math.min(maxX, baseX + (isViewerRight ? -offsetX : offsetX)))
+        const anchorY = Math.max(18, Math.min(62, baseY + offsetY))
 
         projected.push({
           graphic: g,
           sourceSide: 'left',
           isWearerLeft: true,
           isViewerRight,
-          x: anchorX,
-          y: anchorY,
-          scale: g.scale * 0.72,
-          angleY: isViewerRight ? -52 : 52,
-          angleZ: isViewerRight ? 14 : -14,
-          skewY: isViewerRight ? 9 : -9,
+          x: Math.round(anchorX * 10) / 10,
+          y: Math.round(anchorY * 10) / 10,
+          scale: g.scale * 0.78,
+          // Sudut perspektif 3D natural, rapi, dan proporsional (tidak gepeng ekstrem)
+          angleY: isViewerRight ? -28 : 28,
+          angleZ: isViewerRight ? 7 : -7,
+          skewY: isViewerRight ? 3 : -3,
         })
       }
 
-      // Jika ada logo di Lengan Kanan
+      // 2. Jika ada logo di Lengan Kanan (Wearer's Right Arm)
       if (g.side === 'right') {
-        // Di Tampak Depan: lengan kanan pemakai terlihat di sebelah KIRI layar
-        // Di Tampak Belakang: lengan kanan pemakai terlihat di sebelah KANAN layar
+        // Di Tampak Depan: lengan kanan pemakai terlihat di sebelah KIRI layar (Viewer Left, x < 50)
+        // Di Tampak Belakang: lengan kanan pemakai terlihat di sebelah KANAN layar (Viewer Right, x > 50)
         const isViewerRight = currentSide === 'back'
-        const matchingSleeveZone = currentPrintZones.find((z) =>
-          z.name.toLowerCase().includes('lengan kanan') || z.name.toLowerCase().includes('bahu kanan')
-        )
-        const anchorX = matchingSleeveZone ? matchingSleeveZone.x : (isViewerRight ? 82.5 : 17.5)
-        const baseY = matchingSleeveZone ? matchingSleeveZone.y : 35
-        const anchorY = Math.max(20, Math.min(56, baseY + ((g.y - 35) / 45) * 20))
+        const matchingSleeveZone = currentPrintZones.find((z) => {
+          const n = z.name.toLowerCase()
+          if (isViewerRight) {
+            return (n.includes('lengan kanan') || n.includes('bahu kanan')) || (z.x > 50 && (n.includes('lengan') || n.includes('sleeve') || n.includes('bahu')))
+          } else {
+            return (n.includes('lengan kanan') || n.includes('bahu kanan')) || (z.x < 50 && (n.includes('lengan') || n.includes('sleeve') || n.includes('bahu')))
+          }
+        })
+
+        // Base anchor titik tengah kain lengan (bukan tepi terluar agar tidak menggantung di luar kain)
+        const baseX = matchingSleeveZone ? matchingSleeveZone.x : (isViewerRight ? 77 : 23)
+        const baseY = matchingSleeveZone ? matchingSleeveZone.y : 34
+
+        // Presisi offset horizontal & vertikal mengikuti pergeseran pengguna di Tampak Samping (g.x dan g.y)
+        const offsetX = ((g.x - 50) / 50) * 4.5
+        const offsetY = ((g.y - 35) / 50) * 16
+
+        // Batasi batas aman agar desain selalu berada di atas kain lengan
+        const minX = isViewerRight ? 67 : 16
+        const maxX = isViewerRight ? 84 : 31
+        const anchorX = Math.max(minX, Math.min(maxX, baseX + (isViewerRight ? -offsetX : offsetX)))
+        const anchorY = Math.max(18, Math.min(62, baseY + offsetY))
 
         projected.push({
           graphic: g,
           sourceSide: 'right',
           isWearerLeft: false,
           isViewerRight,
-          x: anchorX,
-          y: anchorY,
-          scale: g.scale * 0.72,
-          angleY: isViewerRight ? -52 : 52,
-          angleZ: isViewerRight ? 14 : -14,
-          skewY: isViewerRight ? 9 : -9,
+          x: Math.round(anchorX * 10) / 10,
+          y: Math.round(anchorY * 10) / 10,
+          scale: g.scale * 0.78,
+          // Sudut perspektif 3D natural, rapi, dan proporsional (tidak gepeng ekstrem)
+          angleY: isViewerRight ? -28 : 28,
+          angleZ: isViewerRight ? 7 : -7,
+          skewY: isViewerRight ? 3 : -3,
         })
       }
     })
@@ -1466,6 +1503,32 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     )
   }
 
+  // Geser posisi grafis secara presisi (Nudge per 2%)
+  const handleNudgeGraphic = (gId: string, direction: 'up' | 'down' | 'left' | 'right') => {
+    pushHistorySnapshot()
+    onGraphicsChange(
+      graphics.map((g) => {
+        if (g.id !== gId) return g
+        const step = 2
+        let newX = g.x
+        let newY = g.y
+        if (direction === 'up') newY = Math.max(10, g.y - step)
+        if (direction === 'down') newY = Math.min(85, g.y + step)
+        if (direction === 'left') newX = Math.max(15, g.x - step)
+        if (direction === 'right') newX = Math.min(85, g.x + step)
+        return { ...g, x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 }
+      })
+    )
+  }
+
+  // Reset posisi lengan ke titik tengah default (50, 35)
+  const handleResetSleevePosition = (gId: string) => {
+    pushHistorySnapshot()
+    onGraphicsChange(
+      graphics.map((g) => (g.id === gId ? { ...g, x: 50, y: 35 } : g))
+    )
+  }
+
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!dragState.mode || !selectedGraphicId || !viewportRef.current) return
 
@@ -1477,14 +1540,35 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       const deltaPercentX = (deltaPixelX / rect.width) * 100
       const deltaPercentY = (deltaPixelY / rect.height) * 100
 
-      // When clipping mask is on, strictly constrain graphics within mockup bounds
-      const minX = isClippingMaskActive ? 15 : 5
-      const maxX = isClippingMaskActive ? 85 : 95
-      const minY = isClippingMaskActive ? 12 : 8
-      const maxY = isClippingMaskActive ? 88 : 92
+      const targetG = graphics.find((g) => g.id === selectedGraphicId)
+      const isProjectedView =
+        (currentSide === 'front' || currentSide === 'back') &&
+        (targetG?.side === 'left' || targetG?.side === 'right')
 
-      const newX = Math.max(minX, Math.min(maxX, dragState.initialGraphicX + deltaPercentX))
-      const newY = Math.max(minY, Math.min(maxY, dragState.initialGraphicY + deltaPercentY))
+      let newX: number
+      let newY: number
+
+      if (isProjectedView && targetG) {
+        // Dragging projected sleeve graphic in front/back view maps naturally to sleeve axes
+        const isViewerRight =
+          (currentSide === 'front' && targetG.side === 'left') ||
+          (currentSide === 'back' && targetG.side === 'right')
+
+        const effectiveDeltaX = isViewerRight ? -deltaPercentX / 0.45 : deltaPercentX / 0.45
+        const effectiveDeltaY = deltaPercentY / 0.85
+
+        newX = Math.max(15, Math.min(85, dragState.initialGraphicX + effectiveDeltaX))
+        newY = Math.max(10, Math.min(85, dragState.initialGraphicY + effectiveDeltaY))
+      } else {
+        // When clipping mask is on, strictly constrain graphics within mockup bounds
+        const minX = isClippingMaskActive ? 15 : 5
+        const maxX = isClippingMaskActive ? 85 : 95
+        const minY = isClippingMaskActive ? 12 : 8
+        const maxY = isClippingMaskActive ? 88 : 92
+
+        newX = Math.max(minX, Math.min(maxX, dragState.initialGraphicX + deltaPercentX))
+        newY = Math.max(minY, Math.min(maxY, dragState.initialGraphicY + deltaPercentY))
+      }
 
       onGraphicsChange(
         graphics.map((g) => {
@@ -1661,26 +1745,33 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           img.onload = () => {
             const w = 240
             const h = (img.height / img.width) * w
-            ctx.drawImage(img, -w / 2, -h / 2, w, h)
 
-            // Efek silinder kain seragam (ambient cylindrical gradient)
-            const grad = ctx.createLinearGradient(-w / 2, 0, w / 2, 0)
-            if (proj.isViewerRight) {
-              grad.addColorStop(0, 'rgba(0,0,0,0.35)')
-              grad.addColorStop(0.3, 'rgba(0,0,0,0.05)')
-              grad.addColorStop(0.65, 'rgba(255,255,255,0.2)')
-              grad.addColorStop(1, 'rgba(0,0,0,0.3)')
+            // Masking gradien kain silinder khusus pada piksel gambar (tanpa bocor keluar)
+            const off = document.createElement('canvas')
+            off.width = w
+            off.height = h
+            const offCtx = off.getContext('2d')
+            if (offCtx) {
+              offCtx.drawImage(img, 0, 0, w, h)
+              offCtx.globalCompositeOperation = 'source-atop'
+              const grad = offCtx.createLinearGradient(0, 0, w, 0)
+              if (proj.isViewerRight) {
+                grad.addColorStop(0, 'rgba(0,0,0,0.3)')
+                grad.addColorStop(0.35, 'rgba(0,0,0,0.05)')
+                grad.addColorStop(0.7, 'rgba(255,255,255,0.15)')
+                grad.addColorStop(1, 'rgba(0,0,0,0.25)')
+              } else {
+                grad.addColorStop(0, 'rgba(0,0,0,0.25)')
+                grad.addColorStop(0.35, 'rgba(255,255,255,0.15)')
+                grad.addColorStop(0.7, 'rgba(0,0,0,0.05)')
+                grad.addColorStop(1, 'rgba(0,0,0,0.3)')
+              }
+              offCtx.fillStyle = grad
+              offCtx.fillRect(0, 0, w, h)
+              ctx.drawImage(off, -w / 2, -h / 2, w, h)
             } else {
-              grad.addColorStop(0, 'rgba(0,0,0,0.3)')
-              grad.addColorStop(0.35, 'rgba(255,255,255,0.2)')
-              grad.addColorStop(0.7, 'rgba(0,0,0,0.05)')
-              grad.addColorStop(1, 'rgba(0,0,0,0.35)')
+              ctx.drawImage(img, -w / 2, -h / 2, w, h)
             }
-            ctx.save()
-            ctx.globalCompositeOperation = 'multiply'
-            ctx.fillStyle = grad
-            ctx.fillRect(-w / 2, -h / 2, w, h)
-            ctx.restore()
 
             ctx.restore()
             checkFinished()
@@ -3723,6 +3814,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                     return (
                       <div
                         key={`proj-${proj.graphic.id}`}
+                        onMouseDown={(e) => handleStartMove(e, proj.graphic.id)}
                         style={{
                           left: `${proj.x}%`,
                           top: `${proj.y}%`,
@@ -3736,10 +3828,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           e.stopPropagation()
                           setSelectedGraphicId(proj.graphic.id)
                         }}
-                        className={`absolute select-none pointer-events-auto cursor-pointer group/proj transition-all duration-150 ${
+                        className={`absolute select-none pointer-events-auto cursor-grab active:cursor-grabbing group/proj transition-all duration-150 ${
                           isSelected ? 'ring-2 ring-[#ff5e00] rounded-lg p-0.5 shadow-md' : 'hover:ring-1 hover:ring-orange-400/60 rounded'
                         }`}
-                        title={`Proyeksi Lengan ${proj.isWearerLeft ? 'Kiri' : 'Kanan'} (Tampak Menyamping) - Klik untuk pilih / edit`}
+                        title={`Proyeksi Lengan ${proj.isWearerLeft ? 'Kiri' : 'Kanan'} (Tampak Menyamping) - Drag untuk geser, atau gunakan tombol di toolbar`}
                       >
                         {/* Floating Action Quickbar when Selected in Projected View */}
                         {isSelected && (
@@ -3749,11 +3841,12 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                               transform: `translate(-50%, 0) rotate(-${proj.angleZ + (proj.graphic.rotation || 0)}deg)`,
                               transformOrigin: 'center bottom',
                             }}
-                            className="absolute -top-14 left-1/2 flex items-center gap-1 bg-slate-900 text-white px-2.5 py-1.5 rounded-xl text-[10px] shadow-2xl whitespace-nowrap z-50 border border-slate-800"
+                            className="absolute -top-15 left-1/2 flex items-center gap-1.5 bg-slate-900 text-white px-2.5 py-1.5 rounded-xl text-[10px] shadow-2xl whitespace-nowrap z-50 border border-slate-800"
                           >
-                            <div className="flex items-center gap-1 text-[9px] font-bold text-amber-300 mr-1">
+                            <div className="flex items-center gap-1 text-[9px] font-bold text-amber-300 mr-0.5">
                               <span>🔗 Lengan {proj.isWearerLeft ? 'Kiri' : 'Kanan'}</span>
                             </div>
+
                             {/* Technique Switch: Bordir vs Sablon */}
                             <button
                               type="button"
@@ -3774,17 +3867,65 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             >
                               <span>{proj.graphic.technique === 'bordir' ? '🪡 Bordir' : '🎨 Sablon'}</span>
                             </button>
-                            <div className="w-px h-3 bg-slate-700 mx-0.5" />
+
+                            <div className="w-px h-3.5 bg-slate-700" />
+
+                            {/* Precise Nudge Arrow Controls */}
+                            <div className="flex items-center gap-0.5 bg-slate-800/90 p-0.5 rounded-lg border border-slate-700">
+                              <button
+                                type="button"
+                                onClick={() => handleNudgeGraphic(proj.graphic.id, 'left')}
+                                className="p-1 hover:bg-slate-700 text-slate-300 hover:text-white rounded cursor-pointer"
+                                title="Geser Kiri (2%)"
+                              >
+                                <ArrowLeft className="w-2.5 h-2.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleNudgeGraphic(proj.graphic.id, 'right')}
+                                className="p-1 hover:bg-slate-700 text-slate-300 hover:text-white rounded cursor-pointer"
+                                title="Geser Kanan (2%)"
+                              >
+                                <ArrowRight className="w-2.5 h-2.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleNudgeGraphic(proj.graphic.id, 'up')}
+                                className="p-1 hover:bg-slate-700 text-slate-300 hover:text-white rounded cursor-pointer"
+                                title="Geser Naik (2%)"
+                              >
+                                <ArrowUp className="w-2.5 h-2.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleNudgeGraphic(proj.graphic.id, 'down')}
+                                className="p-1 hover:bg-slate-700 text-slate-300 hover:text-white rounded cursor-pointer"
+                                title="Geser Turun (2%)"
+                              >
+                                <ArrowDown className="w-2.5 h-2.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleResetSleevePosition(proj.graphic.id)}
+                                className="px-1 py-0.5 hover:bg-slate-700 text-slate-400 hover:text-amber-300 rounded font-bold text-[8.5px] cursor-pointer"
+                                title="Kembalikan posisi ke titik tengah lengan (50, 35)"
+                              >
+                                Reset
+                              </button>
+                            </div>
+
+                            <div className="w-px h-3.5 bg-slate-700" />
+
                             {/* Jump to Sleeve View to edit directly */}
                             <button
                               type="button"
                               onClick={() => setCurrentSide(proj.graphic.side)}
-                              title="Buka Tampak Samping untuk edit langsung"
+                              title="Buka Tampak Samping untuk edit langsung secara datar"
                               className="px-2 py-0.5 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded font-bold text-[9px] flex items-center gap-1 cursor-pointer"
                             >
-                              <span>Buka Tampak Samping →</span>
+                              <span>Buka Samping →</span>
                             </button>
-                            <div className="w-px h-3 bg-slate-700 mx-0.5" />
+
                             <button
                               type="button"
                               onClick={() => handleDeleteGraphic(proj.graphic.id)}
@@ -3797,7 +3938,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                         )}
 
                         {/* Visual Content: Image with Bordir / Sablon */}
-                        <div className="relative inline-block select-none overflow-hidden rounded-xs shadow-sm">
+                        <div className="relative inline-block select-none">
                           <img
                             src={proj.graphic.content}
                             alt="projected-sleeve-logo"
@@ -3848,23 +3989,39 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             </>
                           )}
 
-                          {/* Realistic 3D Cylindrical Ambient Shading (Efek Lengkungan Silinder Lengan) */}
+                          {/* Realistic 3D Cylindrical Ambient Shading (Masked tightly to logo alpha) */}
                           <div
                             className="absolute inset-0 pointer-events-none"
                             style={{
+                              WebkitMaskImage: `url("${proj.graphic.content}")`,
+                              maskImage: `url("${proj.graphic.content}")`,
+                              WebkitMaskSize: 'contain',
+                              maskSize: 'contain',
+                              WebkitMaskRepeat: 'no-repeat',
+                              maskRepeat: 'no-repeat',
+                              WebkitMaskPosition: 'center',
+                              maskPosition: 'center',
                               background: proj.isViewerRight
-                                ? 'linear-gradient(to right, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.05) 30%, rgba(255,255,255,0.2) 65%, rgba(0,0,0,0.3) 100%)'
-                                : 'linear-gradient(to left, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.05) 30%, rgba(255,255,255,0.2) 65%, rgba(0,0,0,0.3) 100%)',
+                                ? 'linear-gradient(to right, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.05) 35%, rgba(255,255,255,0.15) 70%, rgba(0,0,0,0.25) 100%)'
+                                : 'linear-gradient(to left, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.05) 35%, rgba(255,255,255,0.15) 70%, rgba(0,0,0,0.25) 100%)',
                               mixBlendMode: 'multiply',
                             }}
                           />
-                          {/* Ambient Sheen Along Sleeve Ridge */}
+                          {/* Ambient Sheen Along Sleeve Ridge (Masked tightly to logo alpha) */}
                           <div
-                            className="absolute inset-0 pointer-events-none opacity-30"
+                            className="absolute inset-0 pointer-events-none opacity-25"
                             style={{
+                              WebkitMaskImage: `url("${proj.graphic.content}")`,
+                              maskImage: `url("${proj.graphic.content}")`,
+                              WebkitMaskSize: 'contain',
+                              maskSize: 'contain',
+                              WebkitMaskRepeat: 'no-repeat',
+                              maskRepeat: 'no-repeat',
+                              WebkitMaskPosition: 'center',
+                              maskPosition: 'center',
                               background: proj.isViewerRight
-                                ? 'linear-gradient(to right, transparent 35%, rgba(255,255,255,0.45) 55%, transparent 75%)'
-                                : 'linear-gradient(to left, transparent 35%, rgba(255,255,255,0.45) 55%, transparent 75%)',
+                                ? 'linear-gradient(to right, transparent 35%, rgba(255,255,255,0.4) 55%, transparent 75%)'
+                                : 'linear-gradient(to left, transparent 35%, rgba(255,255,255,0.4) 55%, transparent 75%)',
                               mixBlendMode: 'screen',
                             }}
                           />
