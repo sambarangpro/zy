@@ -41,6 +41,8 @@ export interface CanvasGraphic {
   scaleX?: number // for flip horizontal (-1 or 1)
   scaleY?: number // for flip vertical (-1 or 1)
   rotation: number // degrees -180 to 180
+  rotationY?: number // degrees -85 to 85 (perspektif Y menyamping 3D)
+  enableAutoClipping?: boolean // auto clipping mask mengikuti siluet kain blangko
   textColor?: string
   fontFamily?: string
   fontSize?: number
@@ -83,6 +85,8 @@ export interface PrintZone {
   price: number // Harga sablon / cetak pada titik ini (Rp)
   maxSizeCm?: string // Ukuran fisik misal "10×10 cm", "A4 (21×30 cm)", "A3 (30×42 cm)"
   description?: string
+  rotationY?: number // degrees -85 to 85 (kemiringan sudut pandang Y / menyamping pada canvas blangko)
+  enableAutoClipping?: boolean // aktifkan clipping mask otomatis mengikuti siluet kain baju
 }
 
 // Model Mockup Seragam Custom yang dibuat oleh pengguna di Dashboard

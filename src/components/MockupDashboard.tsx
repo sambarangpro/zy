@@ -323,6 +323,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       price: preset?.price ?? 15000,
       maxSizeCm: preset?.maxSizeCm ?? '10×10 cm',
       description: preset?.description,
+      rotationY: preset?.rotationY ?? 0,
+      enableAutoClipping: preset?.enableAutoClipping ?? true,
     }
     const updated = [...printZones, newZone]
     setPrintZones(updated)
@@ -2612,7 +2614,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                 top: `${zone.y}%`,
                                 width: `${zone.width}%`,
                                 height: `${zone.height}%`,
-                                transform: 'translate(-50%, -50%)',
+                                transform: `translate(-50%, -50%) perspective(400px) rotateY(${zone.rotationY || 0}deg)`,
+                                transformOrigin: 'center center',
                               }}
                               onClick={(e) => {
                                 e.stopPropagation()
@@ -2634,6 +2637,16 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                     • Rp {zone.price.toLocaleString('id-ID')}
                                   </span>
                                 )}
+                                {zone.rotationY && zone.rotationY !== 0 ? (
+                                  <span className="bg-amber-500/30 text-amber-300 px-1 py-0.2 rounded font-mono text-[8px]" title="Rotasi Y (Perspektif 3D Menyamping)">
+                                    ⟳ Y:{zone.rotationY > 0 ? '+' : ''}{zone.rotationY}°
+                                  </span>
+                                ) : null}
+                                {zone.enableAutoClipping ?? true ? (
+                                  <span className="bg-emerald-500/30 text-emerald-300 px-1 py-0.2 rounded text-[7.5px]" title="Auto Clipping Mask Siluet Kain Aktif">
+                                    ✂ Clip
+                                  </span>
+                                ) : null}
                               </div>
 
                               {/* Center size info */}
@@ -2998,6 +3011,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                     height: 20,
                                     price: 15000,
                                     maxSizeCm: '8×8 cm',
+                                    rotationY: 35,
+                                    enableAutoClipping: true,
                                     description: 'Sinkron otomatis ke Tampak Kanan & Belakang',
                                   })
                                 }
@@ -3016,6 +3031,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                     height: 20,
                                     price: 15000,
                                     maxSizeCm: '8×8 cm',
+                                    rotationY: -35,
+                                    enableAutoClipping: true,
                                     description: 'Sinkron otomatis ke Tampak Kiri & Belakang',
                                   })
                                 }
@@ -3071,6 +3088,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                     height: 20,
                                     price: 15000,
                                     maxSizeCm: '8×8 cm',
+                                    rotationY: 35,
+                                    enableAutoClipping: true,
                                     description: 'Sinkron otomatis ke Tampak Kiri & Depan',
                                   })
                                 }
@@ -3089,6 +3108,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                     height: 20,
                                     price: 15000,
                                     maxSizeCm: '8×8 cm',
+                                    rotationY: -35,
+                                    enableAutoClipping: true,
                                     description: 'Sinkron otomatis ke Tampak Kanan & Depan',
                                   })
                                 }
@@ -3280,6 +3301,131 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                               />
                             </div>
                           </div>
+
+                          {/* Rotasi Y (Perspektif 3D Horizontal / Menyamping) */}
+                          <div className="space-y-1.5 pt-1.5 border-t border-slate-200">
+                            <div className="flex items-center justify-between text-[10px] text-slate-600 mb-0.5">
+                              <span className="flex items-center gap-1 font-semibold text-slate-700">
+                                <RotateCw className="w-3 h-3 text-[#ff5e00]" />
+                                <span>Rotasi Y (Perspektif 3D Menyamping):</span>
+                              </span>
+                              <span className="font-mono font-bold text-[#ff5e00] bg-orange-50 px-1.5 py-0.2 rounded border border-orange-200">
+                                {selectedPrintZone.rotationY ? `${selectedPrintZone.rotationY > 0 ? '+' : ''}${selectedPrintZone.rotationY}°` : '0° (Datar)'}
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min={-75}
+                              max={75}
+                              step={1}
+                              value={selectedPrintZone.rotationY || 0}
+                              onChange={(e) =>
+                                handleUpdatePrintZone(selectedPrintZone.id, {
+                                  rotationY: Number(e.target.value),
+                                })
+                              }
+                              className="w-full h-1 accent-[#ff5e00] cursor-pointer"
+                            />
+                            {/* Preset Sudut Rotasi Y */}
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleUpdatePrintZone(selectedPrintZone.id, { rotationY: -45 })}
+                                className={`flex-1 py-0.5 rounded text-[9px] font-mono font-bold border transition-colors cursor-pointer ${
+                                  selectedPrintZone.rotationY === -45
+                                    ? 'bg-[#ff5e00] text-white border-[#ff5e00]'
+                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                                }`}
+                                title="Miring Kiri Tajam (-45°)"
+                              >
+                                -45°
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdatePrintZone(selectedPrintZone.id, { rotationY: -30 })}
+                                className={`flex-1 py-0.5 rounded text-[9px] font-mono font-bold border transition-colors cursor-pointer ${
+                                  selectedPrintZone.rotationY === -30
+                                    ? 'bg-[#ff5e00] text-white border-[#ff5e00]'
+                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                                }`}
+                                title="Miring Kiri Sedang (-30°)"
+                              >
+                                -30°
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdatePrintZone(selectedPrintZone.id, { rotationY: 0 })}
+                                className={`flex-1 py-0.5 rounded text-[9px] font-mono font-bold border transition-colors cursor-pointer ${
+                                  !selectedPrintZone.rotationY || selectedPrintZone.rotationY === 0
+                                    ? 'bg-slate-800 text-white border-slate-800'
+                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                                }`}
+                                title="Datar / Tegak (0°)"
+                              >
+                                0° Datar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdatePrintZone(selectedPrintZone.id, { rotationY: 30 })}
+                                className={`flex-1 py-0.5 rounded text-[9px] font-mono font-bold border transition-colors cursor-pointer ${
+                                  selectedPrintZone.rotationY === 30
+                                    ? 'bg-[#ff5e00] text-white border-[#ff5e00]'
+                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                                }`}
+                                title="Miring Kanan Sedang (+30°)"
+                              >
+                                +30°
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdatePrintZone(selectedPrintZone.id, { rotationY: 45 })}
+                                className={`flex-1 py-0.5 rounded text-[9px] font-mono font-bold border transition-colors cursor-pointer ${
+                                  selectedPrintZone.rotationY === 45
+                                    ? 'bg-[#ff5e00] text-white border-[#ff5e00]'
+                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                                }`}
+                                title="Miring Kanan Tajam (+45°)"
+                              >
+                                +45°
+                              </button>
+                            </div>
+                            <p className="text-[9px] text-slate-400 italic">
+                              *Gunakan rotasi Y pada bahu/lengan agar sablon otomatis tampak menyamping 3D saat dilihat dari depan atau belakang.
+                            </p>
+                          </div>
+
+                          {/* Auto Clipping Mask Toggle Switch */}
+                          <div className="pt-2 border-t border-slate-200">
+                            <label className="flex items-start gap-2 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={selectedPrintZone.enableAutoClipping ?? true}
+                                onChange={(e) =>
+                                  handleUpdatePrintZone(selectedPrintZone.id, {
+                                    enableAutoClipping: e.target.checked,
+                                  })
+                                }
+                                className="mt-0.5 w-3.5 h-3.5 accent-[#ff5e00] rounded cursor-pointer"
+                              />
+                              <div className="flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[11px] font-bold text-slate-800">
+                                    Auto Clipping Mask
+                                  </span>
+                                  <span className={`text-[8.5px] px-1 py-0.2 rounded font-bold ${
+                                    (selectedPrintZone.enableAutoClipping ?? true)
+                                      ? 'bg-emerald-100 text-emerald-700'
+                                      : 'bg-slate-200 text-slate-600'
+                                  }`}>
+                                    {(selectedPrintZone.enableAutoClipping ?? true) ? 'AKTIF' : 'NONAKTIF'}
+                                  </span>
+                                </div>
+                                <p className="text-[9.5px] text-slate-500 leading-tight mt-0.5">
+                                  Secara otomatis memotong gambar sablon/bordir mengikuti lekukan kain blangko baju agar tepi logo tidak bocor melayang ke udara.
+                                </p>
+                              </div>
+                            </label>
+                          </div>
                         </div>
                       ) : (
                         <div className="p-3 bg-slate-50 border border-dashed border-slate-200 rounded-lg text-center text-slate-400 text-xs">
@@ -3322,6 +3468,16 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                     <span className="font-bold text-xs text-slate-900 truncate">
                                       {zone.name}
                                     </span>
+                                    {zone.rotationY && zone.rotationY !== 0 ? (
+                                      <span className="bg-amber-100 text-amber-800 text-[8px] font-mono px-1 py-0.2 rounded font-bold">
+                                        ⟳{zone.rotationY > 0 ? '+' : ''}{zone.rotationY}°
+                                      </span>
+                                    ) : null}
+                                    {zone.enableAutoClipping ?? true ? (
+                                      <span className="bg-emerald-100 text-emerald-800 text-[8px] px-1 py-0.2 rounded font-bold">
+                                        ✂ Clip
+                                      </span>
+                                    ) : null}
                                   </div>
                                   <div className="text-[10px] text-slate-500 flex items-center gap-1.5 font-mono">
                                     <span className="text-emerald-600 font-bold">

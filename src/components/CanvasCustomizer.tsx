@@ -388,6 +388,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       y: number
       scaleX: number
       scaleY: number
+      rotationY: number
+      enableAutoClipping: boolean
     }> = []
 
     graphics.forEach((g) => {
@@ -425,6 +427,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         const flipX = g.scaleX || 1
         const flipY = g.scaleY || 1
 
+        const rotY =
+          g.rotationY !== undefined && g.rotationY !== 0
+            ? g.rotationY
+            : matchingSleeveZone?.rotationY !== undefined && matchingSleeveZone.rotationY !== 0
+            ? matchingSleeveZone.rotationY
+            : isViewerRight
+            ? -35
+            : 35
+        const autoClip = matchingSleeveZone?.enableAutoClipping ?? g.enableAutoClipping ?? true
+
         projected.push({
           graphic: g,
           sourceSide: 'left',
@@ -435,6 +447,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           // Kompresi horizontal tampak menyamping yang rapi, simetris, dan tegak (tidak miring/penyok)
           scaleX: Number((baseScale * flipX * 0.62).toFixed(3)),
           scaleY: Number((baseScale * flipY * 0.86).toFixed(3)),
+          rotationY: rotY,
+          enableAutoClipping: autoClip,
         })
       }
 
@@ -470,6 +484,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         const flipX = g.scaleX || 1
         const flipY = g.scaleY || 1
 
+        const rotY =
+          g.rotationY !== undefined && g.rotationY !== 0
+            ? g.rotationY
+            : matchingSleeveZone?.rotationY !== undefined && matchingSleeveZone.rotationY !== 0
+            ? matchingSleeveZone.rotationY
+            : isViewerRight
+            ? -35
+            : 35
+        const autoClip = matchingSleeveZone?.enableAutoClipping ?? g.enableAutoClipping ?? true
+
         projected.push({
           graphic: g,
           sourceSide: 'right',
@@ -480,6 +504,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           // Kompresi horizontal tampak menyamping yang rapi, simetris, dan tegak (tidak miring/penyok)
           scaleX: Number((baseScale * flipX * 0.62).toFixed(3)),
           scaleY: Number((baseScale * flipY * 0.86).toFixed(3)),
+          rotationY: rotY,
+          enableAutoClipping: autoClip,
         })
       }
     })
@@ -1188,6 +1214,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       scaleX: 1,
       scaleY: 1,
       rotation: 0,
+      rotationY: chosenZone?.rotationY || 0,
+      enableAutoClipping: chosenZone?.enableAutoClipping ?? true,
       technique,
       label: fileName.trim() || (technique === 'bordir' ? 'Bordir Komputer' : 'Sablon DTF'),
       sizeCategory: sizeCat,
@@ -1505,6 +1533,28 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     )
   }
 
+  // Set Rotasi Y grafik (Perspektif 3D Menyamping: -85 sampai +85 derajat)
+  const handleSetGraphicRotationY = (gId: string, rotY: number) => {
+    pushHistorySnapshot()
+    onGraphicsChange(
+      graphics.map((g) => (g.id === gId ? { ...g, rotationY: rotY } : g))
+    )
+  }
+
+  // Toggle Auto Clipping Mask grafik (Potong siluet kain baju)
+  const handleToggleGraphicAutoClipping = (gId: string) => {
+    pushHistorySnapshot()
+    onGraphicsChange(
+      graphics.map((g) => {
+        if (g.id === gId) {
+          const currentVal = g.enableAutoClipping ?? true
+          return { ...g, enableAutoClipping: !currentVal }
+        }
+        return g
+      })
+    )
+  }
+
   // Geser posisi grafis secara presisi (Nudge per 2%)
   const handleNudgeGraphic = (gId: string, direction: 'up' | 'down' | 'left' | 'right') => {
     pushHistorySnapshot()
@@ -1678,7 +1728,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       visibleCurrentGraphics.forEach((g) => {
         const posX = (g.x / 100) * canvas.width
         const posY = (g.y / 100) * canvas.height
-        const scaleX = (g.scaleX || 1) * g.scale
+        const rotYRad = ((g.rotationY || 0) * Math.PI) / 180
+        const cosY = Math.cos(rotYRad)
+        const scaleX = (g.scaleX || 1) * g.scale * Math.max(0.15, Math.abs(cosY))
         const scaleY = (g.scaleY || 1) * g.scale
 
         ctx.save()
@@ -1720,7 +1772,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         const posX = (proj.x / 100) * canvas.width
         const posY = (proj.y / 100) * canvas.height
         const rotRad = ((proj.graphic.rotation || 0) * Math.PI) / 180
-        const scaleX = proj.scaleX
+        const rotYRad = ((proj.rotationY || 0) * Math.PI) / 180
+        const cosY = Math.cos(rotYRad)
+        const scaleX = proj.scaleX * Math.max(0.2, Math.abs(cosY))
         const scaleY = proj.scaleY
 
         ctx.save()
@@ -3470,6 +3524,220 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   />
                 </div>
 
+                {/* 3.8. AUTO CLIPPING MASK LAYER FOR GRAPHICS (Potong Otomatis Mengikuti Siluet Kontur Kain Baju) */}
+                {isClippingMaskActive && currentMockupImage && (
+                  <div
+                    style={clippingMaskStyle}
+                    className="w-full h-full absolute inset-0 pointer-events-none z-18 overflow-hidden"
+                  >
+                    {/* A. Masked Visuals for Current Side Graphics */}
+                    {currentSideGraphics
+                      .filter((g) => !hiddenGraphicIds.includes(g.id) && (g.enableAutoClipping ?? true))
+                      .map((g) => {
+                        const scaleX = (g.scaleX || 1) * g.scale
+                        const scaleY = (g.scaleY || 1) * g.scale
+                        return (
+                          <div
+                            key={`masked-vis-${g.id}`}
+                            style={{
+                              left: `${g.x}%`,
+                              top: `${g.y}%`,
+                              transform: `translate(-50%, -50%) perspective(500px) rotateY(${g.rotationY || 0}deg) rotate(${g.rotation}deg)`,
+                              transformOrigin: 'center center',
+                              opacity: (g.opacity !== undefined ? g.opacity : 100) / 100,
+                              mixBlendMode: g.blendMode || 'normal',
+                            }}
+                            className="absolute select-none pointer-events-none"
+                          >
+                            <div
+                              style={{
+                                transform: `scale(${scaleX}, ${scaleY})`,
+                                transformOrigin: 'center center',
+                              }}
+                            >
+                              {g.type === 'image' ? (
+                                <div className="relative inline-block select-none">
+                                  <img
+                                    src={g.content}
+                                    alt="graphic"
+                                    className="max-w-[140px] max-h-[140px] object-contain select-none pointer-events-none block"
+                                    style={{
+                                      filter:
+                                        g.technique === 'bordir'
+                                          ? 'drop-shadow(0 1px 1px rgba(0,0,0,0.7)) drop-shadow(1px 3px 5px rgba(0,0,0,0.5)) drop-shadow(-1px -1px 0px rgba(255,255,255,0.85)) contrast(1.1) saturate(1.18)'
+                                          : 'drop-shadow(0 1.5px 2px rgba(0,0,0,0.35))',
+                                    }}
+                                  />
+
+                                  {/* Realistic 3D Embroidery Overlays */}
+                                  {g.technique === 'bordir' && (
+                                    <>
+                                      <div
+                                        className="absolute inset-0 pointer-events-none"
+                                        style={{
+                                          WebkitMaskImage: `url("${g.content}")`,
+                                          maskImage: `url("${g.content}")`,
+                                          WebkitMaskSize: 'contain',
+                                          maskSize: 'contain',
+                                          WebkitMaskRepeat: 'no-repeat',
+                                          maskRepeat: 'no-repeat',
+                                          WebkitMaskPosition: 'center',
+                                          maskPosition: 'center',
+                                          backgroundImage:
+                                            'repeating-linear-gradient(55deg, rgba(255,255,255,0.42) 0px, rgba(255,255,255,0.42) 1.2px, transparent 1.2px, transparent 2.4px, rgba(0,0,0,0.38) 2.4px, rgba(0,0,0,0.38) 3.6px, transparent 3.6px, transparent 4.8px)',
+                                          mixBlendMode: 'overlay',
+                                        }}
+                                      />
+                                      <div
+                                        className="absolute inset-0 pointer-events-none opacity-55"
+                                        style={{
+                                          WebkitMaskImage: `url("${g.content}")`,
+                                          maskImage: `url("${g.content}")`,
+                                          WebkitMaskSize: 'contain',
+                                          maskSize: 'contain',
+                                          WebkitMaskRepeat: 'no-repeat',
+                                          maskRepeat: 'no-repeat',
+                                          WebkitMaskPosition: 'center',
+                                          maskPosition: 'center',
+                                          backgroundImage:
+                                            'repeating-linear-gradient(-35deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 1.5px, transparent 1.5px, transparent 6px)',
+                                          mixBlendMode: 'soft-light',
+                                        }}
+                                      />
+                                    </>
+                                  )}
+
+                                  {g.technique === 'sablon' && (
+                                    <div
+                                      className="absolute inset-0 pointer-events-none opacity-25"
+                                      style={{
+                                        WebkitMaskImage: `url("${g.content}")`,
+                                        maskImage: `url("${g.content}")`,
+                                        WebkitMaskSize: 'contain',
+                                        maskSize: 'contain',
+                                        WebkitMaskRepeat: 'no-repeat',
+                                        maskRepeat: 'no-repeat',
+                                        WebkitMaskPosition: 'center',
+                                        maskPosition: 'center',
+                                        background:
+                                          'linear-gradient(135deg, rgba(255,255,255,0.35) 0%, transparent 65%)',
+                                        mixBlendMode: 'screen',
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="relative inline-block select-none">
+                                  <span
+                                    style={{
+                                      fontSize: `${g.fontSize || 22}px`,
+                                      fontFamily: g.fontFamily || 'Montserrat',
+                                      color: g.textColor || '#ffffff',
+                                      textShadow: '0 1px 3px rgba(0,0,0,0.5)',
+                                    }}
+                                    className="font-bold whitespace-nowrap block px-2 py-0.5"
+                                  >
+                                    {g.content}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+
+                    {/* B. Masked Visuals for Sleeve Projected Graphics */}
+                    {sleeveProjectedGraphics
+                      .filter((proj) => proj.enableAutoClipping)
+                      .map((proj) => {
+                        return (
+                          <div
+                            key={`masked-proj-${proj.graphic.id}`}
+                            style={{
+                              left: `${proj.x}%`,
+                              top: `${proj.y}%`,
+                              transform: `translate(-50%, -50%) perspective(500px) rotateY(${proj.rotationY}deg) rotate(${proj.graphic.rotation || 0}deg) scale(${proj.scaleX}, ${proj.scaleY})`,
+                              transformOrigin: 'center center',
+                              opacity: (proj.graphic.opacity !== undefined ? proj.graphic.opacity : 100) / 100,
+                              mixBlendMode: proj.graphic.blendMode || 'normal',
+                            }}
+                            className="absolute select-none pointer-events-none"
+                          >
+                            <div className="relative inline-block select-none">
+                              <img
+                                src={proj.graphic.content}
+                                alt="projected-sleeve-logo"
+                                className="max-w-[140px] max-h-[140px] object-contain select-none pointer-events-none block"
+                                style={{
+                                  filter:
+                                    proj.graphic.technique === 'bordir'
+                                      ? 'drop-shadow(0 1px 1px rgba(0,0,0,0.65)) drop-shadow(1px 2px 4px rgba(0,0,0,0.4)) drop-shadow(-1px -1px 0px rgba(255,255,255,0.85)) contrast(1.1) saturate(1.15)'
+                                      : 'drop-shadow(0 2px 3px rgba(0,0,0,0.3))',
+                                }}
+                              />
+
+                              {proj.graphic.technique === 'bordir' && (
+                                <>
+                                  <div
+                                    className="absolute inset-0 pointer-events-none"
+                                    style={{
+                                      WebkitMaskImage: `url("${proj.graphic.content}")`,
+                                      maskImage: `url("${proj.graphic.content}")`,
+                                      WebkitMaskSize: 'contain',
+                                      maskSize: 'contain',
+                                      WebkitMaskRepeat: 'no-repeat',
+                                      maskRepeat: 'no-repeat',
+                                      WebkitMaskPosition: 'center',
+                                      maskPosition: 'center',
+                                      backgroundImage:
+                                        'repeating-linear-gradient(55deg, rgba(255,255,255,0.42) 0px, rgba(255,255,255,0.42) 1.2px, transparent 1.2px, transparent 2.4px, rgba(0,0,0,0.38) 2.4px, rgba(0,0,0,0.38) 3.6px, transparent 3.6px, transparent 4.8px)',
+                                      mixBlendMode: 'overlay',
+                                    }}
+                                  />
+                                  <div
+                                    className="absolute inset-0 pointer-events-none opacity-55"
+                                    style={{
+                                      WebkitMaskImage: `url("${proj.graphic.content}")`,
+                                      maskImage: `url("${proj.graphic.content}")`,
+                                      WebkitMaskSize: 'contain',
+                                      maskSize: 'contain',
+                                      WebkitMaskRepeat: 'no-repeat',
+                                      maskRepeat: 'no-repeat',
+                                      WebkitMaskPosition: 'center',
+                                      maskPosition: 'center',
+                                      backgroundImage:
+                                        'repeating-linear-gradient(-35deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 1.5px, transparent 1.5px, transparent 6px)',
+                                      mixBlendMode: 'soft-light',
+                                    }}
+                                  />
+                                </>
+                              )}
+
+                              {/* Cylindrical Sheen */}
+                              <div
+                                className="absolute inset-0 pointer-events-none opacity-20"
+                                style={{
+                                  WebkitMaskImage: `url("${proj.graphic.content}")`,
+                                  maskImage: `url("${proj.graphic.content}")`,
+                                  WebkitMaskSize: 'contain',
+                                  maskSize: 'contain',
+                                  WebkitMaskRepeat: 'no-repeat',
+                                  maskRepeat: 'no-repeat',
+                                  WebkitMaskPosition: 'center',
+                                  maskPosition: 'center',
+                                  background: proj.isViewerRight
+                                    ? 'linear-gradient(to right, transparent 30%, rgba(255,255,255,0.6) 65%, transparent 85%)'
+                                    : 'linear-gradient(to left, transparent 30%, rgba(255,255,255,0.6) 65%, transparent 85%)',
+                                  mixBlendMode: 'screen',
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+
                 {/* 4. GRAPHIC & TEXT ELEMENTS LAYER (UNMASKED - FRAME & CONTROLS NEVER CLIPPED BY SHIRT MASK!) */}
                 <div
                   className={`absolute inset-0 w-full h-full ${
@@ -3484,153 +3752,214 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       const scaleX = (g.scaleX || 1) * g.scale
                       const scaleY = (g.scaleY || 1) * g.scale
 
+                      const isClipped = isClippingMaskActive && (g.enableAutoClipping ?? true)
+
                       return (
-                        <div
-                          key={g.id}
-                          id={`graphic-element-${g.id}`}
-                          style={{
-                            left: `${g.x}%`,
-                            top: `${g.y}%`,
-                            transform: `translate(-50%, -50%) rotate(${g.rotation}deg)`,
-                            transformOrigin: 'center center',
-                            zIndex: isSelected ? 40 : 10 + idx,
-                            opacity: (g.opacity !== undefined ? g.opacity : 100) / 100,
-                            mixBlendMode: g.blendMode || 'normal',
-                          }}
-                          className={`absolute select-none pointer-events-auto ${
-                            g.isLocked ? 'cursor-default' : 'cursor-move'
-                          }`}
-                        >
-                        {/* Floating Action Quickbar on Top of Selected Object (Always Stays Horizontal) */}
-                        {isSelected && (
-                          <div
-                            onMouseDown={(e) => e.stopPropagation()}
-                            style={{
-                              transform: `translate(-50%, 0) rotate(-${g.rotation || 0}deg)`,
-                              transformOrigin: 'center bottom',
-                            }}
-                            className="absolute -top-15 left-1/2 flex items-center gap-1 bg-slate-900 text-white px-2.5 py-1.5 rounded-xl text-[10px] shadow-2xl whitespace-nowrap z-50 border border-slate-800"
-                          >
-                            {/* Rotasi Kiri 45° */}
-                            <button
-                              type="button"
-                              onClick={() => handleRotateGraphicBy(g.id, -45)}
-                              title="Putar Kiri 45°"
-                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                        <React.Fragment key={`graphic-frag-${g.id}`}>
+                          {/* Floating Action Quickbar on Top of Selected Object (Always Stays Horizontal & Unskewed) */}
+                          {isSelected && (
+                            <div
+                              onMouseDown={(e) => e.stopPropagation()}
+                              style={{
+                                left: `${g.x}%`,
+                                top: `${g.y}%`,
+                                transform: 'translate(-50%, -100%) translateY(-54px)',
+                                zIndex: 60,
+                              }}
+                              className="absolute flex items-center gap-1.5 bg-slate-900/95 backdrop-blur-md text-white px-2.5 py-1.5 rounded-xl text-[10px] shadow-2xl whitespace-nowrap border border-slate-700/80 pointer-events-auto select-none"
                             >
-                              <RotateCcw className="w-3.5 h-3.5" />
-                            </button>
-                            {/* Rotasi Kanan 45° */}
-                            <button
-                              type="button"
-                              onClick={() => handleRotateGraphicBy(g.id, 45)}
-                              title="Putar Kanan 45°"
-                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                            >
-                              <RotateCw className="w-3.5 h-3.5" />
-                            </button>
-                            {/* Sudut Rotasi & Tombol Reset 0° */}
-                            {g.rotation !== 0 && (
+                              {/* Rotasi 2D Kiri 45° */}
                               <button
                                 type="button"
-                                onClick={() => handleResetRotation(g.id)}
-                                title="Klik untuk reset rotasi kembali tegak (0°)"
-                                className="px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 font-mono text-[9px] font-bold cursor-pointer transition-colors"
+                                onClick={() => handleRotateGraphicBy(g.id, -45)}
+                                title="Putar Kiri 45°"
+                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
                               >
-                                {g.rotation}° (Reset)
+                                <RotateCcw className="w-3.5 h-3.5" />
                               </button>
-                            )}
-                            <div className="w-px h-3 bg-slate-700 mx-0.5" />
-                            <button
-                              onClick={() => handleDuplicateGraphic(g.id)}
-                              title="Duplikat (Ctrl+D)"
-                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                            >
-                              <Copy className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => handleFlipHorizontal(g.id)}
-                              title="Balik Horizontal (Mirror)"
-                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                            >
-                              <FlipHorizontal className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => handleFlipVertical(g.id)}
-                              title="Balik Vertikal"
-                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                            >
-                              <FlipVertical className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleAlign(g.id, 'center_h')}
-                              title="Rata Tengah Horizontal"
-                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                            >
-                              <AlignCenter className="w-3.5 h-3.5" />
-                            </button>
-                            <div className="w-px h-3 bg-slate-700 mx-0.5" />
-                            {/* Quick Switch: Bordir vs Sablon */}
-                            <button
-                              onClick={() => {
-                                const nextTech = g.technique === 'bordir' ? 'sablon' : 'bordir'
-                                updateGraphicsWithHistory(
-                                  graphics.map((item) =>
-                                    item.id === g.id ? { ...item, technique: nextTech } : item
+                              {/* Rotasi 2D Kanan 45° */}
+                              <button
+                                type="button"
+                                onClick={() => handleRotateGraphicBy(g.id, 45)}
+                                title="Putar Kanan 45°"
+                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                              >
+                                <RotateCw className="w-3.5 h-3.5" />
+                              </button>
+                              {/* Sudut Rotasi & Tombol Reset 0° */}
+                              {g.rotation !== 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleResetRotation(g.id)}
+                                  title="Klik untuk reset rotasi kembali tegak (0°)"
+                                  className="px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 font-mono text-[9px] font-bold cursor-pointer transition-colors"
+                                >
+                                  {g.rotation}° (Reset)
+                                </button>
+                              )}
+
+                              <div className="w-px h-3 bg-slate-700 mx-0.5" />
+
+                              {/* Rotasi Y (Perspektif 3D Menyamping) */}
+                              <div className="flex items-center gap-0.5 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
+                                <span className="text-[8.5px] text-amber-300 font-bold px-1 font-mono">
+                                  ⟳ Y:{g.rotationY ? `${g.rotationY > 0 ? '+' : ''}${g.rotationY}°` : '0°'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetGraphicRotationY(g.id, -35)}
+                                  className={`px-1 py-0.5 rounded text-[8.5px] font-mono font-bold cursor-pointer transition-colors ${
+                                    g.rotationY === -35 ? 'bg-[#ff5e00] text-white' : 'hover:bg-slate-700 text-slate-300'
+                                  }`}
+                                  title="Miring Kiri (-35°)"
+                                >
+                                  -35°
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetGraphicRotationY(g.id, 0)}
+                                  className={`px-1 py-0.5 rounded text-[8.5px] font-mono font-bold cursor-pointer transition-colors ${
+                                    !g.rotationY || g.rotationY === 0 ? 'bg-slate-700 text-white' : 'hover:bg-slate-700 text-slate-400'
+                                  }`}
+                                  title="Datar Tegak (0°)"
+                                >
+                                  0°
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetGraphicRotationY(g.id, 35)}
+                                  className={`px-1 py-0.5 rounded text-[8.5px] font-mono font-bold cursor-pointer transition-colors ${
+                                    g.rotationY === 35 ? 'bg-[#ff5e00] text-white' : 'hover:bg-slate-700 text-slate-300'
+                                  }`}
+                                  title="Miring Kanan (+35°)"
+                                >
+                                  +35°
+                                </button>
+                              </div>
+
+                              {/* Auto Clipping Mask Toggle */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleGraphicAutoClipping(g.id)}
+                                className={`px-1.5 py-0.5 rounded font-bold text-[9px] cursor-pointer transition-colors ${
+                                  (g.enableAutoClipping ?? true)
+                                    ? 'bg-emerald-500/40 text-emerald-300 hover:bg-emerald-500/60'
+                                    : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                                }`}
+                                title="Toggle Auto Clipping Mask (Potong rapi mengikuti kontur kain baju)"
+                              >
+                                <span>{(g.enableAutoClipping ?? true) ? '✂ Clip: ON' : '✂ Clip: OFF'}</span>
+                              </button>
+
+                              <div className="w-px h-3 bg-slate-700 mx-0.5" />
+
+                              <button
+                                onClick={() => handleDuplicateGraphic(g.id)}
+                                title="Duplikat (Ctrl+D)"
+                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                              >
+                                <Copy className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => handleFlipHorizontal(g.id)}
+                                title="Balik Horizontal (Mirror)"
+                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                              >
+                                <FlipHorizontal className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => handleFlipVertical(g.id)}
+                                title="Balik Vertikal"
+                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                              >
+                                <FlipVertical className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleAlign(g.id, 'center_h')}
+                                title="Rata Tengah Horizontal"
+                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                              >
+                                <AlignCenter className="w-3.5 h-3.5" />
+                              </button>
+                              <div className="w-px h-3 bg-slate-700 mx-0.5" />
+                              {/* Quick Switch: Bordir vs Sablon */}
+                              <button
+                                onClick={() => {
+                                  const nextTech = g.technique === 'bordir' ? 'sablon' : 'bordir'
+                                  updateGraphicsWithHistory(
+                                    graphics.map((item) =>
+                                      item.id === g.id ? { ...item, technique: nextTech } : item
+                                    )
                                   )
-                                )
-                              }}
-                              title={`Teknik saat ini: ${g.technique === 'bordir' ? '🪡 Bordir Komputer' : '🎨 Sablon DTF'}. Klik untuk ubah mode.`}
-                              className={`px-1.5 py-0.5 rounded font-bold text-[9px] flex items-center gap-1 cursor-pointer transition-colors ${
-                                g.technique === 'bordir'
-                                  ? 'bg-amber-500/40 text-amber-300 hover:bg-amber-500/60'
-                                  : 'bg-indigo-500/40 text-indigo-300 hover:bg-indigo-500/60'
+                                }}
+                                title={`Teknik saat ini: ${g.technique === 'bordir' ? '🪡 Bordir Komputer' : '🎨 Sablon DTF'}. Klik untuk ubah mode.`}
+                                className={`px-1.5 py-0.5 rounded font-bold text-[9px] flex items-center gap-1 cursor-pointer transition-colors ${
+                                  g.technique === 'bordir'
+                                    ? 'bg-amber-500/40 text-amber-300 hover:bg-amber-500/60'
+                                    : 'bg-indigo-500/40 text-indigo-300 hover:bg-indigo-500/60'
+                                }`}
+                              >
+                                <span>{g.technique === 'bordir' ? '🪡 Bordir' : '🎨 Sablon'}</span>
+                              </button>
+                              <div className="w-px h-3 bg-slate-700 mx-0.5" />
+                              <button
+                                onClick={() => handleBringToFront(g.id)}
+                                title="Bawa ke Paling Depan"
+                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                              >
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleSendToBack(g.id)}
+                                title="Kirim ke Paling Belakang"
+                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                              >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteGraphic(g.id)}
+                                title="Hapus (Delete)"
+                                className="p-1 bg-red-600/80 hover:bg-red-600 rounded text-white ml-0.5 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Main Graphic Container */}
+                          <div
+                            id={`graphic-element-${g.id}`}
+                            style={{
+                              left: `${g.x}%`,
+                              top: `${g.y}%`,
+                              transform: `translate(-50%, -50%) perspective(500px) rotateY(${g.rotationY || 0}deg) rotate(${g.rotation}deg)`,
+                              transformOrigin: 'center center',
+                              zIndex: isSelected ? 40 : 10 + idx,
+                              opacity: (g.opacity !== undefined ? g.opacity : 100) / 100,
+                              mixBlendMode: g.blendMode || 'normal',
+                            }}
+                            className={`absolute select-none pointer-events-auto ${
+                              g.isLocked ? 'cursor-default' : 'cursor-move'
+                            }`}
+                          >
+                            {/* Main Bounding Box */}
+                            <div
+                              onMouseDown={(e) => handleStartMove(e, g.id)}
+                              className={`relative p-1 transition-all ${
+                                isSelected
+                                  ? 'border-2 border-[#ff5e00] rounded-lg shadow-sm bg-orange-500/5'
+                                  : 'hover:border hover:border-[#ff5e00]/60 rounded-lg'
                               }`}
                             >
-                              <span>{g.technique === 'bordir' ? '🪡 Bordir' : '🎨 Sablon'}</span>
-                            </button>
-                            <div className="w-px h-3 bg-slate-700 mx-0.5" />
-                            <button
-                              onClick={() => handleBringToFront(g.id)}
-                              title="Bawa ke Paling Depan"
-                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                            >
-                              <ChevronUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleSendToBack(g.id)}
-                              title="Kirim ke Paling Belakang"
-                              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                            >
-                              <ChevronDown className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteGraphic(g.id)}
-                              title="Hapus (Delete)"
-                              className="p-1 bg-red-600/80 hover:bg-red-600 rounded text-white ml-0.5 cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Main Bounding Box */}
-                        <div
-                          onMouseDown={(e) => handleStartMove(e, g.id)}
-                          className={`relative p-1 transition-all ${
-                            isSelected
-                              ? 'border-2 border-[#ff5e00] rounded-lg shadow-sm bg-orange-500/5'
-                              : 'hover:border hover:border-[#ff5e00]/60 rounded-lg'
-                          }`}
-                        >
-                          {/* Content Image / Text */}
-                          <div
-                            style={{
-                              transform: `scale(${scaleX}, ${scaleY})`,
-                              transformOrigin: 'center center',
-                            }}
-                            className="pointer-events-none"
-                          >
+                              {/* Content Image / Text */}
+                              <div
+                                style={{
+                                  transform: `scale(${scaleX}, ${scaleY})`,
+                                  transformOrigin: 'center center',
+                                  opacity: isClipped ? 0 : 1,
+                                }}
+                                className="pointer-events-none"
+                              >
                             {g.type === 'image' ? (
                               <div className="relative inline-block select-none">
                                 <img
@@ -3777,8 +4106,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           )}
                         </div>
                       </div>
-                    )
-                  })}
+                    </React.Fragment>
+                  )
+                })}
 
                   {/* 4.5. LIVE 3D SLEEVE PROJECTIONS (Tampak Menyamping Rapi & Proporsional) */}
                   {sleeveProjectedGraphics.map((proj) => {
@@ -3874,6 +4204,59 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
                             <div className="w-px h-3.5 bg-slate-700 mx-0.5" />
 
+                            {/* Rotasi Y (Perspektif 3D Menyamping) */}
+                            <div className="flex items-center gap-0.5 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
+                              <span className="text-[8.5px] text-amber-300 font-bold px-1 font-mono">
+                                ⟳ Y:{proj.rotationY > 0 ? '+' : ''}{proj.rotationY}°
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleSetGraphicRotationY(proj.graphic.id, -35)}
+                                className={`px-1 py-0.5 rounded text-[8.5px] font-mono font-bold cursor-pointer transition-colors ${
+                                  proj.rotationY === -35 ? 'bg-[#ff5e00] text-white' : 'hover:bg-slate-700 text-slate-300'
+                                }`}
+                                title="Miring Kiri (-35°)"
+                              >
+                                -35°
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSetGraphicRotationY(proj.graphic.id, 0)}
+                                className={`px-1 py-0.5 rounded text-[8.5px] font-mono font-bold cursor-pointer transition-colors ${
+                                  proj.rotationY === 0 ? 'bg-slate-700 text-white' : 'hover:bg-slate-700 text-slate-400'
+                                }`}
+                                title="Datar Tegak (0°)"
+                              >
+                                0°
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSetGraphicRotationY(proj.graphic.id, 35)}
+                                className={`px-1 py-0.5 rounded text-[8.5px] font-mono font-bold cursor-pointer transition-colors ${
+                                  proj.rotationY === 35 ? 'bg-[#ff5e00] text-white' : 'hover:bg-slate-700 text-slate-300'
+                                }`}
+                                title="Miring Kanan (+35°)"
+                              >
+                                +35°
+                              </button>
+                            </div>
+
+                            {/* Auto Clipping Mask Toggle */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleGraphicAutoClipping(proj.graphic.id)}
+                              className={`px-1.5 py-0.5 rounded font-bold text-[9px] cursor-pointer transition-colors ${
+                                proj.enableAutoClipping
+                                  ? 'bg-emerald-500/40 text-emerald-300 hover:bg-emerald-500/60'
+                                  : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                              }`}
+                              title="Toggle Auto Clipping Mask (Potong rapi mengikuti siluet kain)"
+                            >
+                              <span>{proj.enableAutoClipping ? '✂ Clip: ON' : '✂ Clip: OFF'}</span>
+                            </button>
+
+                            <div className="w-px h-3.5 bg-slate-700 mx-0.5" />
+
                             {/* Jump to Sleeve View to edit directly */}
                             <button
                               type="button"
@@ -3902,7 +4285,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           style={{
                             left: `${proj.x}%`,
                             top: `${proj.y}%`,
-                            transform: `translate(-50%, -50%) rotate(${proj.graphic.rotation || 0}deg) scale(${proj.scaleX}, ${proj.scaleY})`,
+                            transform: `translate(-50%, -50%) perspective(500px) rotateY(${proj.rotationY}deg) rotate(${proj.graphic.rotation || 0}deg) scale(${proj.scaleX}, ${proj.scaleY})`,
                             transformOrigin: 'center center',
                             zIndex: isSelected ? 40 : 25,
                             opacity: (proj.graphic.opacity !== undefined ? proj.graphic.opacity : 100) / 100,
@@ -3920,7 +4303,12 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           title={`Desain Lengan ${proj.isWearerLeft ? 'Kiri' : 'Kanan'} (Tampak Menyamping) - Klik untuk pilih, drag untuk geser`}
                         >
                           {/* Visual Content: Image with Bordir / Sablon */}
-                          <div className="relative inline-block select-none">
+                          <div
+                            style={{
+                              opacity: (isClippingMaskActive && proj.enableAutoClipping) ? 0 : 1,
+                            }}
+                            className="relative inline-block select-none"
+                          >
                             <img
                               src={proj.graphic.content}
                               alt="projected-sleeve-logo"
@@ -4029,7 +4417,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             top: `${zone.y}%`,
                             width: `${zone.width}%`,
                             height: `${zone.height}%`,
-                            transform: 'translate(-50%, -50%)',
+                            transform: `translate(-50%, -50%) perspective(400px) rotateY(${zone.rotationY || 0}deg)`,
+                            transformOrigin: 'center center',
                           }}
                           onClick={(e) => {
                             if (!hasGraphic) {
@@ -4079,6 +4468,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                                 • Rp {zone.price.toLocaleString('id-ID')}
                               </span>
                             )}
+                            {zone.rotationY && zone.rotationY !== 0 ? (
+                              <span className="bg-amber-500/30 text-amber-300 px-1 py-0.2 rounded font-mono text-[8px]" title="Rotasi Y (Perspektif 3D Menyamping)">
+                                ⟳ Y:{zone.rotationY > 0 ? '+' : ''}{zone.rotationY}°
+                              </span>
+                            ) : null}
+                            {zone.enableAutoClipping ?? true ? (
+                              <span className="bg-emerald-500/30 text-emerald-300 px-1 py-0.2 rounded text-[7.5px]" title="Auto Clipping Mask Aktif">
+                                ✂ Clip
+                              </span>
+                            ) : null}
                           </div>
 
                           {/* Center: Upload Area Action Button */}
