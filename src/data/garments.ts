@@ -315,21 +315,21 @@ export const POSITION_PRESETS: Array<{
 // Definisi Garis Panduan Area Sablon Aman (Print Safe Zones Standar)
 export const PRINT_ZONES: PrintZone[] = [
   // Tampak Depan
-  { id: 'z_left_chest', name: 'Dada Kiri (10×10cm)', x: 68, y: 32, width: 20, height: 18, side: 'front', price: 15000, maxSizeCm: '10×10 cm', rotationY: 0, enableAutoClipping: true },
-  { id: 'z_right_chest', name: 'Dada Kanan (10×10cm)', x: 32, y: 32, width: 20, height: 18, side: 'front', price: 15000, maxSizeCm: '10×10 cm', rotationY: 0, enableAutoClipping: true },
-  { id: 'z_front_a3', name: 'Area Cetak Depan Maks (A3)', x: 50, y: 45, width: 52, height: 58, side: 'front', price: 35000, maxSizeCm: 'A3 (30×42 cm)', rotationY: 0, enableAutoClipping: true },
-  { id: 'z_front_sleeve_right', name: 'Bahu / Lengan Kanan (Menyamping)', x: 23, y: 34, width: 14, height: 20, side: 'front', price: 15000, maxSizeCm: '8×8 cm', rotationY: 35, enableAutoClipping: true, description: 'Sinkron otomatis ke Tampak Kanan & Belakang' },
-  { id: 'z_front_sleeve_left', name: 'Bahu / Lengan Kiri (Menyamping)', x: 77, y: 34, width: 14, height: 20, side: 'front', price: 15000, maxSizeCm: '8×8 cm', rotationY: -35, enableAutoClipping: true, description: 'Sinkron otomatis ke Tampak Kiri & Belakang' },
+  { id: 'z_left_chest', name: 'Dada Kiri (10×10cm)', x: 68, y: 32, width: 20, height: 18, side: 'front', price: 15000, maxSizeCm: '10×10 cm', rotationX: 0, rotationY: 0, rotationZ: 0, enableAutoClipping: true },
+  { id: 'z_right_chest', name: 'Dada Kanan (10×10cm)', x: 32, y: 32, width: 20, height: 18, side: 'front', price: 15000, maxSizeCm: '10×10 cm', rotationX: 0, rotationY: 0, rotationZ: 0, enableAutoClipping: true },
+  { id: 'z_front_a3', name: 'Area Cetak Depan Maks (A3)', x: 50, y: 45, width: 52, height: 58, side: 'front', price: 35000, maxSizeCm: 'A3 (30×42 cm)', rotationX: 0, rotationY: 0, rotationZ: 0, enableAutoClipping: true },
+  { id: 'z_front_sleeve_right', name: 'Bahu / Lengan Kanan (Menyamping)', x: 23, y: 34, width: 14, height: 20, side: 'front', price: 15000, maxSizeCm: '8×8 cm', rotationX: 0, rotationY: 35, rotationZ: 0, enableAutoClipping: true, description: 'Sinkron otomatis ke Tampak Kanan & Belakang' },
+  { id: 'z_front_sleeve_left', name: 'Bahu / Lengan Kiri (Menyamping)', x: 77, y: 34, width: 14, height: 20, side: 'front', price: 15000, maxSizeCm: '8×8 cm', rotationX: 0, rotationY: -35, rotationZ: 0, enableAutoClipping: true, description: 'Sinkron otomatis ke Tampak Kiri & Belakang' },
 
   // Tampak Belakang
-  { id: 'z_back_a3', name: 'Area Cetak Punggung Maks (A3+)', x: 50, y: 45, width: 54, height: 62, side: 'back', price: 45000, maxSizeCm: 'A3+ (32×48 cm)', rotationY: 0, enableAutoClipping: true },
-  { id: 'z_neck_back', name: 'Tengkuk Belakang (8×8cm)', x: 50, y: 16, width: 16, height: 12, side: 'back', price: 10000, maxSizeCm: '8×8 cm', rotationY: 0, enableAutoClipping: true },
-  { id: 'z_back_sleeve_left', name: 'Bahu / Lengan Kiri (Belakang)', x: 23, y: 34, width: 14, height: 20, side: 'back', price: 15000, maxSizeCm: '8×8 cm', rotationY: 35, enableAutoClipping: true, description: 'Sinkron otomatis ke Tampak Kiri & Depan' },
-  { id: 'z_back_sleeve_right', name: 'Bahu / Lengan Kanan (Belakang)', x: 77, y: 34, width: 14, height: 20, side: 'back', price: 15000, maxSizeCm: '8×8 cm', rotationY: -35, enableAutoClipping: true, description: 'Sinkron otomatis ke Tampak Kanan & Depan' },
+  { id: 'z_back_a3', name: 'Area Cetak Punggung Maks (A3+)', x: 50, y: 45, width: 54, height: 62, side: 'back', price: 45000, maxSizeCm: 'A3+ (32×48 cm)', rotationX: 0, rotationY: 0, rotationZ: 0, enableAutoClipping: true },
+  { id: 'z_neck_back', name: 'Tengkuk Belakang (8×8cm)', x: 50, y: 16, width: 16, height: 12, side: 'back', price: 10000, maxSizeCm: '8×8 cm', rotationX: 0, rotationY: 0, rotationZ: 0, enableAutoClipping: true },
+  { id: 'z_back_sleeve_left', name: 'Bahu / Lengan Kiri (Belakang)', x: 23, y: 34, width: 14, height: 20, side: 'back', price: 15000, maxSizeCm: '8×8 cm', rotationX: 0, rotationY: 35, rotationZ: 0, enableAutoClipping: true, description: 'Sinkron otomatis ke Tampak Kiri & Depan' },
+  { id: 'z_back_sleeve_right', name: 'Bahu / Lengan Kanan (Belakang)', x: 77, y: 34, width: 14, height: 20, side: 'back', price: 15000, maxSizeCm: '8×8 cm', rotationX: 0, rotationY: -35, rotationZ: 0, enableAutoClipping: true, description: 'Sinkron otomatis ke Tampak Kanan & Depan' },
 
   // Tampak Lengan Kiri & Kanan
-  { id: 'z_left_sleeve', name: 'Area Patch Lengan Kiri', x: 50, y: 35, width: 40, height: 40, side: 'left', price: 15000, maxSizeCm: '8×8 cm', rotationY: 0, enableAutoClipping: true },
-  { id: 'z_right_sleeve', name: 'Area Patch Lengan Kanan', x: 50, y: 35, width: 40, height: 40, side: 'right', price: 15000, maxSizeCm: '8×8 cm', rotationY: 0, enableAutoClipping: true },
+  { id: 'z_left_sleeve', name: 'Area Patch Lengan Kiri', x: 50, y: 35, width: 40, height: 40, side: 'left', price: 15000, maxSizeCm: '8×8 cm', rotationX: 0, rotationY: 0, rotationZ: 0, enableAutoClipping: true },
+  { id: 'z_right_sleeve', name: 'Area Patch Lengan Kanan', x: 50, y: 35, width: 40, height: 40, side: 'right', price: 15000, maxSizeCm: '8×8 cm', rotationX: 0, rotationY: 0, rotationZ: 0, enableAutoClipping: true },
 ]
 
 // ZY Clothes Smart Pricing Engine by Graphic Size

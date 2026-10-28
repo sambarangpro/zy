@@ -40,8 +40,10 @@ export interface CanvasGraphic {
   scale: number // 0.2 to 2.5
   scaleX?: number // for flip horizontal (-1 or 1)
   scaleY?: number // for flip vertical (-1 or 1)
-  rotation: number // degrees -180 to 180
-  rotationY?: number // degrees -85 to 85 (perspektif Y menyamping 3D)
+  rotation: number // degrees -180 to 180 (rotasi 2D / Z-axis)
+  rotationX?: number // degrees -85 to 85 (perspektif 3D vertikal / pitch)
+  rotationY?: number // degrees -85 to 85 (perspektif Y menyamping 3D / yaw)
+  rotationZ?: number // degrees -180 to 180 (alias eksplisit untuk Z-axis)
   enableAutoClipping?: boolean // auto clipping mask mengikuti siluet kain blangko
   textColor?: string
   fontFamily?: string
@@ -85,7 +87,9 @@ export interface PrintZone {
   price: number // Harga sablon / cetak pada titik ini (Rp)
   maxSizeCm?: string // Ukuran fisik misal "10×10 cm", "A4 (21×30 cm)", "A3 (30×42 cm)"
   description?: string
-  rotationY?: number // degrees -85 to 85 (kemiringan sudut pandang Y / menyamping pada canvas blangko)
+  rotationX?: number // degrees -85 to 85 (kemiringan sudut pandang X vertikal / pitch)
+  rotationY?: number // degrees -85 to 85 (kemiringan sudut pandang Y menyamping 3D / yaw)
+  rotationZ?: number // degrees -180 to 180 (sudut putar 2D bidang kain / roll)
   enableAutoClipping?: boolean // aktifkan clipping mask otomatis mengikuti siluet kain baju
 }
 

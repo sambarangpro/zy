@@ -359,6 +359,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
   // Refs
   const viewportRef = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const paintCanvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -388,7 +389,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       y: number
       scaleX: number
       scaleY: number
+      rotationX: number
       rotationY: number
+      rotationZ: number
       enableAutoClipping: boolean
     }> = []
 
@@ -427,6 +430,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         const flipX = g.scaleX || 1
         const flipY = g.scaleY || 1
 
+        const rotX =
+          g.rotationX !== undefined && g.rotationX !== 0
+            ? g.rotationX
+            : matchingSleeveZone?.rotationX !== undefined
+            ? matchingSleeveZone.rotationX
+            : 0
+
         const rotY =
           g.rotationY !== undefined && g.rotationY !== 0
             ? g.rotationY
@@ -435,6 +445,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             : isViewerRight
             ? -35
             : 35
+
+        const rotZ =
+          g.rotationZ !== undefined && g.rotationZ !== 0
+            ? g.rotationZ
+            : g.rotation !== undefined && g.rotation !== 0
+            ? g.rotation
+            : matchingSleeveZone?.rotationZ !== undefined
+            ? matchingSleeveZone.rotationZ
+            : 0
+
         const autoClip = matchingSleeveZone?.enableAutoClipping ?? g.enableAutoClipping ?? true
 
         projected.push({
@@ -447,7 +467,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           // Kompresi horizontal tampak menyamping yang rapi, simetris, dan tegak (tidak miring/penyok)
           scaleX: Number((baseScale * flipX * 0.62).toFixed(3)),
           scaleY: Number((baseScale * flipY * 0.86).toFixed(3)),
+          rotationX: rotX,
           rotationY: rotY,
+          rotationZ: rotZ,
           enableAutoClipping: autoClip,
         })
       }
@@ -484,6 +506,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         const flipX = g.scaleX || 1
         const flipY = g.scaleY || 1
 
+        const rotX =
+          g.rotationX !== undefined && g.rotationX !== 0
+            ? g.rotationX
+            : matchingSleeveZone?.rotationX !== undefined
+            ? matchingSleeveZone.rotationX
+            : 0
+
         const rotY =
           g.rotationY !== undefined && g.rotationY !== 0
             ? g.rotationY
@@ -492,6 +521,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             : isViewerRight
             ? -35
             : 35
+
+        const rotZ =
+          g.rotationZ !== undefined && g.rotationZ !== 0
+            ? g.rotationZ
+            : g.rotation !== undefined && g.rotation !== 0
+            ? g.rotation
+            : matchingSleeveZone?.rotationZ !== undefined
+            ? matchingSleeveZone.rotationZ
+            : 0
+
         const autoClip = matchingSleeveZone?.enableAutoClipping ?? g.enableAutoClipping ?? true
 
         projected.push({
@@ -504,7 +543,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           // Kompresi horizontal tampak menyamping yang rapi, simetris, dan tegak (tidak miring/penyok)
           scaleX: Number((baseScale * flipX * 0.62).toFixed(3)),
           scaleY: Number((baseScale * flipY * 0.86).toFixed(3)),
+          rotationX: rotX,
           rotationY: rotY,
+          rotationZ: rotZ,
           enableAutoClipping: autoClip,
         })
       }
@@ -779,6 +820,36 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       ? activeMockup.leftImg
       : activeMockup.rightImg
     : undefined
+
+  // Natural image dimensions for 1:1 pixel accuracy matching MockupDashboard (Zero Letterboxing Offset)
+  const [mockupNaturalSize, setMockupNaturalSize] = useState<{ width: number; height: number }>({
+    width: 540,
+    height: 640,
+  })
+
+  useEffect(() => {
+    if (!currentMockupImage) {
+      setMockupNaturalSize({ width: 540, height: 640 })
+      return
+    }
+    const img = new Image()
+    img.onload = () => {
+      if (img.naturalWidth && img.naturalHeight) {
+        setMockupNaturalSize({ width: img.naturalWidth, height: img.naturalHeight })
+      }
+    }
+    img.src = currentMockupImage
+  }, [currentMockupImage])
+
+  const stageAspectRatio = mockupNaturalSize.width / Math.max(1, mockupNaturalSize.height)
+  const MAX_STAGE_HEIGHT = 600
+  const MAX_STAGE_WIDTH = 540
+  let stageDisplayHeight = MAX_STAGE_HEIGHT
+  let stageDisplayWidth = stageDisplayHeight * stageAspectRatio
+  if (stageDisplayWidth > MAX_STAGE_WIDTH) {
+    stageDisplayWidth = MAX_STAGE_WIDTH
+    stageDisplayHeight = stageDisplayWidth / stageAspectRatio
+  }
 
   // Redraw paint layer whenever currentSide changes
   useEffect(() => {
@@ -1121,6 +1192,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       scaleX: 1,
       scaleY: 1,
       rotation: 0,
+      rotationX: 0,
+      rotationY: 0,
+      rotationZ: 0,
+      enableAutoClipping: true,
       technique: 'bordir',
       label,
       sizeCategory: calc.sizeCategory,
@@ -1140,6 +1215,75 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       fileInputRef.current.value = ''
       fileInputRef.current.click()
     }
+  }
+
+  // Render Contoh Area Gambar Logo / Patch Realistis (Identik 1:1 dengan MockupDashboard)
+  const renderSampleEmblem = (zone: PrintZone) => {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center p-0.5 select-none pointer-events-none drop-shadow-md">
+        <svg
+          viewBox="0 0 100 100"
+          className="w-full h-full max-w-full max-h-full overflow-visible drop-shadow-sm"
+        >
+          <defs>
+            <linearGradient id={`cz-grad-shield-${zone.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#1e3a8a" />
+              <stop offset="50%" stopColor="#2563eb" />
+              <stop offset="100%" stopColor="#1d4ed8" />
+            </linearGradient>
+            <linearGradient id={`cz-grad-gold-${zone.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#fef08a" />
+              <stop offset="50%" stopColor="#eab308" />
+              <stop offset="100%" stopColor="#ca8a04" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M50 6 L84 20 L84 54 Q84 84 50 94 Q16 84 16 54 L16 20 Z"
+            fill={`url(#cz-grad-shield-${zone.id})`}
+            stroke={`url(#cz-grad-gold-${zone.id})`}
+            strokeWidth="3.5"
+          />
+          <path
+            d="M50 13 L77 24 L77 52 Q77 77 50 86 Q23 77 23 52 L23 24 Z"
+            fill="none"
+            stroke="#fbbf24"
+            strokeWidth="1.2"
+            strokeDasharray="2.5 1.5"
+          />
+          <polygon
+            points="50,22 53.5,33 65,33 55.7,40 59.2,51 50,44.5 40.8,51 44.3,40 35,33 46.5,33"
+            fill={`url(#cz-grad-gold-${zone.id})`}
+            stroke="#92400e"
+            strokeWidth="0.8"
+          />
+          <rect x="25" y="56" width="50" height="13" rx="2.5" fill="#dc2626" stroke="#fbbf24" strokeWidth="1" />
+          <text
+            x="50"
+            y="65.5"
+            textAnchor="middle"
+            fill="#ffffff"
+            fontSize="6"
+            fontWeight="900"
+            fontFamily="sans-serif"
+            letterSpacing="0.4"
+          >
+            SABLON / BORDIR
+          </text>
+          <text
+            x="50"
+            y="77.5"
+            textAnchor="middle"
+            fill="#fde047"
+            fontSize="4.8"
+            fontWeight="700"
+            fontFamily="sans-serif"
+            letterSpacing="0.3"
+          >
+            ★ PREMIUM ★
+          </text>
+        </svg>
+      </div>
+    )
   }
 
   // Handle image upload from user device - opens modal choosing between Bordir and Sablon + target zone
@@ -1213,8 +1357,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       scale,
       scaleX: 1,
       scaleY: 1,
-      rotation: 0,
+      rotation: chosenZone?.rotationZ !== undefined ? chosenZone.rotationZ : 0,
+      rotationX: chosenZone?.rotationX || 0,
       rotationY: chosenZone?.rotationY || 0,
+      rotationZ: chosenZone?.rotationZ !== undefined ? chosenZone.rotationZ : 0,
       enableAutoClipping: chosenZone?.enableAutoClipping ?? true,
       technique,
       label: fileName.trim() || (technique === 'bordir' ? 'Bordir Komputer' : 'Sablon DTF'),
@@ -1246,6 +1392,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       scaleX: 1,
       scaleY: 1,
       rotation: 0,
+      rotationX: 0,
+      rotationY: 0,
+      rotationZ: 0,
+      enableAutoClipping: true,
       textColor,
       fontFamily: textFont,
       fontSize: 22,
@@ -1518,7 +1668,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         if (g.id === gId) {
           let newRot = Math.round((g.rotation || 0) + deltaDeg) % 360
           if (newRot < 0) newRot += 360
-          return { ...g, rotation: newRot }
+          return { ...g, rotation: newRot, rotationZ: newRot }
         }
         return g
       })
@@ -1529,7 +1679,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const handleResetRotation = (gId: string) => {
     pushHistorySnapshot()
     onGraphicsChange(
-      graphics.map((g) => (g.id === gId ? { ...g, rotation: 0 } : g))
+      graphics.map((g) => (g.id === gId ? { ...g, rotation: 0, rotationZ: 0 } : g))
+    )
+  }
+
+  // Set Rotasi X grafik (Perspektif 3D Vertikal / Menunduk: -85 sampai +85 derajat)
+  const handleSetGraphicRotationX = (gId: string, rotX: number) => {
+    pushHistorySnapshot()
+    onGraphicsChange(
+      graphics.map((g) => (g.id === gId ? { ...g, rotationX: Math.max(-85, Math.min(85, rotX)) } : g))
     )
   }
 
@@ -1537,7 +1695,47 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const handleSetGraphicRotationY = (gId: string, rotY: number) => {
     pushHistorySnapshot()
     onGraphicsChange(
-      graphics.map((g) => (g.id === gId ? { ...g, rotationY: rotY } : g))
+      graphics.map((g) => (g.id === gId ? { ...g, rotationY: Math.max(-85, Math.min(85, rotY)) } : g))
+    )
+  }
+
+  // Set Rotasi Z grafik (Sudut Putar 2D Bidang Kain: -180 sampai +180 derajat)
+  const handleSetGraphicRotationZ = (gId: string, rotZ: number) => {
+    pushHistorySnapshot()
+    let newRot = rotZ
+    if (newRot > 180) newRot -= 360
+    if (newRot < -180) newRot += 360
+    onGraphicsChange(
+      graphics.map((g) => (g.id === gId ? { ...g, rotation: newRot, rotationZ: newRot } : g))
+    )
+  }
+
+  // Nudge Rotasi X (+5, -5)
+  const handleNudgeGraphicRotationX = (gId: string, deltaDeg: number, baseValue?: number) => {
+    const target = graphics.find((g) => g.id === gId)
+    const current = target?.rotationX !== undefined ? target.rotationX : (baseValue ?? 0)
+    handleSetGraphicRotationX(gId, current + deltaDeg)
+  }
+
+  // Nudge Rotasi Y (+5, -5)
+  const handleNudgeGraphicRotationY = (gId: string, deltaDeg: number, baseValue?: number) => {
+    const target = graphics.find((g) => g.id === gId)
+    const current = target?.rotationY !== undefined ? target.rotationY : (baseValue ?? 0)
+    handleSetGraphicRotationY(gId, current + deltaDeg)
+  }
+
+  // Nudge Rotasi Z (+5, -5)
+  const handleNudgeGraphicRotationZ = (gId: string, deltaDeg: number, baseValue?: number) => {
+    const target = graphics.find((g) => g.id === gId)
+    const current = target?.rotationZ !== undefined ? target.rotationZ : (baseValue !== undefined ? baseValue : (target?.rotation || 0))
+    handleSetGraphicRotationZ(gId, current + deltaDeg)
+  }
+
+  // Reset semua rotasi 3D (X, Y, Z) ke 0 derajat
+  const handleResetGraphic3D = (gId: string) => {
+    pushHistorySnapshot()
+    onGraphicsChange(
+      graphics.map((g) => (g.id === gId ? { ...g, rotationX: 0, rotationY: 0, rotation: 0, rotationZ: 0 } : g))
     )
   }
 
@@ -1584,13 +1782,14 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!dragState.mode || !selectedGraphicId || !viewportRef.current) return
 
-    const rect = viewportRef.current.getBoundingClientRect()
     const deltaPixelX = e.clientX - dragState.startX
     const deltaPixelY = e.clientY - dragState.startY
+    const stageW = (stageDisplayWidth || 540) * (zoomLevel || 1)
+    const stageH = (stageDisplayHeight || 600) * (zoomLevel || 1)
 
     if (dragState.mode === 'move') {
-      const deltaPercentX = (deltaPixelX / rect.width) * 100
-      const deltaPercentY = (deltaPixelY / rect.height) * 100
+      const deltaPercentX = (deltaPixelX / stageW) * 100
+      const deltaPercentY = (deltaPixelY / stageH) * 100
 
       const targetG = graphics.find((g) => g.id === selectedGraphicId)
       const isProjectedView =
@@ -1660,7 +1859,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       onGraphicsChange(
         graphics.map((item) => {
           if (item.id === selectedGraphicId) {
-            return { ...item, rotation: newRotation }
+            return { ...item, rotation: newRotation, rotationZ: newRotation }
           }
           return item
         })
@@ -1729,13 +1928,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         const posX = (g.x / 100) * canvas.width
         const posY = (g.y / 100) * canvas.height
         const rotYRad = ((g.rotationY || 0) * Math.PI) / 180
+        const rotXRad = ((g.rotationX || 0) * Math.PI) / 180
         const cosY = Math.cos(rotYRad)
+        const cosX = Math.cos(rotXRad)
         const scaleX = (g.scaleX || 1) * g.scale * Math.max(0.15, Math.abs(cosY))
-        const scaleY = (g.scaleY || 1) * g.scale
+        const scaleY = (g.scaleY || 1) * g.scale * Math.max(0.15, Math.abs(cosX))
 
         ctx.save()
         ctx.translate(posX, posY)
-        ctx.rotate((g.rotation * Math.PI) / 180)
+        ctx.rotate(((g.rotationZ !== undefined ? g.rotationZ : g.rotation) * Math.PI) / 180)
         ctx.scale(scaleX, scaleY)
 
         if (g.type === 'text') {
@@ -1771,11 +1972,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       visibleProjected.forEach((proj) => {
         const posX = (proj.x / 100) * canvas.width
         const posY = (proj.y / 100) * canvas.height
-        const rotRad = ((proj.graphic.rotation || 0) * Math.PI) / 180
+        const rotRad = ((proj.rotationZ || proj.graphic.rotation || 0) * Math.PI) / 180
         const rotYRad = ((proj.rotationY || 0) * Math.PI) / 180
+        const rotXRad = ((proj.rotationX || 0) * Math.PI) / 180
         const cosY = Math.cos(rotYRad)
+        const cosX = Math.cos(rotXRad)
         const scaleX = proj.scaleX * Math.max(0.2, Math.abs(cosY))
-        const scaleY = proj.scaleY
+        const scaleY = proj.scaleY * Math.max(0.2, Math.abs(cosX))
 
         ctx.save()
         ctx.translate(posX, posY)
@@ -2473,6 +2676,26 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
+              </div>
+
+              <div className="h-4 w-px bg-slate-200" />
+
+              {/* 3D Multi-Axis Rotation Pill in Inspector */}
+              <div className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200 text-[10px] font-mono">
+                <span className="text-slate-500 font-semibold font-sans">3D:</span>
+                <span className="text-amber-700 font-bold" title="Rotasi Y (Menyamping)">Y:{selectedGraphic.rotationY || 0}°</span>
+                <span className="text-cyan-700 font-bold" title="Rotasi X (Menunduk)">X:{selectedGraphic.rotationX || 0}°</span>
+                <span className="text-pink-700 font-bold" title="Rotasi Z (Roll / Sudut Pola)">Z:{selectedGraphic.rotationZ !== undefined ? selectedGraphic.rotationZ : (selectedGraphic.rotation || 0)}°</span>
+                {Boolean(selectedGraphic.rotationX || selectedGraphic.rotationY || (selectedGraphic.rotationZ !== undefined ? selectedGraphic.rotationZ : selectedGraphic.rotation)) && (
+                  <button
+                    type="button"
+                    onClick={() => handleResetGraphic3D(selectedGraphic.id)}
+                    className="ml-1 px-1 py-0.2 bg-slate-200 hover:bg-red-500 text-slate-700 hover:text-white rounded text-[8px] cursor-pointer transition-colors"
+                    title="Reset 3D (X, Y, Z) ke 0°"
+                  >
+                    Reset
+                  </button>
+                )}
               </div>
 
               <div className="h-4 w-px bg-slate-200" />
@@ -3356,81 +3579,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             backgroundSize: '24px 24px',
           }}
         >
-          {/* FLOATING QUICK BAR FOR COLOR PARTS (Sinkron Lintas Sudut Pandang) */}
-          {(unifiedPartGroups.length > 0 || baseGarmentColor) && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl shadow-lg px-3.5 py-1.5 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
-              <div className="flex items-center gap-1.5 text-xs font-black text-slate-800">
-                <Palette className="w-3.5 h-3.5 text-[#ff5e00]" />
-                <span>Warna Seragam:</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {/* Tombol Cepat: Warna Keseluruhan Seragam */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTool('palette')
-                    setActiveColorPickerGroupKey('__base__')
-                  }}
-                  title="Ganti warna dasar seluruh seragam (posisi di bawah semua layer)"
-                  className="flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-2.5 py-1 rounded-lg text-[10px] font-black text-[#ff5e00] cursor-pointer transition-colors shadow-2xs"
-                >
-                  <GarmentPartIcon iconId="all_garment" className="w-3.5 h-3.5 stroke-[2] shrink-0" />
-                  <span
-                    style={{ backgroundColor: baseGarmentColor }}
-                    className="w-2.5 h-2.5 rounded-full border border-orange-400 inline-block shadow-2xs"
-                  />
-                  <span>Warna Keseluruhan</span>
-                </button>
-
-                {unifiedPartGroups.slice(0, 3).map((group) => {
-                  return (
-                    <button
-                      key={group.key}
-                      onClick={() => {
-                        setShowLayersPanel(true)
-                        setActiveColorPickerGroupKey(group.key)
-                      }}
-                      title={`Klik untuk ubah warna ${group.name} di Panel Layer (Sinkron 4 Sisi)`}
-                      className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-700 cursor-pointer transition-colors shadow-2xs"
-                    >
-                      <GarmentPartIcon
-                        iconId={group.icon}
-                        partName={group.name}
-                        className="w-3.5 h-3.5 stroke-[2] text-slate-600 shrink-0"
-                      />
-                      <span
-                        style={{ backgroundColor: group.currentColor }}
-                        className="w-2.5 h-2.5 rounded-full border border-slate-300 inline-block shadow-2xs"
-                      />
-                      <span>{group.name}</span>
-                      <span className="text-[9px] text-slate-400 font-normal">
-                        ({group.sides.length} Sisi)
-                      </span>
-                    </button>
-                  )
-                })}
-                {unifiedPartGroups.length > 3 && (
-                  <button
-                    onClick={() => setShowLayersPanel(true)}
-                    className="text-[10px] font-extrabold text-[#ff5e00] hover:underline cursor-pointer"
-                  >
-                    +{unifiedPartGroups.length - 3} lainnya
-                  </button>
-                )}
-              </div>
-              <button
-                onClick={() => setShowLayersPanel(true)}
-                className="text-[11px] font-extrabold text-[#ff5e00] hover:text-[#e05300] cursor-pointer ml-1"
-              >
-                Panel Layer
-              </button>
-            </div>
-          )}
-
-          {/* User's Realistic Mockup Stage with UNIFIED CLIPPING MASK CONTAINER */}
+          {/* User's Realistic Mockup Stage with EXACT 1:1 BOUNDING WRAPPER MATCHING CANVAS OWNER */}
           <div
-            className="w-full h-full max-w-[680px] max-h-[760px] relative flex items-center justify-center transition-transform drop-shadow-[0_15px_30px_rgba(0,0,0,0.12)]"
-            style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
+            ref={stageRef}
+            className="relative flex items-center justify-center transition-transform drop-shadow-[0_15px_30px_rgba(0,0,0,0.12)] select-none shrink-0"
+            style={{
+              width: `${Math.round(stageDisplayWidth)}px`,
+              height: `${Math.round(stageDisplayHeight)}px`,
+              transform: `scale(${zoomLevel})`,
+              transformOrigin: 'center center',
+            }}
           >
             {/* If photo not uploaded */}
             {!currentMockupImage ? (
@@ -3542,7 +3700,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             style={{
                               left: `${g.x}%`,
                               top: `${g.y}%`,
-                              transform: `translate(-50%, -50%) perspective(500px) rotateY(${g.rotationY || 0}deg) rotate(${g.rotation}deg)`,
+                              transform: `translate(-50%, -50%) perspective(500px) rotateX(${g.rotationX || 0}deg) rotateY(${g.rotationY || 0}deg) rotate(${g.rotationZ !== undefined ? g.rotationZ : g.rotation}deg)`,
                               transformOrigin: 'center center',
                               opacity: (g.opacity !== undefined ? g.opacity : 100) / 100,
                               mixBlendMode: g.blendMode || 'normal',
@@ -3656,7 +3814,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             style={{
                               left: `${proj.x}%`,
                               top: `${proj.y}%`,
-                              transform: `translate(-50%, -50%) perspective(500px) rotateY(${proj.rotationY}deg) rotate(${proj.graphic.rotation || 0}deg) scale(${proj.scaleX}, ${proj.scaleY})`,
+                              transform: `translate(-50%, -50%) perspective(500px) rotateX(${proj.rotationX || 0}deg) rotateY(${proj.rotationY || 0}deg) rotateZ(${proj.rotationZ !== undefined ? proj.rotationZ : (proj.graphic.rotation || 0)}deg) scale(${proj.scaleX}, ${proj.scaleY})`,
                               transformOrigin: 'center center',
                               opacity: (proj.graphic.opacity !== undefined ? proj.graphic.opacity : 100) / 100,
                               mixBlendMode: proj.graphic.blendMode || 'normal',
@@ -3735,6 +3893,78 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           </div>
                         )
                       })}
+
+                    {/* C. Sample Emblems with Auto-Clipping Mask (Matching Canvas Owner) */}
+                    {showGuidelines && (
+                      <>
+                        {currentPrintZones
+                          .filter((z) => {
+                            const hasG = currentSideGraphics.some(
+                              (g) =>
+                                Math.abs(g.x - z.x) <= Math.max(z.width / 2, 4) &&
+                                Math.abs(g.y - z.y) <= Math.max(z.height / 2, 4)
+                            )
+                            const hasP = sleeveProjectedGraphics.some(
+                              (p) =>
+                                Math.abs(p.x - z.x) <= Math.max(z.width / 2, 4) &&
+                                Math.abs(p.y - z.y) <= Math.max(z.height / 2, 4)
+                            )
+                            return !hasG && !hasP && (z.enableAutoClipping ?? true)
+                          })
+                          .map((zone) => (
+                            <div
+                              key={`cz-sample-masked-${zone.id}`}
+                              style={{
+                                left: `${zone.x}%`,
+                                top: `${zone.y}%`,
+                                width: `${zone.width}%`,
+                                height: `${zone.height}%`,
+                                transform: `translate(-50%, -50%) perspective(500px) rotateX(${zone.rotationX || 0}deg) rotateY(${zone.rotationY || 0}deg) rotateZ(${zone.rotationZ || 0}deg)`,
+                                transformOrigin: 'center center',
+                              }}
+                              className="absolute pointer-events-none z-10"
+                            >
+                              {renderSampleEmblem(zone)}
+                            </div>
+                          ))}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* 3.9 UNMASKED SAMPLE EMBLEMS (For zones without auto-clipping or when clipping is off) */}
+                {showGuidelines && (
+                  <div className="absolute inset-0 w-full h-full pointer-events-none z-17 overflow-hidden">
+                    {currentPrintZones
+                      .filter((z) => {
+                        const hasG = currentSideGraphics.some(
+                          (g) =>
+                            Math.abs(g.x - z.x) <= Math.max(z.width / 2, 4) &&
+                            Math.abs(g.y - z.y) <= Math.max(z.height / 2, 4)
+                        )
+                        const hasP = sleeveProjectedGraphics.some(
+                          (p) =>
+                            Math.abs(p.x - z.x) <= Math.max(z.width / 2, 4) &&
+                            Math.abs(p.y - z.y) <= Math.max(z.height / 2, 4)
+                        )
+                        return !hasG && !hasP && (!isClippingMaskActive || !(z.enableAutoClipping ?? true))
+                      })
+                      .map((zone) => (
+                        <div
+                          key={`cz-sample-unmasked-${zone.id}`}
+                          style={{
+                            left: `${zone.x}%`,
+                            top: `${zone.y}%`,
+                            width: `${zone.width}%`,
+                            height: `${zone.height}%`,
+                            transform: `translate(-50%, -50%) perspective(500px) rotateX(${zone.rotationX || 0}deg) rotateY(${zone.rotationY || 0}deg) rotateZ(${zone.rotationZ || 0}deg)`,
+                            transformOrigin: 'center center',
+                          }}
+                          className="absolute pointer-events-none z-10"
+                        >
+                          {renderSampleEmblem(zone)}
+                        </div>
+                      ))}
                   </div>
                 )}
 
@@ -3800,40 +4030,73 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
                               <div className="w-px h-3 bg-slate-700 mx-0.5" />
 
-                              {/* Rotasi Y (Perspektif 3D Menyamping) */}
-                              <div className="flex items-center gap-0.5 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
-                                <span className="text-[8.5px] text-amber-300 font-bold px-1 font-mono">
-                                  ⟳ Y:{g.rotationY ? `${g.rotationY > 0 ? '+' : ''}${g.rotationY}°` : '0°'}
-                                </span>
+                              {/* Rotasi 3D Multi-Axis (Y, X, Z) */}
+                              <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700 text-[8.5px] font-mono">
+                                {/* Y Control (Yaw - Menyamping) */}
+                                <div className="flex items-center gap-0.5">
+                                  <span className="text-amber-300 font-bold px-0.5" title="Rotasi Y (Menyamping 3D)">Y:</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleNudgeGraphicRotationY(g.id, -5)}
+                                    className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
+                                    title="Putar Y -5°"
+                                  >-</button>
+                                  <span className="font-bold text-white px-0.5 min-w-[20px] text-center">{g.rotationY || 0}°</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleNudgeGraphicRotationY(g.id, 5)}
+                                    className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
+                                    title="Putar Y +5°"
+                                  >+</button>
+                                </div>
+
+                                <div className="w-px h-3 bg-slate-700 mx-0.5" />
+
+                                {/* X Control (Pitch - Menunduk) */}
+                                <div className="flex items-center gap-0.5">
+                                  <span className="text-cyan-300 font-bold px-0.5" title="Rotasi X (Menunduk Vertikal 3D)">X:</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleNudgeGraphicRotationX(g.id, -5)}
+                                    className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
+                                    title="Putar X -5°"
+                                  >-</button>
+                                  <span className="font-bold text-white px-0.5 min-w-[20px] text-center">{g.rotationX || 0}°</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleNudgeGraphicRotationX(g.id, 5)}
+                                    className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
+                                    title="Putar X +5°"
+                                  >+</button>
+                                </div>
+
+                                <div className="w-px h-3 bg-slate-700 mx-0.5" />
+
+                                {/* Z Control (Roll - Sudut Pola) */}
+                                <div className="flex items-center gap-0.5">
+                                  <span className="text-pink-300 font-bold px-0.5" title="Rotasi Z (Sudut Putar Pola 2D)">Z:</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleNudgeGraphicRotationZ(g.id, -5)}
+                                    className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
+                                    title="Putar Z -5°"
+                                  >-</button>
+                                  <span className="font-bold text-white px-0.5 min-w-[20px] text-center">{g.rotationZ !== undefined ? g.rotationZ : (g.rotation || 0)}°</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleNudgeGraphicRotationZ(g.id, 5)}
+                                    className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
+                                    title="Putar Z +5°"
+                                  >+</button>
+                                </div>
+
                                 <button
                                   type="button"
-                                  onClick={() => handleSetGraphicRotationY(g.id, -35)}
-                                  className={`px-1 py-0.5 rounded text-[8.5px] font-mono font-bold cursor-pointer transition-colors ${
-                                    g.rotationY === -35 ? 'bg-[#ff5e00] text-white' : 'hover:bg-slate-700 text-slate-300'
-                                  }`}
-                                  title="Miring Kiri (-35°)"
-                                >
-                                  -35°
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleSetGraphicRotationY(g.id, 0)}
-                                  className={`px-1 py-0.5 rounded text-[8.5px] font-mono font-bold cursor-pointer transition-colors ${
-                                    !g.rotationY || g.rotationY === 0 ? 'bg-slate-700 text-white' : 'hover:bg-slate-700 text-slate-400'
-                                  }`}
-                                  title="Datar Tegak (0°)"
+                                  onClick={() => handleResetGraphic3D(g.id)}
+                                  className="ml-1 px-1 py-0.2 bg-slate-700 hover:bg-red-500 text-slate-300 hover:text-white rounded text-[8px] cursor-pointer"
+                                  title="Reset X, Y, Z ke 0°"
                                 >
                                   0°
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleSetGraphicRotationY(g.id, 35)}
-                                  className={`px-1 py-0.5 rounded text-[8.5px] font-mono font-bold cursor-pointer transition-colors ${
-                                    g.rotationY === 35 ? 'bg-[#ff5e00] text-white' : 'hover:bg-slate-700 text-slate-300'
-                                  }`}
-                                  title="Miring Kanan (+35°)"
-                                >
-                                  +35°
                                 </button>
                               </div>
 
@@ -3932,7 +4195,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             style={{
                               left: `${g.x}%`,
                               top: `${g.y}%`,
-                              transform: `translate(-50%, -50%) perspective(500px) rotateY(${g.rotationY || 0}deg) rotate(${g.rotation}deg)`,
+                              transform: `translate(-50%, -50%) perspective(500px) rotateX(${g.rotationX || 0}deg) rotateY(${g.rotationY || 0}deg) rotate(${g.rotationZ !== undefined ? g.rotationZ : g.rotation}deg)`,
                               transformOrigin: 'center center',
                               zIndex: isSelected ? 40 : 10 + idx,
                               opacity: (g.opacity !== undefined ? g.opacity : 100) / 100,
@@ -4204,40 +4467,73 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
                             <div className="w-px h-3.5 bg-slate-700 mx-0.5" />
 
-                            {/* Rotasi Y (Perspektif 3D Menyamping) */}
-                            <div className="flex items-center gap-0.5 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
-                              <span className="text-[8.5px] text-amber-300 font-bold px-1 font-mono">
-                                ⟳ Y:{proj.rotationY > 0 ? '+' : ''}{proj.rotationY}°
-                              </span>
+                            {/* Rotasi 3D Multi-Axis (Y, X, Z) */}
+                            <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700 text-[8.5px] font-mono">
+                              {/* Y Control (Yaw - Menyamping) */}
+                              <div className="flex items-center gap-0.5">
+                                <span className="text-amber-300 font-bold px-0.5" title="Rotasi Y (Menyamping 3D)">Y:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleNudgeGraphicRotationY(proj.graphic.id, -5, proj.rotationY)}
+                                  className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
+                                  title="Putar Y -5°"
+                                >-</button>
+                                <span className="font-bold text-white px-0.5 min-w-[20px] text-center">{proj.rotationY}°</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleNudgeGraphicRotationY(proj.graphic.id, 5, proj.rotationY)}
+                                  className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
+                                  title="Putar Y +5°"
+                                >+</button>
+                              </div>
+
+                              <div className="w-px h-3 bg-slate-700 mx-0.5" />
+
+                              {/* X Control (Pitch - Menunduk) */}
+                              <div className="flex items-center gap-0.5">
+                                <span className="text-cyan-300 font-bold px-0.5" title="Rotasi X (Menunduk Vertikal 3D)">X:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleNudgeGraphicRotationX(proj.graphic.id, -5, proj.rotationX)}
+                                  className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
+                                  title="Putar X -5°"
+                                >-</button>
+                                <span className="font-bold text-white px-0.5 min-w-[20px] text-center">{proj.rotationX}°</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleNudgeGraphicRotationX(proj.graphic.id, 5, proj.rotationX)}
+                                  className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
+                                  title="Putar X +5°"
+                                >+</button>
+                              </div>
+
+                              <div className="w-px h-3 bg-slate-700 mx-0.5" />
+
+                              {/* Z Control (Roll - Sudut Pola) */}
+                              <div className="flex items-center gap-0.5">
+                                <span className="text-pink-300 font-bold px-0.5" title="Rotasi Z (Sudut Putar Pola 2D)">Z:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleNudgeGraphicRotationZ(proj.graphic.id, -5, proj.rotationZ)}
+                                  className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
+                                  title="Putar Z -5°"
+                                >-</button>
+                                <span className="font-bold text-white px-0.5 min-w-[20px] text-center">{proj.rotationZ}°</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleNudgeGraphicRotationZ(proj.graphic.id, 5, proj.rotationZ)}
+                                  className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
+                                  title="Putar Z +5°"
+                                >+</button>
+                              </div>
+
                               <button
                                 type="button"
-                                onClick={() => handleSetGraphicRotationY(proj.graphic.id, -35)}
-                                className={`px-1 py-0.5 rounded text-[8.5px] font-mono font-bold cursor-pointer transition-colors ${
-                                  proj.rotationY === -35 ? 'bg-[#ff5e00] text-white' : 'hover:bg-slate-700 text-slate-300'
-                                }`}
-                                title="Miring Kiri (-35°)"
-                              >
-                                -35°
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleSetGraphicRotationY(proj.graphic.id, 0)}
-                                className={`px-1 py-0.5 rounded text-[8.5px] font-mono font-bold cursor-pointer transition-colors ${
-                                  proj.rotationY === 0 ? 'bg-slate-700 text-white' : 'hover:bg-slate-700 text-slate-400'
-                                }`}
-                                title="Datar Tegak (0°)"
+                                onClick={() => handleResetGraphic3D(proj.graphic.id)}
+                                className="ml-1 px-1 py-0.2 bg-slate-700 hover:bg-red-500 text-slate-300 hover:text-white rounded text-[8px] cursor-pointer"
+                                title="Reset X, Y, Z ke 0°"
                               >
                                 0°
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleSetGraphicRotationY(proj.graphic.id, 35)}
-                                className={`px-1 py-0.5 rounded text-[8.5px] font-mono font-bold cursor-pointer transition-colors ${
-                                  proj.rotationY === 35 ? 'bg-[#ff5e00] text-white' : 'hover:bg-slate-700 text-slate-300'
-                                }`}
-                                title="Miring Kanan (+35°)"
-                              >
-                                +35°
                               </button>
                             </div>
 
@@ -4285,7 +4581,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           style={{
                             left: `${proj.x}%`,
                             top: `${proj.y}%`,
-                            transform: `translate(-50%, -50%) perspective(500px) rotateY(${proj.rotationY}deg) rotate(${proj.graphic.rotation || 0}deg) scale(${proj.scaleX}, ${proj.scaleY})`,
+                            transform: `translate(-50%, -50%) perspective(500px) rotateX(${proj.rotationX || 0}deg) rotateY(${proj.rotationY || 0}deg) rotateZ(${proj.rotationZ !== undefined ? proj.rotationZ : (proj.graphic.rotation || 0)}deg) scale(${proj.scaleX}, ${proj.scaleY})`,
                             transformOrigin: 'center center',
                             zIndex: isSelected ? 40 : 25,
                             opacity: (proj.graphic.opacity !== undefined ? proj.graphic.opacity : 100) / 100,
@@ -4417,7 +4713,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             top: `${zone.y}%`,
                             width: `${zone.width}%`,
                             height: `${zone.height}%`,
-                            transform: `translate(-50%, -50%) perspective(400px) rotateY(${zone.rotationY || 0}deg)`,
+                            transform: `translate(-50%, -50%) perspective(500px) rotateX(${zone.rotationX || 0}deg) rotateY(${zone.rotationY || 0}deg) rotateZ(${zone.rotationZ || 0}deg)`,
                             transformOrigin: 'center center',
                           }}
                           onClick={(e) => {
@@ -4448,56 +4744,32 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                               reader.readAsDataURL(file)
                             }
                           }}
-                          className={`absolute border-2 border-dashed border-[#ff5e00] bg-[#ff5e00]/10 rounded-2xl flex flex-col items-center justify-between p-1.5 shadow-xs transition-all group/zone backdrop-blur-[0.5px] ${
+                          className={`absolute border-2 rounded-2xl flex flex-col items-center justify-between p-1.5 transition-all group/zone ${
                             !hasGraphic
-                              ? 'pointer-events-auto cursor-pointer hover:bg-[#ff5e00]/20 hover:border-[#ff5e00] hover:scale-[1.01]'
-                              : 'pointer-events-none'
+                              ? 'border-dashed border-indigo-500/80 bg-indigo-500/10 hover:border-[#ff5e00] hover:bg-[#ff5e00]/15 pointer-events-auto cursor-pointer shadow-xs backdrop-blur-[0.5px]'
+                              : 'border-transparent pointer-events-none'
                           }`}
                           title={
                             !hasGraphic
-                              ? `Klik untuk upload gambar langsung ke titik ${zone.name} (Bordir / Sablon)`
+                              ? `Klik untuk upload desain ke titik ${zone.name}`
                               : `Titik Produksi: ${zone.name}`
                           }
                         >
-                          {/* Top Label & Price Tag */}
-                          <div className="flex items-center gap-1.5 bg-slate-900/90 text-white px-2 py-0.5 rounded-full text-[9px] font-bold shadow-md border border-slate-700 whitespace-nowrap pointer-events-auto">
-                            <span className="text-[#ff5e00]">⊞</span>
-                            <span>{zone.name}</span>
-                            {zone.price > 0 && (
-                              <span className="text-emerald-400 font-mono">
-                                • Rp {zone.price.toLocaleString('id-ID')}
+                          {/* Center size info matching Canvas Owner */}
+                          <div className="flex flex-col items-center pointer-events-none z-10">
+                            {zone.maxSizeCm && (
+                              <span className="text-[8px] font-mono font-semibold text-slate-800 bg-white/90 px-1.5 py-0.2 rounded border border-slate-200 shadow-2xs">
+                                {zone.maxSizeCm}
                               </span>
                             )}
-                            {zone.rotationY && zone.rotationY !== 0 ? (
-                              <span className="bg-amber-500/30 text-amber-300 px-1 py-0.2 rounded font-mono text-[8px]" title="Rotasi Y (Perspektif 3D Menyamping)">
-                                ⟳ Y:{zone.rotationY > 0 ? '+' : ''}{zone.rotationY}°
-                              </span>
-                            ) : null}
-                            {zone.enableAutoClipping ?? true ? (
-                              <span className="bg-emerald-500/30 text-emerald-300 px-1 py-0.2 rounded text-[7.5px]" title="Auto Clipping Mask Aktif">
-                                ✂ Clip
-                              </span>
-                            ) : null}
                           </div>
 
-                          {/* Center: Upload Area Action Button */}
+                          {/* Hover Upload Button */}
                           {!hasGraphic ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleInitiateUploadForZone(zone)
-                              }}
-                              className="pointer-events-auto my-auto flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 bg-white/95 hover:bg-[#ff5e00] text-slate-800 hover:text-white rounded-xl shadow-md border border-orange-300 hover:border-orange-500 transition-all cursor-pointer group-hover/zone:scale-105 active:scale-95"
-                            >
-                              <div className="flex items-center gap-1.5">
-                                <Upload className="w-3.5 h-3.5 text-[#ff5e00] group-hover:text-white transition-colors" />
-                                <span className="text-[10px] font-extrabold tracking-tight">Upload Desain</span>
-                              </div>
-                              <span className="text-[8px] font-semibold text-orange-700 group-hover:text-orange-100 transition-colors">
-                                🪡 Bordir / 🎨 Sablon
-                              </span>
-                            </button>
+                            <div className="pointer-events-auto opacity-0 group-hover/zone:opacity-100 transition-opacity my-auto flex items-center gap-1 px-2.5 py-1 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded-lg text-[9px] font-bold shadow-md transform group-hover/zone:scale-105 active:scale-95 cursor-pointer">
+                              <Upload className="w-3 h-3 text-white" />
+                              <span>Upload Desain</span>
+                            </div>
                           ) : (
                             <button
                               type="button"
@@ -4513,18 +4785,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             </button>
                           )}
 
-                          {/* Bottom watermark or size info */}
-                          {zone.maxSizeCm && (
-                            <span className="text-[8px] font-mono font-semibold text-orange-700/80 bg-white/85 px-1.5 py-0.2 rounded border border-orange-200 pointer-events-auto">
-                              {zone.maxSizeCm}
-                            </span>
-                          )}
-
-                          {/* Corner markers */}
-                          <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2 border-[#ff5e00]" />
-                          <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 border-[#ff5e00]" />
-                          <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2 border-[#ff5e00]" />
-                          <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2 border-[#ff5e00]" />
+                          {/* Corner markers matching Canvas Owner */}
+                          <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2 border-slate-700 pointer-events-none" />
+                          <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 border-slate-700 pointer-events-none" />
+                          <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2 border-slate-700 pointer-events-none" />
+                          <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2 border-slate-700 pointer-events-none" />
                         </div>
                       )
                     })}

@@ -43,10 +43,6 @@ import {
   RotateCw,
   Grid,
   Maximize2,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ArrowDown,
 } from 'lucide-react'
 
 // CorelDRAW Style Spline & Curve Helpers (Cubic Catmull-Rom & Bézier Curves)
@@ -180,7 +176,9 @@ function ensureAllSleeveZones(existing: PrintZone[]): PrintZone[] {
       side: 'front',
       price: 15000,
       maxSizeCm: '8×8 cm',
+      rotationX: 0,
       rotationY: 35,
+      rotationZ: 0,
       enableAutoClipping: true,
       description: 'Sinkron otomatis ke Tampak Kanan & Belakang',
     })
@@ -201,7 +199,9 @@ function ensureAllSleeveZones(existing: PrintZone[]): PrintZone[] {
       side: 'front',
       price: 15000,
       maxSizeCm: '8×8 cm',
+      rotationX: 0,
       rotationY: -35,
+      rotationZ: 0,
       enableAutoClipping: true,
       description: 'Sinkron otomatis ke Tampak Kiri & Belakang',
     })
@@ -222,7 +222,9 @@ function ensureAllSleeveZones(existing: PrintZone[]): PrintZone[] {
       side: 'back',
       price: 15000,
       maxSizeCm: '8×8 cm',
+      rotationX: 0,
       rotationY: 35,
+      rotationZ: 0,
       enableAutoClipping: true,
       description: 'Sinkron otomatis ke Tampak Kiri & Depan',
     })
@@ -243,7 +245,9 @@ function ensureAllSleeveZones(existing: PrintZone[]): PrintZone[] {
       side: 'back',
       price: 15000,
       maxSizeCm: '8×8 cm',
+      rotationX: 0,
       rotationY: -35,
+      rotationZ: 0,
       enableAutoClipping: true,
       description: 'Sinkron otomatis ke Tampak Kanan & Depan',
     })
@@ -264,7 +268,9 @@ function ensureAllSleeveZones(existing: PrintZone[]): PrintZone[] {
       side: 'left',
       price: 15000,
       maxSizeCm: '8×8 cm',
+      rotationX: 0,
       rotationY: 0,
+      rotationZ: 0,
       enableAutoClipping: true,
     })
   }
@@ -284,32 +290,38 @@ function ensureAllSleeveZones(existing: PrintZone[]): PrintZone[] {
       side: 'right',
       price: 15000,
       maxSizeCm: '8×8 cm',
+      rotationX: 0,
       rotationY: 0,
+      rotationZ: 0,
       enableAutoClipping: true,
     })
   }
 
-  // Pastikan setiap area sablon memiliki rotasi 3D dan auto clipping mask default
+  // Pastikan setiap area sablon memiliki rotasi 3D (X, Y, Z) dan auto clipping mask default
   return result.map((z) => {
-    let rot = z.rotationY
+    let rotX = z.rotationX ?? 0
+    let rotY = z.rotationY
+    let rotZ = z.rotationZ ?? 0
     const clip = z.enableAutoClipping ?? true
     const n = z.name.toLowerCase()
-    if (rot === undefined) {
+    if (rotY === undefined) {
       if (z.side === 'front') {
-        if (n.includes('kanan') || z.x < 40) rot = 35
-        else if (n.includes('kiri') || z.x > 60) rot = -35
-        else rot = 0
+        if (n.includes('kanan') || z.x < 40) rotY = 35
+        else if (n.includes('kiri') || z.x > 60) rotY = -35
+        else rotY = 0
       } else if (z.side === 'back') {
-        if (n.includes('kiri') || z.x < 40) rot = 35
-        else if (n.includes('kanan') || z.x > 60) rot = -35
-        else rot = 0
+        if (n.includes('kiri') || z.x < 40) rotY = 35
+        else if (n.includes('kanan') || z.x > 60) rotY = -35
+        else rotY = 0
       } else {
-        rot = 0
+        rotY = 0
       }
     }
     return {
       ...z,
-      rotationY: rot,
+      rotationX: rotX,
+      rotationY: rotY,
+      rotationZ: rotZ,
       enableAutoClipping: clip,
     }
   })
@@ -529,7 +541,9 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       price: preset?.price ?? 15000,
       maxSizeCm: preset?.maxSizeCm ?? '10×10 cm',
       description: preset?.description,
+      rotationX: preset?.rotationX ?? 0,
       rotationY: preset?.rotationY ?? 0,
+      rotationZ: preset?.rotationZ ?? 0,
       enableAutoClipping: preset?.enableAutoClipping ?? true,
     }
     const updated = [...printZones, newZone]
@@ -2008,66 +2022,6 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     return editFormData[sideKey] || null
   }, [editFormData, selectedSide])
 
-  // Helper identifikasi zona sablon lengan kiri & kanan
-  const sleeveZonesOnCurrentSide = useMemo(() => {
-    if (selectedSide === 'front') {
-      const rightArm = printZones.find(
-        (z) =>
-          z.side === 'front' &&
-          (z.id === 'z_front_sleeve_right' ||
-            z.name.toLowerCase().includes('lengan kanan') ||
-            z.name.toLowerCase().includes('bahu kanan') ||
-            (z.x < 40 && z.name.toLowerCase().includes('lengan')))
-      )
-      const leftArm = printZones.find(
-        (z) =>
-          z.side === 'front' &&
-          (z.id === 'z_front_sleeve_left' ||
-            z.name.toLowerCase().includes('lengan kiri') ||
-            z.name.toLowerCase().includes('bahu kiri') ||
-            (z.x > 60 && z.name.toLowerCase().includes('lengan')))
-      )
-      return { rightArm, leftArm }
-    } else if (selectedSide === 'back') {
-      const leftArm = printZones.find(
-        (z) =>
-          z.side === 'back' &&
-          (z.id === 'z_back_sleeve_left' ||
-            z.name.toLowerCase().includes('lengan kiri') ||
-            z.name.toLowerCase().includes('bahu kiri') ||
-            (z.x < 40 && z.name.toLowerCase().includes('lengan')))
-      )
-      const rightArm = printZones.find(
-        (z) =>
-          z.side === 'back' &&
-          (z.id === 'z_back_sleeve_right' ||
-            z.name.toLowerCase().includes('lengan kanan') ||
-            z.name.toLowerCase().includes('bahu kanan') ||
-            (z.x > 60 && z.name.toLowerCase().includes('lengan')))
-      )
-      return { rightArm, leftArm }
-    } else if (selectedSide === 'left') {
-      const leftArm = printZones.find(
-        (z) =>
-          z.side === 'left' &&
-          (z.id === 'z_left_sleeve' ||
-            z.name.toLowerCase().includes('lengan') ||
-            z.name.toLowerCase().includes('sleeve'))
-      )
-      return { leftArm, rightArm: undefined }
-    } else if (selectedSide === 'right') {
-      const rightArm = printZones.find(
-        (z) =>
-          z.side === 'right' &&
-          (z.id === 'z_right_sleeve' ||
-            z.name.toLowerCase().includes('lengan') ||
-            z.name.toLowerCase().includes('sleeve'))
-      )
-      return { rightArm, leftArm: undefined }
-    }
-    return { rightArm: undefined, leftArm: undefined }
-  }, [printZones, selectedSide])
-
   // Dragging & Resizing Real-Time Window Handlers
   useEffect(() => {
     if (!draggingZoneState) return
@@ -2100,46 +2054,6 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       window.removeEventListener('mouseup', handleWindowMouseUp)
     }
   }, [draggingZoneState, stageDisplayWidth, stageDisplayHeight, zoomScale])
-
-  // Helper untuk lompat dari samping ke depan/belakang untuk atur proyeksi 3D
-  const handleJumpToSleeve3D = (side: 'front' | 'back', targetArm: 'left' | 'right') => {
-    handleSelectSide(side)
-    setShowPrintZones(true)
-    setActiveInspectorTab('printZones')
-
-    setTimeout(() => {
-      const targetSideZones = printZones.filter((z) => z.side === side)
-      let found: PrintZone | undefined
-      if (side === 'front') {
-        found = targetSideZones.find((z) =>
-          targetArm === 'right'
-            ? z.id === 'z_front_sleeve_right' ||
-              z.name.toLowerCase().includes('lengan kanan') ||
-              z.name.toLowerCase().includes('bahu kanan') ||
-              (z.x < 40 && z.name.toLowerCase().includes('lengan'))
-            : z.id === 'z_front_sleeve_left' ||
-              z.name.toLowerCase().includes('lengan kiri') ||
-              z.name.toLowerCase().includes('bahu kiri') ||
-              (z.x > 60 && z.name.toLowerCase().includes('lengan'))
-        )
-      } else {
-        found = targetSideZones.find((z) =>
-          targetArm === 'left'
-            ? z.id === 'z_back_sleeve_left' ||
-              z.name.toLowerCase().includes('lengan kiri') ||
-              z.name.toLowerCase().includes('bahu kiri') ||
-              (z.x < 40 && z.name.toLowerCase().includes('lengan'))
-            : z.id === 'z_back_sleeve_right' ||
-              z.name.toLowerCase().includes('lengan kanan') ||
-              z.name.toLowerCase().includes('bahu kanan') ||
-              (z.x > 60 && z.name.toLowerCase().includes('lengan'))
-        )
-      }
-      if (found) {
-        setSelectedPrintZoneId(found.id)
-      }
-    }, 50)
-  }
 
   // Render Contoh Area Gambar Logo / Patch Realistis
   const renderSampleEmblem = (zone: PrintZone) => {
@@ -2198,12 +2112,12 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
             y="77.5"
             textAnchor="middle"
             fill="#fde047"
-            fontSize="5.5"
+            fontSize="4.8"
             fontWeight="800"
             fontFamily="sans-serif"
           >
-            {zone.rotationY && zone.rotationY !== 0
-              ? `3D (${zone.rotationY > 0 ? '+' : ''}${zone.rotationY}°)`
+            {zone.rotationX || zone.rotationY || zone.rotationZ
+              ? `3D: ${zone.rotationX ? `X:${zone.rotationX > 0 ? '+' : ''}${zone.rotationX}° ` : ''}${zone.rotationY ? `Y:${zone.rotationY > 0 ? '+' : ''}${zone.rotationY}° ` : ''}${zone.rotationZ ? `Z:${zone.rotationZ > 0 ? '+' : ''}${zone.rotationZ}°` : ''}`.trim()
               : 'TAMPAK TEGAK'}
           </text>
         </svg>
@@ -2969,171 +2883,6 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                 }}
                 onMouseUp={() => setIsPanning(false)}
               >
-                {/* QUICK SLEEVE ZONE NAVIGATION BAR (Floating Top Dock) */}
-                {showPrintZones && (
-                  <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md text-white px-3 py-1.5 rounded-2xl shadow-xl border border-slate-700/80 flex items-center gap-2 z-40 pointer-events-auto select-none">
-                    <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs pr-1 border-r border-slate-700">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Area Sablon Lengan:</span>
-                    </div>
-
-                    {selectedSide === 'front' || selectedSide === 'back' ? (
-                      <>
-                        {sleeveZonesOnCurrentSide.rightArm && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedPrintZoneId(sleeveZonesOnCurrentSide.rightArm!.id)
-                              setActiveInspectorTab('printZones')
-                            }}
-                            className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                              selectedPrintZoneId === sleeveZonesOnCurrentSide.rightArm.id
-                                ? 'bg-[#ff5e00] text-white shadow-md ring-2 ring-[#ff5e00]/40'
-                                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                            }`}
-                          >
-                            <span>👈 Lengan Kanan</span>
-                            <span className="font-mono text-[9px] bg-black/30 px-1 py-0.2 rounded text-amber-300">
-                              ⟳{sleeveZonesOnCurrentSide.rightArm.rotationY && sleeveZonesOnCurrentSide.rightArm.rotationY > 0 ? '+' : ''}{sleeveZonesOnCurrentSide.rightArm.rotationY || 0}°
-                            </span>
-                            {sleeveZonesOnCurrentSide.rightArm.enableAutoClipping ?? true ? (
-                              <span className="text-[8px] text-emerald-400">✂</span>
-                            ) : null}
-                          </button>
-                        )}
-
-                        {sleeveZonesOnCurrentSide.leftArm && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedPrintZoneId(sleeveZonesOnCurrentSide.leftArm!.id)
-                              setActiveInspectorTab('printZones')
-                            }}
-                            className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                              selectedPrintZoneId === sleeveZonesOnCurrentSide.leftArm.id
-                                ? 'bg-[#ff5e00] text-white shadow-md ring-2 ring-[#ff5e00]/40'
-                                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                            }`}
-                          >
-                            <span>👉 Lengan Kiri</span>
-                            <span className="font-mono text-[9px] bg-black/30 px-1 py-0.2 rounded text-amber-300">
-                              ⟳{sleeveZonesOnCurrentSide.leftArm.rotationY && sleeveZonesOnCurrentSide.leftArm.rotationY > 0 ? '+' : ''}{sleeveZonesOnCurrentSide.leftArm.rotationY || 0}°
-                            </span>
-                            {sleeveZonesOnCurrentSide.leftArm.enableAutoClipping ?? true ? (
-                              <span className="text-[8px] text-emerald-400">✂</span>
-                            ) : null}
-                          </button>
-                        )}
-                      </>
-                    ) : selectedSide === 'left' ? (
-                      <>
-                        {sleeveZonesOnCurrentSide.leftArm && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedPrintZoneId(sleeveZonesOnCurrentSide.leftArm!.id)
-                              setActiveInspectorTab('printZones')
-                            }}
-                            className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                              selectedPrintZoneId === sleeveZonesOnCurrentSide.leftArm.id
-                                ? 'bg-[#ff5e00] text-white shadow-md'
-                                : 'bg-slate-800 text-slate-200 border border-slate-700'
-                            }`}
-                          >
-                            <span>📍 Patch Lengan Kiri (Aktif)</span>
-                          </button>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => handleJumpToSleeve3D('front', 'left')}
-                          className="px-2 py-1 rounded-xl text-[11px] font-semibold bg-indigo-600/70 hover:bg-indigo-600 text-white transition-colors flex items-center gap-1 cursor-pointer"
-                          title="Buka Tampak Depan untuk atur posisi & rotasi 3D lengan kiri"
-                        >
-                          <span>👁 Atur di Tampak Depan (3D) →</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleJumpToSleeve3D('back', 'left')}
-                          className="px-2 py-1 rounded-xl text-[11px] font-semibold bg-indigo-600/70 hover:bg-indigo-600 text-white transition-colors flex items-center gap-1 cursor-pointer"
-                          title="Buka Tampak Belakang untuk atur posisi & rotasi 3D lengan kiri"
-                        >
-                          <span>👁 Atur di Tampak Belakang (3D) →</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleSelectSide('right')}
-                          className="px-2 py-1 rounded-xl text-[11px] font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>Ke Lengan Kanan 👉</span>
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        {sleeveZonesOnCurrentSide.rightArm && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedPrintZoneId(sleeveZonesOnCurrentSide.rightArm!.id)
-                              setActiveInspectorTab('printZones')
-                            }}
-                            className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                              selectedPrintZoneId === sleeveZonesOnCurrentSide.rightArm.id
-                                ? 'bg-[#ff5e00] text-white shadow-md'
-                                : 'bg-slate-800 text-slate-200 border border-slate-700'
-                            }`}
-                          >
-                            <span>📍 Patch Lengan Kanan (Aktif)</span>
-                          </button>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => handleJumpToSleeve3D('front', 'right')}
-                          className="px-2 py-1 rounded-xl text-[11px] font-semibold bg-indigo-600/70 hover:bg-indigo-600 text-white transition-colors flex items-center gap-1 cursor-pointer"
-                          title="Buka Tampak Depan untuk atur posisi & rotasi 3D lengan kanan"
-                        >
-                          <span>👁 Atur di Tampak Depan (3D) →</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleJumpToSleeve3D('back', 'right')}
-                          className="px-2 py-1 rounded-xl text-[11px] font-semibold bg-indigo-600/70 hover:bg-indigo-600 text-white transition-colors flex items-center gap-1 cursor-pointer"
-                          title="Buka Tampak Belakang untuk atur posisi & rotasi 3D lengan kanan"
-                        >
-                          <span>👁 Atur di Tampak Belakang (3D) →</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleSelectSide('left')}
-                          className="px-2 py-1 rounded-xl text-[11px] font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>👈 Ke Lengan Kiri</span>
-                        </button>
-                      </>
-                    )}
-
-                    <div className="w-px h-4 bg-slate-700 mx-0.5" />
-
-                    <button
-                      type="button"
-                      onClick={() => setShowZoneSamplePreview((prev) => !prev)}
-                      className={`px-2 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
-                        showZoneSamplePreview
-                          ? 'bg-amber-500/30 text-amber-300 hover:bg-amber-500/40 border border-amber-500/50'
-                          : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'
-                      }`}
-                      title="Tampilkan / Sembunyikan contoh gambar logo di area sablon"
-                    >
-                      {showZoneSamplePreview ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                      <span>Contoh Logo: {showZoneSamplePreview ? 'ON' : 'OFF'}</span>
-                    </button>
-                  </div>
-                )}
                 {/* TRANSFORM CONTAINER PAN & ZOOM */}
                 <div
                   className="relative transition-none select-none"
@@ -3215,7 +2964,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                     top: `${zone.y}%`,
                                     width: `${zone.width}%`,
                                     height: `${zone.height}%`,
-                                    transform: `translate(-50%, -50%) perspective(400px) rotateY(${zone.rotationY || 0}deg)`,
+                                    transform: `translate(-50%, -50%) perspective(500px) rotateX(${zone.rotationX || 0}deg) rotateY(${zone.rotationY || 0}deg) rotateZ(${zone.rotationZ || 0}deg)`,
                                     transformOrigin: 'center center',
                                   }}
                                   className="absolute flex items-center justify-center opacity-90"
@@ -3238,7 +2987,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                   top: `${zone.y}%`,
                                   width: `${zone.width}%`,
                                   height: `${zone.height}%`,
-                                  transform: `translate(-50%, -50%) perspective(400px) rotateY(${zone.rotationY || 0}deg)`,
+                                  transform: `translate(-50%, -50%) perspective(500px) rotateX(${zone.rotationX || 0}deg) rotateY(${zone.rotationY || 0}deg) rotateZ(${zone.rotationZ || 0}deg)`,
                                   transformOrigin: 'center center',
                                 }}
                                 className="absolute flex items-center justify-center opacity-90"
@@ -3263,7 +3012,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                 top: `${zone.y}%`,
                                 width: `${zone.width}%`,
                                 height: `${zone.height}%`,
-                                transform: `translate(-50%, -50%) perspective(400px) rotateY(${zone.rotationY || 0}deg)`,
+                                transform: `translate(-50%, -50%) perspective(500px) rotateX(${zone.rotationX || 0}deg) rotateY(${zone.rotationY || 0}deg) rotateZ(${zone.rotationZ || 0}deg)`,
                                 transformOrigin: 'center center',
                               }}
                               onMouseDown={(e) => handleStartMoveZone(e, zone)}
@@ -3278,118 +3027,6 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                   : 'border-dashed border-indigo-500/80 bg-indigo-500/10 hover:border-[#ff5e00] hover:bg-[#ff5e00]/10 z-35'
                               }`}
                             >
-                              {/* FLOATING QUICK TOOLBAR (Above selected zone) */}
-                              {isSelected && (
-                                <div
-                                  onMouseDown={(e) => e.stopPropagation()}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="absolute -top-12 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-md text-white px-2.5 py-1 rounded-xl shadow-2xl border border-slate-700/90 flex items-center gap-1.5 z-50 pointer-events-auto whitespace-nowrap select-none"
-                                  style={{ transform: 'translateX(-50%)' }}
-                                >
-                                  {/* Directional Nudge */}
-                                  <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdatePrintZone(zone.id, { x: Math.max(2, zone.x - 2) })}
-                                      className="p-1 hover:bg-slate-700 rounded text-slate-300 hover:text-white cursor-pointer"
-                                      title="Geser Kiri (2%)"
-                                    >
-                                      <ArrowLeft className="w-2.5 h-2.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdatePrintZone(zone.id, { x: Math.min(98, zone.x + 2) })}
-                                      className="p-1 hover:bg-slate-700 rounded text-slate-300 hover:text-white cursor-pointer"
-                                      title="Geser Kanan (2%)"
-                                    >
-                                      <ArrowRight className="w-2.5 h-2.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdatePrintZone(zone.id, { y: Math.max(2, zone.y - 2) })}
-                                      className="p-1 hover:bg-slate-700 rounded text-slate-300 hover:text-white cursor-pointer"
-                                      title="Geser Atas (2%)"
-                                    >
-                                      <ArrowUp className="w-2.5 h-2.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdatePrintZone(zone.id, { y: Math.min(98, zone.y + 2) })}
-                                      className="p-1 hover:bg-slate-700 rounded text-slate-300 hover:text-white cursor-pointer"
-                                      title="Geser Bawah (2%)"
-                                    >
-                                      <ArrowDown className="w-2.5 h-2.5" />
-                                    </button>
-                                  </div>
-
-                                  <div className="w-px h-3.5 bg-slate-700" />
-
-                                  {/* Rotasi Y Presets */}
-                                  <div className="flex items-center gap-0.5 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
-                                    <span className="text-[8.5px] text-amber-300 font-bold px-1 font-mono">
-                                      ⟳Y:
-                                    </span>
-                                    {[-45, -35, 0, 35, 45].map((angle) => (
-                                      <button
-                                        key={angle}
-                                        type="button"
-                                        onClick={() => handleUpdatePrintZone(zone.id, { rotationY: angle })}
-                                        className={`px-1 py-0.5 rounded text-[8.5px] font-mono font-bold cursor-pointer transition-colors ${
-                                          (zone.rotationY || 0) === angle
-                                            ? 'bg-[#ff5e00] text-white shadow-xs'
-                                            : 'hover:bg-slate-700 text-slate-300'
-                                        }`}
-                                        title={`Rotasi Y: ${angle}°`}
-                                      >
-                                        {angle > 0 ? `+${angle}` : angle}°
-                                      </button>
-                                    ))}
-                                  </div>
-
-                                  <div className="w-px h-3.5 bg-slate-700" />
-
-                                  {/* Auto Clipping toggle */}
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleUpdatePrintZone(zone.id, {
-                                        enableAutoClipping: !(zone.enableAutoClipping ?? true),
-                                      })
-                                    }
-                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 cursor-pointer transition-colors ${
-                                      zone.enableAutoClipping ?? true
-                                        ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/50'
-                                        : 'bg-slate-800 text-slate-400 border border-slate-700'
-                                    }`}
-                                    title="Toggle Auto Clipping Mask Siluet Kain"
-                                  >
-                                    <span>✂</span>
-                                    <span>{(zone.enableAutoClipping ?? true) ? 'Clip ON' : 'Clip OFF'}</span>
-                                  </button>
-                                </div>
-                              )}
-
-                              {/* Top pill badge */}
-                              <div className="flex items-center gap-1.5 bg-slate-900/95 text-white px-2 py-0.5 rounded-full text-[9px] font-bold shadow-md border border-slate-700 whitespace-nowrap pointer-events-none">
-                                <span className={isSelected ? 'text-[#ff5e00]' : 'text-indigo-400'}>⊞</span>
-                                <span>{zone.name}</span>
-                                {zone.price > 0 && (
-                                  <span className="text-emerald-400 font-mono">
-                                    • Rp {zone.price.toLocaleString('id-ID')}
-                                  </span>
-                                )}
-                                {zone.rotationY && zone.rotationY !== 0 ? (
-                                  <span className="bg-amber-500/30 text-amber-300 px-1 py-0.2 rounded font-mono text-[8px]" title="Rotasi Y (Perspektif 3D Menyamping)">
-                                    ⟳ Y:{zone.rotationY > 0 ? '+' : ''}{zone.rotationY}°
-                                  </span>
-                                ) : null}
-                                {zone.enableAutoClipping ?? true ? (
-                                  <span className="bg-emerald-500/30 text-emerald-300 px-1 py-0.2 rounded text-[7.5px]" title="Auto Clipping Mask Siluet Kain Aktif">
-                                    ✂ Clip
-                                  </span>
-                                ) : null}
-                              </div>
-
                               {/* Center size info */}
                               <div className="flex flex-col items-center pointer-events-none">
                                 {zone.maxSizeCm && (
@@ -3676,9 +3313,24 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                             Titik Panduan Sablon
                           </span>
                         </div>
-                        <span className="text-[9px] font-tech-data font-bold bg-[#ff5e00] text-white px-1.5 py-0.5 rounded shadow-2xs">
-                          {selectedSide.toUpperCase()}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setShowZoneSamplePreview((prev) => !prev)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                              showZoneSamplePreview
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                : 'bg-slate-100 text-slate-500 border border-slate-200'
+                            }`}
+                            title="Tampilkan / Sembunyikan contoh gambar logo di area sablon"
+                          >
+                            {showZoneSamplePreview ? <Eye className="w-3 h-3 text-amber-700" /> : <EyeOff className="w-3 h-3 text-slate-400" />}
+                            <span>Contoh: {showZoneSamplePreview ? 'ON' : 'OFF'}</span>
+                          </button>
+                          <span className="text-[9px] font-tech-data font-bold bg-[#ff5e00] text-white px-1.5 py-0.5 rounded shadow-2xs">
+                            {selectedSide.toUpperCase()}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Tombol Tambah Titik Sablon Baru */}
@@ -3974,181 +3626,249 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                             </div>
                           </div>
 
-                          {/* Posisi X & Y (%) */}
-                          <div className="space-y-1.5 pt-1 border-t border-slate-200">
-                            <div>
-                              <div className="flex items-center justify-between text-[10px] text-slate-600 mb-0.5">
-                                <span>Posisi Horizontal (X):</span>
-                                <span className="font-mono font-bold text-slate-800">{Math.round(selectedPrintZone.x)}%</span>
-                              </div>
-                              <input
-                                type="range"
-                                min={5}
-                                max={95}
-                                value={selectedPrintZone.x}
-                                onChange={(e) =>
-                                  handleUpdatePrintZone(selectedPrintZone.id, {
-                                    x: Number(e.target.value),
-                                  })
-                                }
-                                className="w-full h-1 accent-[#ff5e00] cursor-pointer"
-                              />
-                            </div>
-                            <div>
-                              <div className="flex items-center justify-between text-[10px] text-slate-600 mb-0.5">
-                                <span>Posisi Vertikal (Y):</span>
-                                <span className="font-mono font-bold text-slate-800">{Math.round(selectedPrintZone.y)}%</span>
-                              </div>
-                              <input
-                                type="range"
-                                min={5}
-                                max={95}
-                                value={selectedPrintZone.y}
-                                onChange={(e) =>
-                                  handleUpdatePrintZone(selectedPrintZone.id, {
-                                    y: Number(e.target.value),
-                                  })
-                                }
-                                className="w-full h-1 accent-[#ff5e00] cursor-pointer"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Lebar & Tinggi (%) */}
-                          <div className="space-y-1.5 pt-1 border-t border-slate-200">
-                            <div>
-                              <div className="flex items-center justify-between text-[10px] text-slate-600 mb-0.5">
-                                <span>Lebar Area Sablon (Width):</span>
-                                <span className="font-mono font-bold text-slate-800">{Math.round(selectedPrintZone.width)}%</span>
-                              </div>
-                              <input
-                                type="range"
-                                min={5}
-                                max={90}
-                                value={selectedPrintZone.width}
-                                onChange={(e) =>
-                                  handleUpdatePrintZone(selectedPrintZone.id, {
-                                    width: Number(e.target.value),
-                                  })
-                                }
-                                className="w-full h-1 accent-[#ff5e00] cursor-pointer"
-                              />
-                            </div>
-                            <div>
-                              <div className="flex items-center justify-between text-[10px] text-slate-600 mb-0.5">
-                                <span>Tinggi Area Sablon (Height):</span>
-                                <span className="font-mono font-bold text-slate-800">{Math.round(selectedPrintZone.height)}%</span>
-                              </div>
-                              <input
-                                type="range"
-                                min={5}
-                                max={90}
-                                value={selectedPrintZone.height}
-                                onChange={(e) =>
-                                  handleUpdatePrintZone(selectedPrintZone.id, {
-                                    height: Number(e.target.value),
-                                  })
-                                }
-                                className="w-full h-1 accent-[#ff5e00] cursor-pointer"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Rotasi Y (Perspektif 3D Horizontal / Menyamping) */}
-                          <div className="space-y-1.5 pt-1.5 border-t border-slate-200">
-                            <div className="flex items-center justify-between text-[10px] text-slate-600 mb-0.5">
-                              <span className="flex items-center gap-1 font-semibold text-slate-700">
-                                <RotateCw className="w-3 h-3 text-[#ff5e00]" />
-                                <span>Rotasi Y (Perspektif 3D Menyamping):</span>
+                          {/* 1. GRUP: POSISI & UKURAN */}
+                          <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/90 space-y-2.5">
+                            <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                              <span className="flex items-center gap-1.5">
+                                <Maximize2 className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Posisi & Ukuran</span>
                               </span>
-                              <span className="font-mono font-bold text-[#ff5e00] bg-orange-50 px-1.5 py-0.2 rounded border border-orange-200">
-                                {selectedPrintZone.rotationY ? `${selectedPrintZone.rotationY > 0 ? '+' : ''}${selectedPrintZone.rotationY}°` : '0° (Datar)'}
+                              <span className="text-[10px] font-mono text-slate-500 font-semibold">
+                                X:{Math.round(selectedPrintZone.x)}% Y:{Math.round(selectedPrintZone.y)}%
                               </span>
                             </div>
-                            <input
-                              type="range"
-                              min={-75}
-                              max={75}
-                              step={1}
-                              value={selectedPrintZone.rotationY || 0}
-                              onChange={(e) =>
-                                handleUpdatePrintZone(selectedPrintZone.id, {
-                                  rotationY: Number(e.target.value),
-                                })
-                              }
-                              className="w-full h-1 accent-[#ff5e00] cursor-pointer"
-                            />
-                            {/* Preset Sudut Rotasi Y */}
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleUpdatePrintZone(selectedPrintZone.id, { rotationY: -45 })}
-                                className={`flex-1 py-0.5 rounded text-[9px] font-mono font-bold border transition-colors cursor-pointer ${
-                                  selectedPrintZone.rotationY === -45
-                                    ? 'bg-[#ff5e00] text-white border-[#ff5e00]'
-                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-                                }`}
-                                title="Miring Kiri Tajam (-45°)"
-                              >
-                                -45°
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleUpdatePrintZone(selectedPrintZone.id, { rotationY: -30 })}
-                                className={`flex-1 py-0.5 rounded text-[9px] font-mono font-bold border transition-colors cursor-pointer ${
-                                  selectedPrintZone.rotationY === -30
-                                    ? 'bg-[#ff5e00] text-white border-[#ff5e00]'
-                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-                                }`}
-                                title="Miring Kiri Sedang (-30°)"
-                              >
-                                -30°
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleUpdatePrintZone(selectedPrintZone.id, { rotationY: 0 })}
-                                className={`flex-1 py-0.5 rounded text-[9px] font-mono font-bold border transition-colors cursor-pointer ${
-                                  !selectedPrintZone.rotationY || selectedPrintZone.rotationY === 0
-                                    ? 'bg-slate-800 text-white border-slate-800'
-                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-                                }`}
-                                title="Datar / Tegak (0°)"
-                              >
-                                0° Datar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleUpdatePrintZone(selectedPrintZone.id, { rotationY: 30 })}
-                                className={`flex-1 py-0.5 rounded text-[9px] font-mono font-bold border transition-colors cursor-pointer ${
-                                  selectedPrintZone.rotationY === 30
-                                    ? 'bg-[#ff5e00] text-white border-[#ff5e00]'
-                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-                                }`}
-                                title="Miring Kanan Sedang (+30°)"
-                              >
-                                +30°
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleUpdatePrintZone(selectedPrintZone.id, { rotationY: 45 })}
-                                className={`flex-1 py-0.5 rounded text-[9px] font-mono font-bold border transition-colors cursor-pointer ${
-                                  selectedPrintZone.rotationY === 45
-                                    ? 'bg-[#ff5e00] text-white border-[#ff5e00]'
-                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-                                }`}
-                                title="Miring Kanan Tajam (+45°)"
-                              >
-                                +45°
-                              </button>
+
+                            {/* Posisi X & Y */}
+                            <div className="space-y-1.5">
+                              <div>
+                                <div className="flex items-center justify-between text-[10px] text-slate-600 mb-0.5">
+                                  <span className="font-semibold text-slate-700">Posisi X</span>
+                                  <span className="font-mono font-bold text-slate-900">{Math.round(selectedPrintZone.x)}%</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={5}
+                                  max={95}
+                                  value={selectedPrintZone.x}
+                                  onChange={(e) =>
+                                    handleUpdatePrintZone(selectedPrintZone.id, {
+                                      x: Number(e.target.value),
+                                    })
+                                  }
+                                  className="w-full h-1 accent-[#ff5e00] cursor-pointer"
+                                />
+                              </div>
+                              <div>
+                                <div className="flex items-center justify-between text-[10px] text-slate-600 mb-0.5">
+                                  <span className="font-semibold text-slate-700">Posisi Y</span>
+                                  <span className="font-mono font-bold text-slate-900">{Math.round(selectedPrintZone.y)}%</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={5}
+                                  max={95}
+                                  value={selectedPrintZone.y}
+                                  onChange={(e) =>
+                                    handleUpdatePrintZone(selectedPrintZone.id, {
+                                      y: Number(e.target.value),
+                                    })
+                                  }
+                                  className="w-full h-1 accent-[#ff5e00] cursor-pointer"
+                                />
+                              </div>
                             </div>
-                            <p className="text-[9px] text-slate-400 italic">
-                              *Gunakan rotasi Y pada bahu/lengan agar sablon otomatis tampak menyamping 3D saat dilihat dari depan atau belakang.
-                            </p>
+
+                            {/* Lebar & Tinggi */}
+                            <div className="pt-2 border-t border-slate-200/80 space-y-1.5">
+                              <div>
+                                <div className="flex items-center justify-between text-[10px] text-slate-600 mb-0.5">
+                                  <span className="font-semibold text-slate-700">Lebar (W)</span>
+                                  <span className="font-mono font-bold text-slate-900">{Math.round(selectedPrintZone.width)}%</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={5}
+                                  max={90}
+                                  value={selectedPrintZone.width}
+                                  onChange={(e) =>
+                                    handleUpdatePrintZone(selectedPrintZone.id, {
+                                      width: Number(e.target.value),
+                                    })
+                                  }
+                                  className="w-full h-1 accent-[#ff5e00] cursor-pointer"
+                                />
+                              </div>
+                              <div>
+                                <div className="flex items-center justify-between text-[10px] text-slate-600 mb-0.5">
+                                  <span className="font-semibold text-slate-700">Tinggi (H)</span>
+                                  <span className="font-mono font-bold text-slate-900">{Math.round(selectedPrintZone.height)}%</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={5}
+                                  max={90}
+                                  value={selectedPrintZone.height}
+                                  onChange={(e) =>
+                                    handleUpdatePrintZone(selectedPrintZone.id, {
+                                      height: Number(e.target.value),
+                                    })
+                                  }
+                                  className="w-full h-1 accent-[#ff5e00] cursor-pointer"
+                                />
+                              </div>
+                            </div>
                           </div>
 
-                          {/* Auto Clipping Mask Toggle Switch */}
-                          <div className="pt-2 border-t border-slate-200">
-                            <label className="flex items-start gap-2 cursor-pointer select-none">
+                          {/* 2. GRUP: ROTASI 3D (X, Y, Z) */}
+                          <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/90 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
+                                <RotateCw className="w-3.5 h-3.5 text-[#ff5e00]" />
+                                <span>Rotasi 3D (X, Y, Z)</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdatePrintZone(selectedPrintZone.id, { rotationX: 0, rotationY: 0, rotationZ: 0 })}
+                                className="text-[9.5px] font-bold text-slate-500 hover:text-red-600 bg-white hover:bg-red-50 px-2 py-0.5 rounded border border-slate-200 cursor-pointer transition-colors shadow-2xs"
+                                title="Reset semua sudut rotasi ke 0° (tegak datar)"
+                              >
+                                Reset 3D (0°)
+                              </button>
+                            </div>
+
+                            {/* Rotasi X */}
+                            <div className="bg-white p-2 rounded-lg border border-cyan-200/90 space-y-1">
+                              <div className="flex items-center justify-between text-[10px]">
+                                <span className="font-bold text-cyan-900">Rotasi X (Pitch)</span>
+                                <span className="font-mono font-bold text-cyan-900 bg-cyan-50 px-1.5 py-0.2 rounded border border-cyan-200">
+                                  {selectedPrintZone.rotationX ? `${selectedPrintZone.rotationX > 0 ? '+' : ''}${selectedPrintZone.rotationX}°` : '0°'}
+                                </span>
+                              </div>
+                              <input
+                                type="range"
+                                min={-75}
+                                max={75}
+                                step={1}
+                                value={selectedPrintZone.rotationX || 0}
+                                onChange={(e) =>
+                                  handleUpdatePrintZone(selectedPrintZone.id, {
+                                    rotationX: Number(e.target.value),
+                                  })
+                                }
+                                className="w-full h-1 accent-cyan-600 cursor-pointer"
+                              />
+                              <div className="flex items-center gap-1 pt-0.5">
+                                {[-30, -15, 0, 15, 30].map((angle) => (
+                                  <button
+                                    key={angle}
+                                    type="button"
+                                    onClick={() => handleUpdatePrintZone(selectedPrintZone.id, { rotationX: angle })}
+                                    className={`flex-1 py-0.5 rounded text-[8.5px] font-mono font-bold border transition-colors cursor-pointer ${
+                                      (selectedPrintZone.rotationX || 0) === angle
+                                        ? 'bg-cyan-600 text-white border-cyan-600'
+                                        : 'bg-white hover:bg-cyan-50 text-slate-700 border-slate-200'
+                                    }`}
+                                  >
+                                    {angle > 0 ? `+${angle}` : angle}°
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Rotasi Y */}
+                            <div className="bg-white p-2 rounded-lg border border-amber-200/90 space-y-1">
+                              <div className="flex items-center justify-between text-[10px]">
+                                <span className="font-bold text-amber-900">Rotasi Y (Yaw)</span>
+                                <span className="font-mono font-bold text-amber-900 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                                  {selectedPrintZone.rotationY ? `${selectedPrintZone.rotationY > 0 ? '+' : ''}${selectedPrintZone.rotationY}°` : '0°'}
+                                </span>
+                              </div>
+                              <input
+                                type="range"
+                                min={-75}
+                                max={75}
+                                step={1}
+                                value={selectedPrintZone.rotationY || 0}
+                                onChange={(e) =>
+                                  handleUpdatePrintZone(selectedPrintZone.id, {
+                                    rotationY: Number(e.target.value),
+                                  })
+                                }
+                                className="w-full h-1 accent-[#ff5e00] cursor-pointer"
+                              />
+                              <div className="flex items-center gap-1 pt-0.5">
+                                {[-45, -35, 0, 35, 45].map((angle) => (
+                                  <button
+                                    key={angle}
+                                    type="button"
+                                    onClick={() => handleUpdatePrintZone(selectedPrintZone.id, { rotationY: angle })}
+                                    className={`flex-1 py-0.5 rounded text-[8.5px] font-mono font-bold border transition-colors cursor-pointer ${
+                                      (selectedPrintZone.rotationY || 0) === angle
+                                        ? 'bg-[#ff5e00] text-white border-[#ff5e00]'
+                                        : 'bg-white hover:bg-amber-50 text-slate-700 border-slate-200'
+                                    }`}
+                                  >
+                                    {angle > 0 ? `+${angle}` : angle}°
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Rotasi Z */}
+                            <div className="bg-white p-2 rounded-lg border border-pink-200/90 space-y-1">
+                              <div className="flex items-center justify-between text-[10px]">
+                                <span className="font-bold text-pink-900">Rotasi Z (Roll)</span>
+                                <span className="font-mono font-bold text-pink-900 bg-pink-50 px-1.5 py-0.2 rounded border border-pink-200">
+                                  {selectedPrintZone.rotationZ ? `${selectedPrintZone.rotationZ > 0 ? '+' : ''}${selectedPrintZone.rotationZ}°` : '0°'}
+                                </span>
+                              </div>
+                              <input
+                                type="range"
+                                min={-180}
+                                max={180}
+                                step={1}
+                                value={selectedPrintZone.rotationZ || 0}
+                                onChange={(e) =>
+                                  handleUpdatePrintZone(selectedPrintZone.id, {
+                                    rotationZ: Number(e.target.value),
+                                  })
+                                }
+                                className="w-full h-1 accent-pink-600 cursor-pointer"
+                              />
+                              <div className="flex items-center gap-1 pt-0.5">
+                                {[-45, -30, -15, 0, 15, 30, 45].map((angle) => (
+                                  <button
+                                    key={angle}
+                                    type="button"
+                                    onClick={() => handleUpdatePrintZone(selectedPrintZone.id, { rotationZ: angle })}
+                                    className={`flex-1 py-0.5 rounded text-[8.5px] font-mono font-bold border transition-colors cursor-pointer ${
+                                      (selectedPrintZone.rotationZ || 0) === angle
+                                        ? 'bg-pink-600 text-white border-pink-600'
+                                        : 'bg-white hover:bg-pink-50 text-slate-700 border-slate-200'
+                                    }`}
+                                  >
+                                    {angle > 0 ? `+${angle}` : angle}°
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 3. AUTO CLIPPING MASK */}
+                          <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/90">
+                            <label className="flex items-center justify-between cursor-pointer select-none">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold text-slate-800">
+                                  Auto Clipping Mask
+                                </span>
+                                <span className={`text-[8.5px] px-1 py-0.2 rounded font-bold ${
+                                  (selectedPrintZone.enableAutoClipping ?? true)
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : 'bg-slate-200 text-slate-600'
+                                }`}>
+                                  {(selectedPrintZone.enableAutoClipping ?? true) ? 'AKTIF' : 'NONAKTIF'}
+                                </span>
+                              </div>
                               <input
                                 type="checkbox"
                                 checked={selectedPrintZone.enableAutoClipping ?? true}
@@ -4157,25 +3877,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                     enableAutoClipping: e.target.checked,
                                   })
                                 }
-                                className="mt-0.5 w-3.5 h-3.5 accent-[#ff5e00] rounded cursor-pointer"
+                                className="w-4 h-4 accent-[#ff5e00] rounded cursor-pointer"
                               />
-                              <div className="flex-1">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-[11px] font-bold text-slate-800">
-                                    Auto Clipping Mask
-                                  </span>
-                                  <span className={`text-[8.5px] px-1 py-0.2 rounded font-bold ${
-                                    (selectedPrintZone.enableAutoClipping ?? true)
-                                      ? 'bg-emerald-100 text-emerald-700'
-                                      : 'bg-slate-200 text-slate-600'
-                                  }`}>
-                                    {(selectedPrintZone.enableAutoClipping ?? true) ? 'AKTIF' : 'NONAKTIF'}
-                                  </span>
-                                </div>
-                                <p className="text-[9.5px] text-slate-500 leading-tight mt-0.5">
-                                  Secara otomatis memotong gambar sablon/bordir mengikuti lekukan kain blangko baju agar tepi logo tidak bocor melayang ke udara.
-                                </p>
-                              </div>
                             </label>
                           </div>
                         </div>
