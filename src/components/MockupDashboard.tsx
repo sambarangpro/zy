@@ -42,6 +42,11 @@ import {
   RotateCcw,
   RotateCw,
   Grid,
+  Maximize2,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react'
 
 // CorelDRAW Style Spline & Curve Helpers (Cubic Catmull-Rom & Bézier Curves)
@@ -156,6 +161,160 @@ interface DashboardSnapshot {
   printZones?: PrintZone[]
 }
 
+// Memastikan area gambar sablon lengan kiri & kanan selalu tersedia di tampak depan, belakang, dan samping
+function ensureAllSleeveZones(existing: PrintZone[]): PrintZone[] {
+  const result = [...existing]
+
+  // 1. Front: Bahu / Lengan Kanan (Menyamping)
+  const hasFrontRight = result.some(
+    (z) => z.side === 'front' && (z.name.toLowerCase().includes('lengan kanan') || z.name.toLowerCase().includes('bahu kanan') || (z.x < 40 && z.name.toLowerCase().includes('lengan')))
+  )
+  if (!hasFrontRight) {
+    result.push({
+      id: 'z_front_sleeve_right',
+      name: 'Bahu / Lengan Kanan (Menyamping)',
+      x: 23,
+      y: 34,
+      width: 14,
+      height: 20,
+      side: 'front',
+      price: 15000,
+      maxSizeCm: '8×8 cm',
+      rotationY: 35,
+      enableAutoClipping: true,
+      description: 'Sinkron otomatis ke Tampak Kanan & Belakang',
+    })
+  }
+
+  // 2. Front: Bahu / Lengan Kiri (Menyamping)
+  const hasFrontLeft = result.some(
+    (z) => z.side === 'front' && (z.name.toLowerCase().includes('lengan kiri') || z.name.toLowerCase().includes('bahu kiri') || (z.x > 60 && z.name.toLowerCase().includes('lengan')))
+  )
+  if (!hasFrontLeft) {
+    result.push({
+      id: 'z_front_sleeve_left',
+      name: 'Bahu / Lengan Kiri (Menyamping)',
+      x: 77,
+      y: 34,
+      width: 14,
+      height: 20,
+      side: 'front',
+      price: 15000,
+      maxSizeCm: '8×8 cm',
+      rotationY: -35,
+      enableAutoClipping: true,
+      description: 'Sinkron otomatis ke Tampak Kiri & Belakang',
+    })
+  }
+
+  // 3. Back: Bahu / Lengan Kiri (Belakang)
+  const hasBackLeft = result.some(
+    (z) => z.side === 'back' && (z.name.toLowerCase().includes('lengan kiri') || z.name.toLowerCase().includes('bahu kiri') || (z.x < 40 && z.name.toLowerCase().includes('lengan')))
+  )
+  if (!hasBackLeft) {
+    result.push({
+      id: 'z_back_sleeve_left',
+      name: 'Bahu / Lengan Kiri (Belakang)',
+      x: 23,
+      y: 34,
+      width: 14,
+      height: 20,
+      side: 'back',
+      price: 15000,
+      maxSizeCm: '8×8 cm',
+      rotationY: 35,
+      enableAutoClipping: true,
+      description: 'Sinkron otomatis ke Tampak Kiri & Depan',
+    })
+  }
+
+  // 4. Back: Bahu / Lengan Kanan (Belakang)
+  const hasBackRight = result.some(
+    (z) => z.side === 'back' && (z.name.toLowerCase().includes('lengan kanan') || z.name.toLowerCase().includes('bahu kanan') || (z.x > 60 && z.name.toLowerCase().includes('lengan')))
+  )
+  if (!hasBackRight) {
+    result.push({
+      id: 'z_back_sleeve_right',
+      name: 'Bahu / Lengan Kanan (Belakang)',
+      x: 77,
+      y: 34,
+      width: 14,
+      height: 20,
+      side: 'back',
+      price: 15000,
+      maxSizeCm: '8×8 cm',
+      rotationY: -35,
+      enableAutoClipping: true,
+      description: 'Sinkron otomatis ke Tampak Kanan & Depan',
+    })
+  }
+
+  // 5. Left: Area Patch Lengan Kiri
+  const hasLeftSleeve = result.some(
+    (z) => z.side === 'left' && (z.name.toLowerCase().includes('lengan') || z.name.toLowerCase().includes('sleeve'))
+  )
+  if (!hasLeftSleeve) {
+    result.push({
+      id: 'z_left_sleeve',
+      name: 'Area Patch Lengan Kiri',
+      x: 50,
+      y: 35,
+      width: 40,
+      height: 40,
+      side: 'left',
+      price: 15000,
+      maxSizeCm: '8×8 cm',
+      rotationY: 0,
+      enableAutoClipping: true,
+    })
+  }
+
+  // 6. Right: Area Patch Lengan Kanan
+  const hasRightSleeve = result.some(
+    (z) => z.side === 'right' && (z.name.toLowerCase().includes('lengan') || z.name.toLowerCase().includes('sleeve'))
+  )
+  if (!hasRightSleeve) {
+    result.push({
+      id: 'z_right_sleeve',
+      name: 'Area Patch Lengan Kanan',
+      x: 50,
+      y: 35,
+      width: 40,
+      height: 40,
+      side: 'right',
+      price: 15000,
+      maxSizeCm: '8×8 cm',
+      rotationY: 0,
+      enableAutoClipping: true,
+    })
+  }
+
+  // Pastikan setiap area sablon memiliki rotasi 3D dan auto clipping mask default
+  return result.map((z) => {
+    let rot = z.rotationY
+    const clip = z.enableAutoClipping ?? true
+    const n = z.name.toLowerCase()
+    if (rot === undefined) {
+      if (z.side === 'front') {
+        if (n.includes('kanan') || z.x < 40) rot = 35
+        else if (n.includes('kiri') || z.x > 60) rot = -35
+        else rot = 0
+      } else if (z.side === 'back') {
+        if (n.includes('kiri') || z.x < 40) rot = 35
+        else if (n.includes('kanan') || z.x > 60) rot = -35
+        else rot = 0
+      } else {
+        rot = 0
+      }
+    }
+    return {
+      ...z,
+      rotationY: rot,
+      enableAutoClipping: clip,
+    }
+  })
+}
+
 interface MockupDashboardProps {
   mockups: MockupTemplate[]
   activeMockupId: string | null
@@ -259,14 +418,61 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   }, [editFormData.colorParts])
 
   // Titik Garis Panduan Sablon (Print Zones) yang diatur oleh Owner saat pembuatan blangko
-  const [printZones, setPrintZones] = useState<PrintZone[]>(editFormData.printZones || [...PRINT_ZONES])
+  const [printZones, setPrintZones] = useState<PrintZone[]>(() =>
+    ensureAllSleeveZones(editFormData.printZones || [...PRINT_ZONES])
+  )
   const [selectedPrintZoneId, setSelectedPrintZoneId] = useState<string | null>(null)
   const [showPrintZones, setShowPrintZones] = useState<boolean>(true)
+  const [showZoneSamplePreview, setShowZoneSamplePreview] = useState<boolean>(true)
   const [activeInspectorTab, setActiveInspectorTab] = useState<'masking' | 'printZones'>('masking')
+
+  // Drag & Resize state untuk manipulasi langsung area sablon di Kanvas Blangko
+  const [draggingZoneState, setDraggingZoneState] = useState<{
+    zoneId: string
+    action: 'move' | 'resize'
+    startX: number
+    startY: number
+    initX: number
+    initY: number
+    initW: number
+    initH: number
+  } | null>(null)
+
+  const handleStartMoveZone = (e: React.MouseEvent, zone: PrintZone) => {
+    e.stopPropagation()
+    setSelectedPrintZoneId(zone.id)
+    setActiveInspectorTab('printZones')
+    setDraggingZoneState({
+      zoneId: zone.id,
+      action: 'move',
+      startX: e.clientX,
+      startY: e.clientY,
+      initX: zone.x,
+      initY: zone.y,
+      initW: zone.width,
+      initH: zone.height,
+    })
+  }
+
+  const handleStartResizeZone = (e: React.MouseEvent, zone: PrintZone) => {
+    e.stopPropagation()
+    setSelectedPrintZoneId(zone.id)
+    setActiveInspectorTab('printZones')
+    setDraggingZoneState({
+      zoneId: zone.id,
+      action: 'resize',
+      startX: e.clientX,
+      startY: e.clientY,
+      initX: zone.x,
+      initY: zone.y,
+      initW: zone.width,
+      initH: zone.height,
+    })
+  }
 
   useEffect(() => {
     if (editFormData.printZones && editFormData.printZones.length > 0) {
-      setPrintZones(editFormData.printZones)
+      setPrintZones(ensureAllSleeveZones(editFormData.printZones))
     }
   }, [editFormData.printZones])
 
@@ -548,7 +754,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
   const handleOpenCreateNew = () => {
     colorPartsRef.current = []
-    const defaultZones = [...PRINT_ZONES]
+    const defaultZones = ensureAllSleeveZones([...PRINT_ZONES])
     setPrintZones(defaultZones)
     setSelectedPrintZoneId(null)
     setActiveInspectorTab('masking')
@@ -573,8 +779,9 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
   const handleOpenEdit = (item: MockupTemplate) => {
     const parts = item.colorParts ? [...item.colorParts] : []
-    const zones =
+    const zones = ensureAllSleeveZones(
       item.printZones && item.printZones.length > 0 ? [...item.printZones] : [...PRINT_ZONES]
+    )
     colorPartsRef.current = parts
     setPrintZones(zones)
     setSelectedPrintZoneId(null)
@@ -1605,7 +1812,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       enableClippingMask: editFormData.enableClippingMask ?? true,
       defaultBaseColor: editFormData.defaultBaseColor || '#ffffff',
       colorParts: validColorParts,
-      printZones: printZones.length > 0 ? printZones : (editFormData.printZones || [...PRINT_ZONES]),
+      printZones: ensureAllSleeveZones(printZones.length > 0 ? printZones : (editFormData.printZones || [...PRINT_ZONES])),
       discount12: Number(editFormData.discount12) || 5000,
       discount50: Number(editFormData.discount50) || 10000,
       discount100: Number(editFormData.discount100) || 15000,
@@ -1786,6 +1993,222 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   if (stageDisplayWidth > MAX_STAGE_WIDTH) {
     stageDisplayWidth = MAX_STAGE_WIDTH
     stageDisplayHeight = stageDisplayWidth / stageAspectRatio
+  }
+
+  // Current mockup image URL for masking
+  const currentMockupImgUrl = useMemo(() => {
+    const sideKey =
+      selectedSide === 'front'
+        ? 'frontImg'
+        : selectedSide === 'back'
+        ? 'backImg'
+        : selectedSide === 'left'
+        ? 'leftImg'
+        : 'rightImg'
+    return editFormData[sideKey] || null
+  }, [editFormData, selectedSide])
+
+  // Helper identifikasi zona sablon lengan kiri & kanan
+  const sleeveZonesOnCurrentSide = useMemo(() => {
+    if (selectedSide === 'front') {
+      const rightArm = printZones.find(
+        (z) =>
+          z.side === 'front' &&
+          (z.id === 'z_front_sleeve_right' ||
+            z.name.toLowerCase().includes('lengan kanan') ||
+            z.name.toLowerCase().includes('bahu kanan') ||
+            (z.x < 40 && z.name.toLowerCase().includes('lengan')))
+      )
+      const leftArm = printZones.find(
+        (z) =>
+          z.side === 'front' &&
+          (z.id === 'z_front_sleeve_left' ||
+            z.name.toLowerCase().includes('lengan kiri') ||
+            z.name.toLowerCase().includes('bahu kiri') ||
+            (z.x > 60 && z.name.toLowerCase().includes('lengan')))
+      )
+      return { rightArm, leftArm }
+    } else if (selectedSide === 'back') {
+      const leftArm = printZones.find(
+        (z) =>
+          z.side === 'back' &&
+          (z.id === 'z_back_sleeve_left' ||
+            z.name.toLowerCase().includes('lengan kiri') ||
+            z.name.toLowerCase().includes('bahu kiri') ||
+            (z.x < 40 && z.name.toLowerCase().includes('lengan')))
+      )
+      const rightArm = printZones.find(
+        (z) =>
+          z.side === 'back' &&
+          (z.id === 'z_back_sleeve_right' ||
+            z.name.toLowerCase().includes('lengan kanan') ||
+            z.name.toLowerCase().includes('bahu kanan') ||
+            (z.x > 60 && z.name.toLowerCase().includes('lengan')))
+      )
+      return { rightArm, leftArm }
+    } else if (selectedSide === 'left') {
+      const leftArm = printZones.find(
+        (z) =>
+          z.side === 'left' &&
+          (z.id === 'z_left_sleeve' ||
+            z.name.toLowerCase().includes('lengan') ||
+            z.name.toLowerCase().includes('sleeve'))
+      )
+      return { leftArm, rightArm: undefined }
+    } else if (selectedSide === 'right') {
+      const rightArm = printZones.find(
+        (z) =>
+          z.side === 'right' &&
+          (z.id === 'z_right_sleeve' ||
+            z.name.toLowerCase().includes('lengan') ||
+            z.name.toLowerCase().includes('sleeve'))
+      )
+      return { rightArm, leftArm: undefined }
+    }
+    return { rightArm: undefined, leftArm: undefined }
+  }, [printZones, selectedSide])
+
+  // Dragging & Resizing Real-Time Window Handlers
+  useEffect(() => {
+    if (!draggingZoneState) return
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      const denomW = (stageDisplayWidth || 500) * (zoomScale || 1)
+      const denomH = (stageDisplayHeight || 500) * (zoomScale || 1)
+      const deltaX = ((e.clientX - draggingZoneState.startX) / denomW) * 100
+      const deltaY = ((e.clientY - draggingZoneState.startY) / denomH) * 100
+
+      if (draggingZoneState.action === 'move') {
+        const nextX = Math.round(Math.max(2, Math.min(98, draggingZoneState.initX + deltaX)))
+        const nextY = Math.round(Math.max(2, Math.min(98, draggingZoneState.initY + deltaY)))
+        handleUpdatePrintZone(draggingZoneState.zoneId, { x: nextX, y: nextY })
+      } else if (draggingZoneState.action === 'resize') {
+        const nextW = Math.round(Math.max(5, Math.min(90, draggingZoneState.initW + deltaX * 2)))
+        const nextH = Math.round(Math.max(5, Math.min(90, draggingZoneState.initH + deltaY * 2)))
+        handleUpdatePrintZone(draggingZoneState.zoneId, { width: nextW, height: nextH })
+      }
+    }
+
+    const handleWindowMouseUp = () => {
+      setDraggingZoneState(null)
+    }
+
+    window.addEventListener('mousemove', handleWindowMouseMove)
+    window.addEventListener('mouseup', handleWindowMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove)
+      window.removeEventListener('mouseup', handleWindowMouseUp)
+    }
+  }, [draggingZoneState, stageDisplayWidth, stageDisplayHeight, zoomScale])
+
+  // Helper untuk lompat dari samping ke depan/belakang untuk atur proyeksi 3D
+  const handleJumpToSleeve3D = (side: 'front' | 'back', targetArm: 'left' | 'right') => {
+    handleSelectSide(side)
+    setShowPrintZones(true)
+    setActiveInspectorTab('printZones')
+
+    setTimeout(() => {
+      const targetSideZones = printZones.filter((z) => z.side === side)
+      let found: PrintZone | undefined
+      if (side === 'front') {
+        found = targetSideZones.find((z) =>
+          targetArm === 'right'
+            ? z.id === 'z_front_sleeve_right' ||
+              z.name.toLowerCase().includes('lengan kanan') ||
+              z.name.toLowerCase().includes('bahu kanan') ||
+              (z.x < 40 && z.name.toLowerCase().includes('lengan'))
+            : z.id === 'z_front_sleeve_left' ||
+              z.name.toLowerCase().includes('lengan kiri') ||
+              z.name.toLowerCase().includes('bahu kiri') ||
+              (z.x > 60 && z.name.toLowerCase().includes('lengan'))
+        )
+      } else {
+        found = targetSideZones.find((z) =>
+          targetArm === 'left'
+            ? z.id === 'z_back_sleeve_left' ||
+              z.name.toLowerCase().includes('lengan kiri') ||
+              z.name.toLowerCase().includes('bahu kiri') ||
+              (z.x < 40 && z.name.toLowerCase().includes('lengan'))
+            : z.id === 'z_back_sleeve_right' ||
+              z.name.toLowerCase().includes('lengan kanan') ||
+              z.name.toLowerCase().includes('bahu kanan') ||
+              (z.x > 60 && z.name.toLowerCase().includes('lengan'))
+        )
+      }
+      if (found) {
+        setSelectedPrintZoneId(found.id)
+      }
+    }, 50)
+  }
+
+  // Render Contoh Area Gambar Logo / Patch Realistis
+  const renderSampleEmblem = (zone: PrintZone) => {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center p-0.5 select-none pointer-events-none drop-shadow-md">
+        <svg
+          viewBox="0 0 100 100"
+          className="w-full h-full max-w-full max-h-full overflow-visible drop-shadow-sm"
+        >
+          <defs>
+            <linearGradient id={`grad-shield-${zone.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#1e3a8a" />
+              <stop offset="50%" stopColor="#2563eb" />
+              <stop offset="100%" stopColor="#1d4ed8" />
+            </linearGradient>
+            <linearGradient id={`grad-gold-${zone.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#fef08a" />
+              <stop offset="50%" stopColor="#eab308" />
+              <stop offset="100%" stopColor="#ca8a04" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M50 6 L84 20 L84 54 Q84 84 50 94 Q16 84 16 54 L16 20 Z"
+            fill={`url(#grad-shield-${zone.id})`}
+            stroke={`url(#grad-gold-${zone.id})`}
+            strokeWidth="3.5"
+          />
+          <path
+            d="M50 13 L77 24 L77 52 Q77 77 50 86 Q23 77 23 52 L23 24 Z"
+            fill="none"
+            stroke="#fbbf24"
+            strokeWidth="1.2"
+            strokeDasharray="2.5 1.5"
+          />
+          <polygon
+            points="50,22 53.5,33 65,33 55.7,40 59.2,51 50,44.5 40.8,51 44.3,40 35,33 46.5,33"
+            fill={`url(#grad-gold-${zone.id})`}
+            stroke="#92400e"
+            strokeWidth="0.8"
+          />
+          <rect x="25" y="56" width="50" height="13" rx="2.5" fill="#dc2626" stroke="#fbbf24" strokeWidth="1" />
+          <text
+            x="50"
+            y="65.5"
+            textAnchor="middle"
+            fill="#ffffff"
+            fontSize="6"
+            fontWeight="900"
+            fontFamily="sans-serif"
+            letterSpacing="0.4"
+          >
+            SABLON / BORDIR
+          </text>
+          <text
+            x="50"
+            y="77.5"
+            textAnchor="middle"
+            fill="#fde047"
+            fontSize="5.5"
+            fontWeight="800"
+            fontFamily="sans-serif"
+          >
+            {zone.rotationY && zone.rotationY !== 0
+              ? `3D (${zone.rotationY > 0 ? '+' : ''}${zone.rotationY}°)`
+              : 'TAMPAK TEGAK'}
+          </text>
+        </svg>
+      </div>
+    )
   }
 
   return (
@@ -2546,6 +2969,171 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                 }}
                 onMouseUp={() => setIsPanning(false)}
               >
+                {/* QUICK SLEEVE ZONE NAVIGATION BAR (Floating Top Dock) */}
+                {showPrintZones && (
+                  <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md text-white px-3 py-1.5 rounded-2xl shadow-xl border border-slate-700/80 flex items-center gap-2 z-40 pointer-events-auto select-none">
+                    <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs pr-1 border-r border-slate-700">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Area Sablon Lengan:</span>
+                    </div>
+
+                    {selectedSide === 'front' || selectedSide === 'back' ? (
+                      <>
+                        {sleeveZonesOnCurrentSide.rightArm && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPrintZoneId(sleeveZonesOnCurrentSide.rightArm!.id)
+                              setActiveInspectorTab('printZones')
+                            }}
+                            className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                              selectedPrintZoneId === sleeveZonesOnCurrentSide.rightArm.id
+                                ? 'bg-[#ff5e00] text-white shadow-md ring-2 ring-[#ff5e00]/40'
+                                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                            }`}
+                          >
+                            <span>👈 Lengan Kanan</span>
+                            <span className="font-mono text-[9px] bg-black/30 px-1 py-0.2 rounded text-amber-300">
+                              ⟳{sleeveZonesOnCurrentSide.rightArm.rotationY && sleeveZonesOnCurrentSide.rightArm.rotationY > 0 ? '+' : ''}{sleeveZonesOnCurrentSide.rightArm.rotationY || 0}°
+                            </span>
+                            {sleeveZonesOnCurrentSide.rightArm.enableAutoClipping ?? true ? (
+                              <span className="text-[8px] text-emerald-400">✂</span>
+                            ) : null}
+                          </button>
+                        )}
+
+                        {sleeveZonesOnCurrentSide.leftArm && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPrintZoneId(sleeveZonesOnCurrentSide.leftArm!.id)
+                              setActiveInspectorTab('printZones')
+                            }}
+                            className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                              selectedPrintZoneId === sleeveZonesOnCurrentSide.leftArm.id
+                                ? 'bg-[#ff5e00] text-white shadow-md ring-2 ring-[#ff5e00]/40'
+                                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                            }`}
+                          >
+                            <span>👉 Lengan Kiri</span>
+                            <span className="font-mono text-[9px] bg-black/30 px-1 py-0.2 rounded text-amber-300">
+                              ⟳{sleeveZonesOnCurrentSide.leftArm.rotationY && sleeveZonesOnCurrentSide.leftArm.rotationY > 0 ? '+' : ''}{sleeveZonesOnCurrentSide.leftArm.rotationY || 0}°
+                            </span>
+                            {sleeveZonesOnCurrentSide.leftArm.enableAutoClipping ?? true ? (
+                              <span className="text-[8px] text-emerald-400">✂</span>
+                            ) : null}
+                          </button>
+                        )}
+                      </>
+                    ) : selectedSide === 'left' ? (
+                      <>
+                        {sleeveZonesOnCurrentSide.leftArm && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPrintZoneId(sleeveZonesOnCurrentSide.leftArm!.id)
+                              setActiveInspectorTab('printZones')
+                            }}
+                            className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                              selectedPrintZoneId === sleeveZonesOnCurrentSide.leftArm.id
+                                ? 'bg-[#ff5e00] text-white shadow-md'
+                                : 'bg-slate-800 text-slate-200 border border-slate-700'
+                            }`}
+                          >
+                            <span>📍 Patch Lengan Kiri (Aktif)</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => handleJumpToSleeve3D('front', 'left')}
+                          className="px-2 py-1 rounded-xl text-[11px] font-semibold bg-indigo-600/70 hover:bg-indigo-600 text-white transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Buka Tampak Depan untuk atur posisi & rotasi 3D lengan kiri"
+                        >
+                          <span>👁 Atur di Tampak Depan (3D) →</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleJumpToSleeve3D('back', 'left')}
+                          className="px-2 py-1 rounded-xl text-[11px] font-semibold bg-indigo-600/70 hover:bg-indigo-600 text-white transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Buka Tampak Belakang untuk atur posisi & rotasi 3D lengan kiri"
+                        >
+                          <span>👁 Atur di Tampak Belakang (3D) →</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSelectSide('right')}
+                          className="px-2 py-1 rounded-xl text-[11px] font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>Ke Lengan Kanan 👉</span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {sleeveZonesOnCurrentSide.rightArm && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPrintZoneId(sleeveZonesOnCurrentSide.rightArm!.id)
+                              setActiveInspectorTab('printZones')
+                            }}
+                            className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                              selectedPrintZoneId === sleeveZonesOnCurrentSide.rightArm.id
+                                ? 'bg-[#ff5e00] text-white shadow-md'
+                                : 'bg-slate-800 text-slate-200 border border-slate-700'
+                            }`}
+                          >
+                            <span>📍 Patch Lengan Kanan (Aktif)</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => handleJumpToSleeve3D('front', 'right')}
+                          className="px-2 py-1 rounded-xl text-[11px] font-semibold bg-indigo-600/70 hover:bg-indigo-600 text-white transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Buka Tampak Depan untuk atur posisi & rotasi 3D lengan kanan"
+                        >
+                          <span>👁 Atur di Tampak Depan (3D) →</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleJumpToSleeve3D('back', 'right')}
+                          className="px-2 py-1 rounded-xl text-[11px] font-semibold bg-indigo-600/70 hover:bg-indigo-600 text-white transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Buka Tampak Belakang untuk atur posisi & rotasi 3D lengan kanan"
+                        >
+                          <span>👁 Atur di Tampak Belakang (3D) →</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSelectSide('left')}
+                          className="px-2 py-1 rounded-xl text-[11px] font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>👈 Ke Lengan Kiri</span>
+                        </button>
+                      </>
+                    )}
+
+                    <div className="w-px h-4 bg-slate-700 mx-0.5" />
+
+                    <button
+                      type="button"
+                      onClick={() => setShowZoneSamplePreview((prev) => !prev)}
+                      className={`px-2 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                        showZoneSamplePreview
+                          ? 'bg-amber-500/30 text-amber-300 hover:bg-amber-500/40 border border-amber-500/50'
+                          : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'
+                      }`}
+                      title="Tampilkan / Sembunyikan contoh gambar logo di area sablon"
+                    >
+                      {showZoneSamplePreview ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                      <span>Contoh Logo: {showZoneSamplePreview ? 'ON' : 'OFF'}</span>
+                    </button>
+                  </div>
+                )}
                 {/* TRANSFORM CONTAINER PAN & ZOOM */}
                 <div
                   className="relative transition-none select-none"
@@ -2601,9 +3189,70 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                         )
                       })}
 
+                    {/* SAMPLE LOGO PREVIEWS (AREA GAMBAR REALISTIS 3D PERSPEKTIF & CLIPPING MASK) */}
+                    {showPrintZones && showZoneSamplePreview && (
+                      <>
+                        {/* A. Masked Sample Graphics Layer (Clipped strictly to garment silhouette) */}
+                        {currentMockupImgUrl && (
+                          <div
+                            style={{
+                              WebkitMaskImage: `url("${currentMockupImgUrl}")`,
+                              maskImage: `url("${currentMockupImgUrl}")`,
+                              WebkitMaskSize: '100% 100%',
+                              maskSize: '100% 100%',
+                              WebkitMaskRepeat: 'no-repeat',
+                              maskRepeat: 'no-repeat',
+                            }}
+                            className="absolute inset-0 w-full h-full pointer-events-none z-28 overflow-hidden"
+                          >
+                            {currentSidePrintZones
+                              .filter((z) => z.enableAutoClipping ?? true)
+                              .map((zone) => (
+                                <div
+                                  key={`sample-masked-${zone.id}`}
+                                  style={{
+                                    left: `${zone.x}%`,
+                                    top: `${zone.y}%`,
+                                    width: `${zone.width}%`,
+                                    height: `${zone.height}%`,
+                                    transform: `translate(-50%, -50%) perspective(400px) rotateY(${zone.rotationY || 0}deg)`,
+                                    transformOrigin: 'center center',
+                                  }}
+                                  className="absolute flex items-center justify-center opacity-90"
+                                >
+                                  {renderSampleEmblem(zone)}
+                                </div>
+                              ))}
+                          </div>
+                        )}
+
+                        {/* B. Unmasked Sample Graphics Layer (For zones without auto-clipping or SVG fallback) */}
+                        <div className="absolute inset-0 w-full h-full pointer-events-none z-27 overflow-hidden">
+                          {currentSidePrintZones
+                            .filter((z) => !currentMockupImgUrl || !(z.enableAutoClipping ?? true))
+                            .map((zone) => (
+                              <div
+                                key={`sample-unmasked-${zone.id}`}
+                                style={{
+                                  left: `${zone.x}%`,
+                                  top: `${zone.y}%`,
+                                  width: `${zone.width}%`,
+                                  height: `${zone.height}%`,
+                                  transform: `translate(-50%, -50%) perspective(400px) rotateY(${zone.rotationY || 0}deg)`,
+                                  transformOrigin: 'center center',
+                                }}
+                                className="absolute flex items-center justify-center opacity-90"
+                              >
+                                {renderSampleEmblem(zone)}
+                              </div>
+                            ))}
+                        </div>
+                      </>
+                    )}
+
                     {/* TITIK GARIS PANDUAN SABLON (PRINT SAFE ZONES) - DI DEPAN OBJEK */}
                     {showPrintZones && (
-                      <div className="absolute inset-0 w-full h-full pointer-events-none z-30">
+                      <div className="absolute inset-0 w-full h-full pointer-events-none z-35">
                         {currentSidePrintZones.map((zone) => {
                           const isSelected = selectedPrintZoneId === zone.id
                           return (
@@ -2617,17 +3266,109 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                 transform: `translate(-50%, -50%) perspective(400px) rotateY(${zone.rotationY || 0}deg)`,
                                 transformOrigin: 'center center',
                               }}
+                              onMouseDown={(e) => handleStartMoveZone(e, zone)}
                               onClick={(e) => {
                                 e.stopPropagation()
                                 setSelectedPrintZoneId(zone.id)
                                 setActiveInspectorTab('printZones')
                               }}
-                              className={`absolute border-2 pointer-events-auto transition-all cursor-pointer rounded-2xl flex flex-col items-center justify-between p-1.5 ${
+                              className={`absolute border-2 pointer-events-auto transition-all cursor-move rounded-2xl flex flex-col items-center justify-between p-1.5 ${
                                 isSelected
-                                  ? 'border-[#ff5e00] bg-[#ff5e00]/15 ring-2 ring-[#ff5e00]/40 shadow-md z-40'
-                                  : 'border-dashed border-indigo-500/80 bg-indigo-500/10 hover:border-[#ff5e00] hover:bg-[#ff5e00]/10 z-30'
+                                  ? 'border-[#ff5e00] bg-[#ff5e00]/15 ring-2 ring-[#ff5e00]/50 shadow-lg z-45'
+                                  : 'border-dashed border-indigo-500/80 bg-indigo-500/10 hover:border-[#ff5e00] hover:bg-[#ff5e00]/10 z-35'
                               }`}
                             >
+                              {/* FLOATING QUICK TOOLBAR (Above selected zone) */}
+                              {isSelected && (
+                                <div
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="absolute -top-12 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-md text-white px-2.5 py-1 rounded-xl shadow-2xl border border-slate-700/90 flex items-center gap-1.5 z-50 pointer-events-auto whitespace-nowrap select-none"
+                                  style={{ transform: 'translateX(-50%)' }}
+                                >
+                                  {/* Directional Nudge */}
+                                  <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdatePrintZone(zone.id, { x: Math.max(2, zone.x - 2) })}
+                                      className="p-1 hover:bg-slate-700 rounded text-slate-300 hover:text-white cursor-pointer"
+                                      title="Geser Kiri (2%)"
+                                    >
+                                      <ArrowLeft className="w-2.5 h-2.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdatePrintZone(zone.id, { x: Math.min(98, zone.x + 2) })}
+                                      className="p-1 hover:bg-slate-700 rounded text-slate-300 hover:text-white cursor-pointer"
+                                      title="Geser Kanan (2%)"
+                                    >
+                                      <ArrowRight className="w-2.5 h-2.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdatePrintZone(zone.id, { y: Math.max(2, zone.y - 2) })}
+                                      className="p-1 hover:bg-slate-700 rounded text-slate-300 hover:text-white cursor-pointer"
+                                      title="Geser Atas (2%)"
+                                    >
+                                      <ArrowUp className="w-2.5 h-2.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdatePrintZone(zone.id, { y: Math.min(98, zone.y + 2) })}
+                                      className="p-1 hover:bg-slate-700 rounded text-slate-300 hover:text-white cursor-pointer"
+                                      title="Geser Bawah (2%)"
+                                    >
+                                      <ArrowDown className="w-2.5 h-2.5" />
+                                    </button>
+                                  </div>
+
+                                  <div className="w-px h-3.5 bg-slate-700" />
+
+                                  {/* Rotasi Y Presets */}
+                                  <div className="flex items-center gap-0.5 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
+                                    <span className="text-[8.5px] text-amber-300 font-bold px-1 font-mono">
+                                      ⟳Y:
+                                    </span>
+                                    {[-45, -35, 0, 35, 45].map((angle) => (
+                                      <button
+                                        key={angle}
+                                        type="button"
+                                        onClick={() => handleUpdatePrintZone(zone.id, { rotationY: angle })}
+                                        className={`px-1 py-0.5 rounded text-[8.5px] font-mono font-bold cursor-pointer transition-colors ${
+                                          (zone.rotationY || 0) === angle
+                                            ? 'bg-[#ff5e00] text-white shadow-xs'
+                                            : 'hover:bg-slate-700 text-slate-300'
+                                        }`}
+                                        title={`Rotasi Y: ${angle}°`}
+                                      >
+                                        {angle > 0 ? `+${angle}` : angle}°
+                                      </button>
+                                    ))}
+                                  </div>
+
+                                  <div className="w-px h-3.5 bg-slate-700" />
+
+                                  {/* Auto Clipping toggle */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdatePrintZone(zone.id, {
+                                        enableAutoClipping: !(zone.enableAutoClipping ?? true),
+                                      })
+                                    }
+                                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 cursor-pointer transition-colors ${
+                                      zone.enableAutoClipping ?? true
+                                        ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/50'
+                                        : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                    }`}
+                                    title="Toggle Auto Clipping Mask Siluet Kain"
+                                  >
+                                    <span>✂</span>
+                                    <span>{(zone.enableAutoClipping ?? true) ? 'Clip ON' : 'Clip OFF'}</span>
+                                  </button>
+                                </div>
+                              )}
+
                               {/* Top pill badge */}
                               <div className="flex items-center gap-1.5 bg-slate-900/95 text-white px-2 py-0.5 rounded-full text-[9px] font-bold shadow-md border border-slate-700 whitespace-nowrap pointer-events-none">
                                 <span className={isSelected ? 'text-[#ff5e00]' : 'text-indigo-400'}>⊞</span>
@@ -2662,10 +3403,21 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                               </div>
 
                               {/* Corner markers */}
-                              <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2 border-current" />
-                              <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 border-current" />
-                              <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2 border-current" />
-                              <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2 border-current" />
+                              <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2 border-current pointer-events-none" />
+                              <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 border-current pointer-events-none" />
+                              <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2 border-current pointer-events-none" />
+                              <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2 border-current pointer-events-none" />
+
+                              {/* Corner Resize Handle on bottom right (When Selected) */}
+                              {isSelected && (
+                                <div
+                                  onMouseDown={(e) => handleStartResizeZone(e, zone)}
+                                  className="absolute -bottom-2 -right-2 w-5 h-5 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded-full flex items-center justify-center cursor-nwse-resize shadow-md hover:scale-125 transition-transform z-50 pointer-events-auto"
+                                  title="Tarik untuk mengubah ukuran lebar & tinggi area sablon"
+                                >
+                                  <Maximize2 className="w-2.5 h-2.5 stroke-[2.5]" />
+                                </div>
+                              )}
                             </div>
                           )
                         })}

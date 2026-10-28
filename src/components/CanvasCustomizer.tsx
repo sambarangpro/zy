@@ -418,10 +418,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         const offsetY = ((g.y - 35) / 50) * 16
 
         // Batasi batas aman agar desain selalu berada di atas kain lengan
-        const minX = isViewerRight ? 67 : 16
-        const maxX = isViewerRight ? 84 : 31
+        const minX = isViewerRight ? 50 : 2
+        const maxX = isViewerRight ? 98 : 50
         const anchorX = Math.max(minX, Math.min(maxX, baseX + (isViewerRight ? -offsetX : offsetX)))
-        const anchorY = Math.max(18, Math.min(62, baseY + offsetY))
+        const anchorY = Math.max(5, Math.min(95, baseY + offsetY))
 
         const baseScale = g.scale || 0.8
         const flipX = g.scaleX || 1
@@ -475,10 +475,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         const offsetY = ((g.y - 35) / 50) * 16
 
         // Batasi batas aman agar desain selalu berada di atas kain lengan
-        const minX = isViewerRight ? 67 : 16
-        const maxX = isViewerRight ? 84 : 31
+        const minX = isViewerRight ? 50 : 2
+        const maxX = isViewerRight ? 98 : 50
         const anchorX = Math.max(minX, Math.min(maxX, baseX + (isViewerRight ? -offsetX : offsetX)))
-        const anchorY = Math.max(18, Math.min(62, baseY + offsetY))
+        const anchorY = Math.max(5, Math.min(95, baseY + offsetY))
 
         const baseScale = g.scale || 0.8
         const flipX = g.scaleX || 1
