@@ -350,6 +350,7 @@ export function createDemoSampleMockup(): MockupTemplate {
         name: 'Kerah Baju',
         side: 'front',
         defaultColor: '#0f172a',
+        icon: 'collar',
         maskImg: `data:image/svg+xml;utf8,${encodeURIComponent(collarMaskSvg)}`,
       },
       {
@@ -357,6 +358,7 @@ export function createDemoSampleMockup(): MockupTemplate {
         name: 'Saku Dada (Kanan & Kiri)',
         side: 'front',
         defaultColor: '#182232',
+        icon: 'pocket',
         maskImg: `data:image/svg+xml;utf8,${encodeURIComponent(pocketMaskSvg)}`,
       },
       {
@@ -364,6 +366,7 @@ export function createDemoSampleMockup(): MockupTemplate {
         name: 'Garis Kancing (Placket)',
         side: 'front',
         defaultColor: '#141e2d',
+        icon: 'placket',
         maskImg: `data:image/svg+xml;utf8,${encodeURIComponent(placketMaskSvg)}`,
       },
       {
@@ -371,6 +374,7 @@ export function createDemoSampleMockup(): MockupTemplate {
         name: 'Kancing Baju',
         side: 'front',
         defaultColor: '#94a3b8',
+        icon: 'buttons',
         maskImg: `data:image/svg+xml;utf8,${encodeURIComponent(buttonsMaskSvg)}`,
       },
       {
@@ -378,6 +382,7 @@ export function createDemoSampleMockup(): MockupTemplate {
         name: 'Pangkat / Lidah Pundak',
         side: 'front',
         defaultColor: '#ff5e00',
+        icon: 'shoulder_strap',
         maskImg: `data:image/svg+xml;utf8,${encodeURIComponent(shoulderMaskSvg)}`,
       },
     ],

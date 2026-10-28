@@ -10,6 +10,11 @@ import {
 } from '../services/mockupStorage'
 import { findClosestFabricSwatch } from '../data/fabricColors'
 import {
+  GarmentPartIcon,
+  GARMENT_PART_ICONS,
+  getGarmentIconForPart,
+} from '../data/garmentIcons'
+import {
   Plus,
   Upload,
   Trash2,
@@ -504,6 +509,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     )
     const groupId = matchingFromOtherSide?.groupId || `group_${slotIdx}`
     const finalDefaultColor = matchingFromOtherSide?.defaultColor || defaultColor
+    const initialIcon = matchingFromOtherSide?.icon || getGarmentIconForPart(partName)
 
     const newPart: ColorablePart = {
       id: 'part_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
@@ -511,6 +517,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       side,
       defaultColor: finalDefaultColor,
       groupId,
+      icon: initialIcon,
     }
 
     const otherParts = currentAll.filter((p) => p.side !== side)
@@ -800,22 +807,65 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     }))
   }
 
-  // Update Keterangan / Nama Layer Langsung (Owner Mode)
-  const handleUpdatePartNameDirectly = (partId: string, newName: string) => {
+  // Popover pemilih icon bagian pakaian (Kerah, Saku, Kancing, dll.)
+  const [activeIconPickerPartId, setActiveIconPickerPartId] = useState<string | null>(null)
+
+  // Update Icon Bagian Pakaian Langsung (Owner Mode)
+  const handleUpdatePartIconDirectly = (partId: string, newIcon: string) => {
+    pushDashboardSnapshot()
     const current = colorPartsRef.current || editFormData.colorParts || []
     const target = current.find((p) => p.id === partId)
     if (!target) return
 
     const updated = current.map((p) => {
       if (p.id === partId) {
-        return { ...p, name: newName }
+        return { ...p, icon: newIcon }
       }
       if (
         autoSync4Sides &&
         ((target.groupId && p.groupId && target.groupId === p.groupId) ||
           (p.name && target.name && p.name.trim().toLowerCase() === target.name.trim().toLowerCase()))
       ) {
-        return { ...p, name: newName }
+        return { ...p, icon: newIcon }
+      }
+      return p
+    })
+
+    colorPartsRef.current = updated
+    setEditFormData((prev) => ({ ...prev, colorParts: updated }))
+
+    if (editFormData.id) {
+      const currentMockup = mockups.find((m) => m.id === editFormData.id)
+      if (currentMockup) {
+        const updatedMockup: MockupTemplate = {
+          ...currentMockup,
+          ...editFormData,
+          colorParts: updated.filter((p) => p.maskImg && p.maskImg.trim().length > 5),
+        }
+        const updatedList = saveMockup(updatedMockup)
+        onMockupsChange(updatedList)
+      }
+    }
+    setActiveIconPickerPartId(null)
+  }
+
+  // Update Keterangan / Nama Layer Langsung (Owner Mode)
+  const handleUpdatePartNameDirectly = (partId: string, newName: string) => {
+    const current = colorPartsRef.current || editFormData.colorParts || []
+    const target = current.find((p) => p.id === partId)
+    if (!target) return
+
+    const suggestedIcon = getGarmentIconForPart(newName)
+    const updated = current.map((p) => {
+      if (p.id === partId) {
+        return { ...p, name: newName, icon: p.icon || suggestedIcon }
+      }
+      if (
+        autoSync4Sides &&
+        ((target.groupId && p.groupId && target.groupId === p.groupId) ||
+          (p.name && target.name && p.name.trim().toLowerCase() === target.name.trim().toLowerCase()))
+      ) {
+        return { ...p, name: newName, icon: p.icon || suggestedIcon }
       }
       return p
     })
@@ -3133,6 +3183,77 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                   }}
                                   title={`Warna dasar: ${part.defaultColor}`}
                                 />
+
+                                {/* Tombol Pemilih Icon Bagian Pakaian */}
+                                <div className="relative shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setActiveIconPickerPartId((prev) =>
+                                        prev === part.id ? null : part.id
+                                      )
+                                    }
+                                    className="w-7 h-7 rounded-lg bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-400 text-indigo-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                                    title="Pilih Icon Bagian Pakaian (Kerah, Saku, Kancing, dll.)"
+                                  >
+                                    <GarmentPartIcon
+                                      iconId={part.icon}
+                                      partName={part.name}
+                                      className="w-4 h-4 stroke-[2.2]"
+                                    />
+                                  </button>
+
+                                  {/* Icon Picker Popover */}
+                                  {activeIconPickerPartId === part.id && (
+                                    <div
+                                      className="absolute top-8 left-0 z-50 bg-white rounded-2xl shadow-xl border border-slate-200 p-3 w-64 animate-in fade-in zoom-in-95 duration-100"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                                        <span className="text-[11px] font-extrabold text-slate-800">
+                                          Pilih Icon Bagian Pakaian
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => setActiveIconPickerPartId(null)}
+                                          className="text-slate-400 hover:text-slate-700 p-0.5 rounded cursor-pointer"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                      <div className="grid grid-cols-4 gap-1.5 max-h-52 overflow-y-auto pr-1">
+                                        {GARMENT_PART_ICONS.map((iconMeta) => {
+                                          const isSelected =
+                                            (part.icon || getGarmentIconForPart(part.name)) ===
+                                            iconMeta.id
+                                          return (
+                                            <button
+                                              key={iconMeta.id}
+                                              type="button"
+                                              onClick={() =>
+                                                handleUpdatePartIconDirectly(part.id, iconMeta.id)
+                                              }
+                                              className={`p-1.5 rounded-xl border flex flex-col items-center gap-1 transition-all cursor-pointer ${
+                                                isSelected
+                                                  ? 'bg-indigo-50 border-indigo-400 text-indigo-700 ring-1 ring-indigo-400'
+                                                  : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100 text-slate-700'
+                                              }`}
+                                              title={`${iconMeta.label} - ${iconMeta.description}`}
+                                            >
+                                              <GarmentPartIcon
+                                                iconId={iconMeta.id}
+                                                className="w-4 h-4 stroke-[2.2]"
+                                              />
+                                              <span className="text-[8px] font-semibold text-center truncate w-full leading-tight">
+                                                {iconMeta.label}
+                                              </span>
+                                            </button>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
 
                                 {/* Input Keterangan / Nama Layer (Owner Mode: Bebas beri nama/keterangan layer) */}
                                 <div className="flex-1 min-w-0">

@@ -54,6 +54,7 @@ import {
   FABRIC_CATALOGS,
   findClosestFabricSwatch,
 } from '../data/fabricColors'
+import { GarmentPartIcon, getGarmentIconForPart } from '../data/garmentIcons'
 
 interface CanvasCustomizerProps {
   activeMockup: MockupTemplate | null
@@ -483,6 +484,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         primaryPartId: string
         parts: ColorablePart[]
         sides: ViewSide[]
+        icon?: string
       }
     >()
 
@@ -500,11 +502,17 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         if (partColors[part.id]) {
           existing.currentColor = partColors[part.id]
         }
+        if (!existing.icon && part.icon) {
+          existing.icon = part.icon
+        }
         // Prioritaskan nama spesifik dari Owner Mode jika ada
         const existingIsGeneric = !existing.name || /^bagian\s*\d+$/i.test(existing.name.trim())
         const partIsGeneric = !cleanPartName || /^bagian\s*\d+$/i.test(cleanPartName)
         if (cleanPartName && (existingIsGeneric || !partIsGeneric)) {
           existing.name = cleanPartName
+          if (!existing.icon || existing.icon === 'other') {
+            existing.icon = part.icon || getGarmentIconForPart(cleanPartName)
+          }
         }
       } else {
         groupsMap.set(key, {
@@ -515,6 +523,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           primaryPartId: part.id,
           parts: [part],
           sides: [part.side],
+          icon: part.icon || getGarmentIconForPart(cleanPartName),
         })
       }
     })
@@ -3006,6 +3015,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   title="Ganti warna dasar seluruh seragam (posisi di bawah semua layer)"
                   className="flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-2.5 py-1 rounded-lg text-[10px] font-black text-[#ff5e00] cursor-pointer transition-colors shadow-2xs"
                 >
+                  <GarmentPartIcon iconId="all_garment" className="w-3.5 h-3.5 stroke-[2] shrink-0" />
                   <span
                     style={{ backgroundColor: baseGarmentColor }}
                     className="w-2.5 h-2.5 rounded-full border border-orange-400 inline-block shadow-2xs"
@@ -3024,6 +3034,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       title={`Klik untuk ubah warna ${group.name} di Panel Layer (Sinkron 4 Sisi)`}
                       className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-700 cursor-pointer transition-colors shadow-2xs"
                     >
+                      <GarmentPartIcon
+                        iconId={group.icon}
+                        partName={group.name}
+                        className="w-3.5 h-3.5 stroke-[2] text-slate-600 shrink-0"
+                      />
                       <span
                         style={{ backgroundColor: group.currentColor }}
                         className="w-2.5 h-2.5 rounded-full border border-slate-300 inline-block shadow-2xs"
@@ -3439,13 +3454,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                         <div
                           key={group.key}
                           onClick={() => setActiveColorPickerGroupKey(group.key)}
-                          className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 group ${
+                          className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 group ${
                             activeColorPickerGroupKey === group.key
-                              ? 'bg-orange-50/90 border-[#ff5e00] shadow-2xs'
+                              ? 'bg-orange-50/90 border-[#ff5e00] shadow-2xs ring-1 ring-[#ff5e00]/30'
                               : 'bg-slate-50/90 border-slate-200 hover:border-slate-300 hover:bg-slate-100/80'
                           } ${isHidden ? 'opacity-40' : ''}`}
                         >
-                          <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
                             {/* Tombol Mata-mata (Fungsi Layer Visibility) */}
                             <button
                               type="button"
@@ -3463,15 +3478,27 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                               )}
                             </button>
 
+                            {/* Icon Khusus Bagian Pakaian (Garment Part Icon) */}
+                            <div
+                              className="w-8 h-8 rounded-xl bg-white group-hover:bg-indigo-50 border border-slate-200 group-hover:border-indigo-200 text-slate-700 group-hover:text-indigo-600 flex items-center justify-center shrink-0 shadow-2xs transition-colors"
+                              title={`Bagian: ${group.name}`}
+                            >
+                              <GarmentPartIcon
+                                iconId={group.icon}
+                                partName={group.name}
+                                className="w-4 h-4 stroke-[2.2]"
+                              />
+                            </div>
+
                             {/* Bulatan Warna Kain */}
                             <div
                               style={{ backgroundColor: group.currentColor }}
                               className="w-5 h-5 rounded-full border-2 border-white ring-1 ring-slate-300 shrink-0 shadow-2xs"
-                              title={`Warna: ${group.currentColor}`}
+                              title={`Warna Aktif: ${group.currentColor}`}
                             />
 
                             {/* Nama Bagian & Info Kain Pabrik */}
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               {renamingGroupKey === group.key ? (
                                 <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                   <input
@@ -3504,13 +3531,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                                   </button>
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-1.5 min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
                                   <span
                                     onDoubleClick={(e) => {
                                       e.stopPropagation()
                                       handleStartRenameGroup(group.key, group.name)
                                     }}
-                                    className="font-black text-xs text-slate-900 truncate cursor-pointer hover:underline"
+                                    className="font-black text-xs text-slate-900 cursor-pointer hover:underline"
                                     title={`${group.name} (Klik 2x untuk ganti nama layer)`}
                                   >
                                     {group.name}
@@ -3526,9 +3553,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                                   )}
                                 </div>
                               )}
-                              <div className="text-[10px] text-slate-500 truncate flex items-center gap-1 mt-0.5">
+                              <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
                                 {swatchInfo ? (
-                                  <span className="font-medium text-slate-700">
+                                  <span className="font-medium text-slate-700 truncate">
                                     {swatchInfo.code} • {swatchInfo.name}
                                   </span>
                                 ) : (
@@ -3538,20 +3565,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             </div>
                           </div>
 
-                          {/* Tombol Aksi: Pilih Warna (Public Studio Canvas: Hanya Nama, Layer & Warna - Edit Masker hanya wewenang Owner) */}
-                          <div className="flex items-center shrink-0">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setActiveColorPickerGroupKey(group.key)
-                              }}
-                              className="px-2.5 py-1.5 rounded-lg bg-white group-hover:bg-[#ff5e00] text-slate-700 group-hover:text-white border border-slate-200 group-hover:border-[#ff5e00] text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
-                              title="Pilih warna kain dari database katalog resmi"
-                            >
-                              <Palette className="w-3.5 h-3.5 text-[#ff5e00] group-hover:text-white transition-colors" />
-                              <span>Pilih Warna</span>
-                            </button>
+                          {/* Indikator Palet Warna (Tanpa tombol teks yang memakan tempat) */}
+                          <div className="flex items-center shrink-0 pr-1 text-slate-400 group-hover:text-[#ff5e00] transition-colors" title="Klik kartu untuk ubah warna kain">
+                            <Palette className="w-4 h-4" />
                           </div>
                         </div>
                       )
@@ -3563,9 +3579,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                         setActiveTool('palette')
                         setActiveColorPickerGroupKey('__base__')
                       }}
-                      className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 group ${
+                      className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 group ${
                         activeColorPickerGroupKey === '__base__'
-                          ? 'bg-orange-50/90 border-[#ff5e00] shadow-2xs'
+                          ? 'bg-orange-50/90 border-[#ff5e00] shadow-2xs ring-1 ring-[#ff5e00]/30'
                           : 'bg-slate-50/90 border-slate-200 hover:border-slate-300 hover:bg-slate-100/80'
                       } ${isBaseColorHidden ? 'opacity-40' : ''}`}
                     >
@@ -3592,6 +3608,17 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           )}
                         </button>
 
+                        {/* Icon Seluruh Seragam */}
+                        <div
+                          className="w-8 h-8 rounded-xl bg-orange-100/60 group-hover:bg-[#ff5e00]/15 border border-orange-200 text-[#ff5e00] flex items-center justify-center shrink-0 shadow-2xs transition-colors"
+                          title="Seluruh Seragam"
+                        >
+                          <GarmentPartIcon
+                            iconId="all_garment"
+                            className="w-4 h-4 stroke-[2.2]"
+                          />
+                        </div>
+
                         {/* Bulatan Warna Dasar */}
                         <div
                           style={{ backgroundColor: baseGarmentColor }}
@@ -3601,19 +3628,19 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
                         {/* Keterangan Layer */}
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="font-black text-xs text-slate-900 truncate tracking-tight">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-black text-xs text-slate-900 tracking-tight">
                               Warna Keseluruhan Seragam
                             </span>
                             <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-orange-100 text-[#ff5e00] font-black shrink-0">
                               Lapisan Bawah
                             </span>
                           </div>
-                          <div className="text-[10px] text-slate-500 truncate flex items-center gap-1 mt-0.5">
+                          <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
                             {(() => {
                               const swatch = findClosestFabricSwatch(baseGarmentColor)
                               return swatch ? (
-                                <span className="font-medium text-slate-700">
+                                <span className="font-medium text-slate-700 truncate">
                                   {swatch.code} • {swatch.name}
                                 </span>
                               ) : (
@@ -3624,21 +3651,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                         </div>
                       </div>
 
-                      {/* Tombol Pilih Warna */}
-                      <div className="flex items-center shrink-0">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setActiveTool('palette')
-                            setActiveColorPickerGroupKey('__base__')
-                          }}
-                          className="px-2.5 py-1.5 rounded-lg bg-white group-hover:bg-[#ff5e00] text-slate-700 group-hover:text-white border border-slate-200 group-hover:border-[#ff5e00] text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
-                          title="Pilih warna kain dasar untuk seluruh seragam"
-                        >
-                          <Palette className="w-3.5 h-3.5 text-[#ff5e00] group-hover:text-white transition-colors" />
-                          <span>Pilih Warna</span>
-                        </button>
+                      {/* Indikator Palet Warna */}
+                      <div className="flex items-center shrink-0 pr-1 text-slate-400 group-hover:text-[#ff5e00] transition-colors" title="Klik kartu untuk ubah warna seluruh seragam">
+                        <Palette className="w-4 h-4" />
                       </div>
                     </div>
                   </div>
@@ -3879,6 +3894,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
               primaryPartId: '__base__',
               parts: [],
               sides: ['front', 'back', 'left', 'right'] as ViewSide[],
+              icon: 'all_garment',
             }
           : unifiedPartGroups.find((g) => g.key === activeColorPickerGroupKey)
 
@@ -3910,7 +3926,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
               <div className="p-4 px-6 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl bg-[#ff5e00]/10 text-[#ff5e00] flex items-center justify-center">
-                    <Palette className="w-5 h-5" />
+                    <GarmentPartIcon
+                      iconId={isBaseColor ? 'all_garment' : activeGroup.icon}
+                      partName={activeGroup.name}
+                      className="w-5 h-5 stroke-[2.2]"
+                    />
                   </div>
                   <div>
                     <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
