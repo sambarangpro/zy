@@ -5,6 +5,8 @@ import type {
   StudioLighting,
   MockupTemplate,
   ColorablePart,
+  PrintZone,
+  PrintSizeCategory,
 } from '../types'
 import {
   POSITION_PRESETS,
@@ -175,6 +177,17 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const [hiddenGraphicIds, setHiddenGraphicIds] = useState<string[]>([])
   const [draggedGraphicId, setDraggedGraphicId] = useState<string | null>(null)
   const [dragOverGraphicId, setDragOverGraphicId] = useState<string | null>(null)
+
+  // Target print safe zone when user initiates upload from a specific zone on canvas
+  const [targetZoneForUpload, setTargetZoneForUpload] = useState<PrintZone | null>(null)
+
+  // Upload configuration modal state: shows dialog choosing between Bordir and Sablon + target zone
+  const [uploadModalData, setUploadModalData] = useState<{
+    dataUrl: string
+    fileName: string
+    targetZoneId: string | 'custom'
+    technique: 'bordir' | 'sablon'
+  } | null>(null)
 
   // Snapshot format untuk Global Unified Undo/Redo (mencakup SEMUA tindakan di kanvas)
   interface CustomizerSnapshot {
@@ -974,7 +987,18 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     setSelectedGraphicId(newGraphic.id)
   }
 
-  // Handle image upload from user device
+  // Initiate image upload targeting a specific print zone
+  const handleInitiateUploadForZone = (zone: PrintZone) => {
+    setTargetZoneForUpload(zone)
+    setActiveTool('select')
+    setActiveFlyout(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+      fileInputRef.current.click()
+    }
+  }
+
+  // Handle image upload from user device - opens modal choosing between Bordir and Sablon + target zone
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -982,31 +1006,69 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     const reader = new FileReader()
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string
-      const calc = calculateGraphicPrice(0.8)
-      const newGraphic: CanvasGraphic = {
-        id: 'g_' + Date.now(),
-        type: 'image',
-        side: currentSide,
-        content: dataUrl,
-        x: 50,
-        y: 40,
-        scale: 0.8,
-        scaleX: 1,
-        scaleY: 1,
-        rotation: 0,
-        technique: activeTechnique, // Automatically uses currently selected technique (Bordir or Sablon)
-        label: file.name.slice(0, 18),
-        sizeCategory: calc.sizeCategory,
-        calculatedPrice: calc.price,
-        opacity: 100,
-        blendMode: 'normal',
-        isLocked: false,
-      }
-      updateGraphicsWithHistory([...graphics, newGraphic])
-      setSelectedGraphicId(newGraphic.id)
+      // Preselect the clicked zone or the first available zone on the current side
+      const initialZone = targetZoneForUpload || (currentPrintZones.length > 0 ? currentPrintZones[0] : null)
+      setUploadModalData({
+        dataUrl,
+        fileName: file.name.replace(/\.[^/.]+$/, '').slice(0, 24),
+        targetZoneId: initialZone ? initialZone.id : 'custom',
+        technique: activeTechnique || 'bordir',
+      })
+      setTargetZoneForUpload(null)
     }
     reader.readAsDataURL(file)
     e.target.value = ''
+  }
+
+  // Confirm graphic upload from the configuration modal
+  const handleConfirmUploadGraphic = () => {
+    if (!uploadModalData) return
+
+    const { dataUrl, fileName, targetZoneId, technique } = uploadModalData
+    const chosenZone = currentPrintZones.find((z) => z.id === targetZoneId)
+
+    let graphicX = 50
+    let graphicY = 40
+    let scale = 0.8
+    let price = 15000
+    let sizeCat: PrintSizeCategory = 'Logo Kecil (≤10×10cm)'
+
+    if (chosenZone) {
+      graphicX = chosenZone.x
+      graphicY = chosenZone.y
+      // Proportionally scale to fit neatly inside the zone
+      scale = Math.min(1.2, Math.max(0.4, Number(((chosenZone.width / 24) * 0.75).toFixed(2))))
+      price = chosenZone.price
+      sizeCat = (chosenZone.maxSizeCm || 'Logo Kecil (≤10×10cm)') as PrintSizeCategory
+    } else {
+      const calc = calculateGraphicPrice(0.8)
+      price = calc.price
+      sizeCat = calc.sizeCategory
+    }
+
+    const newGraphic: CanvasGraphic = {
+      id: 'g_' + Date.now(),
+      type: 'image',
+      side: chosenZone ? chosenZone.side : currentSide,
+      content: dataUrl,
+      x: graphicX,
+      y: graphicY,
+      scale,
+      scaleX: 1,
+      scaleY: 1,
+      rotation: 0,
+      technique,
+      label: fileName.trim() || (technique === 'bordir' ? 'Bordir Komputer' : 'Sablon DTF'),
+      sizeCategory: sizeCat,
+      calculatedPrice: price,
+      opacity: 100,
+      blendMode: 'normal',
+      isLocked: false,
+    }
+
+    updateGraphicsWithHistory([...graphics, newGraphic])
+    setSelectedGraphicId(newGraphic.id)
+    setUploadModalData(null)
   }
 
   // Add text element
@@ -2367,11 +2429,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           {/* Tool: Upload Image (U) */}
           <button
             onClick={() => {
+              setTargetZoneForUpload(null)
               setActiveTool('select')
               setActiveFlyout(null)
-              fileInputRef.current?.click()
+              if (fileInputRef.current) {
+                fileInputRef.current.value = ''
+                fileInputRef.current.click()
+              }
             }}
-            title="Unggah Logo / Gambar Desain (U)"
+            title="Unggah Logo / Gambar Desain (U) - Pilih Bordir atau Sablon"
             className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer relative group"
           >
             <Upload className="w-5 h-5" />
@@ -3207,6 +3273,26 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                               <AlignCenter className="w-3.5 h-3.5" />
                             </button>
                             <div className="w-px h-3 bg-slate-700 mx-0.5" />
+                            {/* Quick Switch: Bordir vs Sablon */}
+                            <button
+                              onClick={() => {
+                                const nextTech = g.technique === 'bordir' ? 'sablon' : 'bordir'
+                                updateGraphicsWithHistory(
+                                  graphics.map((item) =>
+                                    item.id === g.id ? { ...item, technique: nextTech } : item
+                                  )
+                                )
+                              }}
+                              title={`Teknik saat ini: ${g.technique === 'bordir' ? '🪡 Bordir Komputer' : '🎨 Sablon DTF'}. Klik untuk ubah mode.`}
+                              className={`px-1.5 py-0.5 rounded font-bold text-[9px] flex items-center gap-1 cursor-pointer transition-colors ${
+                                g.technique === 'bordir'
+                                  ? 'bg-amber-500/40 text-amber-300 hover:bg-amber-500/60'
+                                  : 'bg-indigo-500/40 text-indigo-300 hover:bg-indigo-500/60'
+                              }`}
+                            >
+                              <span>{g.technique === 'bordir' ? '🪡 Bordir' : '🎨 Sablon'}</span>
+                            </button>
+                            <div className="w-px h-3 bg-slate-700 mx-0.5" />
                             <button
                               onClick={() => handleBringToFront(g.id)}
                               title="Bawa ke Paling Depan"
@@ -3257,15 +3343,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                                   style={{
                                     filter:
                                       g.technique === 'bordir'
-                                        ? 'drop-shadow(1px 2px 2px rgba(0,0,0,0.55)) drop-shadow(-0.5px -0.5px 0.5px rgba(255,255,255,0.7))'
-                                        : 'drop-shadow(0.5px 1.5px 1.5px rgba(0,0,0,0.3))',
+                                        ? 'drop-shadow(0 1px 1px rgba(0,0,0,0.7)) drop-shadow(1px 3px 5px rgba(0,0,0,0.5)) drop-shadow(-1px -1px 0px rgba(255,255,255,0.85)) contrast(1.1) saturate(1.18)'
+                                        : 'drop-shadow(0 1.5px 2px rgba(0,0,0,0.35))',
                                   }}
                                 />
 
                                 {/* Realistic 3D Computer Embroidery (Bordir Komputer) Thread Ridge Overlays */}
-                                {g.technique === 'bordir' && (
+                                {g.technique === 'bordir' ? (
                                   <>
-                                    {/* 45-degree satin/tatami thread grooves */}
+                                    {/* 55-degree dense satin/tatami thread grooves */}
                                     <div
                                       className="absolute inset-0 pointer-events-none"
                                       style={{
@@ -3278,13 +3364,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                                         WebkitMaskPosition: 'center',
                                         maskPosition: 'center',
                                         backgroundImage:
-                                          'repeating-linear-gradient(45deg, rgba(255,255,255,0.32) 0px, rgba(255,255,255,0.32) 1.5px, transparent 1.5px, transparent 3px, rgba(0,0,0,0.32) 3px, rgba(0,0,0,0.32) 4.5px, transparent 4.5px, transparent 6px)',
+                                          'repeating-linear-gradient(55deg, rgba(255,255,255,0.42) 0px, rgba(255,255,255,0.42) 1.2px, transparent 1.2px, transparent 2.4px, rgba(0,0,0,0.38) 2.4px, rgba(0,0,0,0.38) 3.6px, transparent 3.6px, transparent 4.8px)',
                                         mixBlendMode: 'overlay',
                                       }}
                                     />
-                                    {/* Subtle cross-thread sheen */}
+                                    {/* Subtle cross-thread satin sheen */}
                                     <div
-                                      className="absolute inset-0 pointer-events-none opacity-45"
+                                      className="absolute inset-0 pointer-events-none opacity-55"
                                       style={{
                                         WebkitMaskImage: `url("${g.content}")`,
                                         maskImage: `url("${g.content}")`,
@@ -3295,11 +3381,29 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                                         WebkitMaskPosition: 'center',
                                         maskPosition: 'center',
                                         backgroundImage:
-                                          'repeating-linear-gradient(-45deg, rgba(255,255,255,0.2) 0px, rgba(255,255,255,0.2) 1px, transparent 1px, transparent 4px)',
+                                          'repeating-linear-gradient(-35deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 1.5px, transparent 1.5px, transparent 6px)',
                                         mixBlendMode: 'soft-light',
                                       }}
                                     />
                                   </>
+                                ) : (
+                                  /* Subtle DTF / Plastisol smooth screenprint finish */
+                                  <div
+                                    className="absolute inset-0 pointer-events-none opacity-25"
+                                    style={{
+                                      WebkitMaskImage: `url("${g.content}")`,
+                                      maskImage: `url("${g.content}")`,
+                                      WebkitMaskSize: 'contain',
+                                      maskSize: 'contain',
+                                      WebkitMaskRepeat: 'no-repeat',
+                                      maskRepeat: 'no-repeat',
+                                      WebkitMaskPosition: 'center',
+                                      maskPosition: 'center',
+                                      background:
+                                        'linear-gradient(135deg, rgba(255,255,255,0.35) 0%, transparent 65%)',
+                                      mixBlendMode: 'screen',
+                                    }}
+                                  />
                                 )}
                               </div>
                             ) : (
@@ -3380,46 +3484,126 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   })}
                 </div>
 
-                {/* 5. GARIS PANDUAN SABLON (PRINT SAFE ZONES) - DI DEPAN OBJEK SERAGAM */}
+                {/* 5. GARIS PANDUAN SABLON & TITIK UPLOAD (PRINT SAFE ZONES) - DI DEPAN OBJEK SERAGAM */}
                 {showGuidelines && (
                   <div className="absolute inset-0 w-full h-full pointer-events-none z-30">
-                    {currentPrintZones.map((zone) => (
-                      <div
-                        key={zone.id}
-                        style={{
-                          left: `${zone.x}%`,
-                          top: `${zone.y}%`,
-                          width: `${zone.width}%`,
-                          height: `${zone.height}%`,
-                          transform: 'translate(-50%, -50%)',
-                        }}
-                        className="absolute border-2 border-dashed border-[#ff5e00] bg-[#ff5e00]/10 rounded-2xl flex flex-col items-center justify-between p-1.5 shadow-xs pointer-events-none transition-all group/zone backdrop-blur-[0.5px]"
-                      >
-                        {/* Top Label & Price Tag */}
-                        <div className="flex items-center gap-1.5 bg-slate-900/90 text-white px-2 py-0.5 rounded-full text-[9px] font-bold shadow-md border border-slate-700 whitespace-nowrap">
-                          <span className="text-[#ff5e00]">⊞</span>
-                          <span>{zone.name}</span>
-                          {zone.price > 0 && (
-                            <span className="text-emerald-400 font-mono">
-                              • Rp {zone.price.toLocaleString('id-ID')}
+                    {currentPrintZones.map((zone) => {
+                      // Check whether a graphic currently occupies this print safe zone
+                      const graphicsInZone = currentSideGraphics.filter(
+                        (g) =>
+                          Math.abs(g.x - zone.x) <= Math.max(zone.width / 2, 4) &&
+                          Math.abs(g.y - zone.y) <= Math.max(zone.height / 2, 4)
+                      )
+                      const hasGraphic = graphicsInZone.length > 0
+
+                      return (
+                        <div
+                          key={zone.id}
+                          style={{
+                            left: `${zone.x}%`,
+                            top: `${zone.y}%`,
+                            width: `${zone.width}%`,
+                            height: `${zone.height}%`,
+                            transform: 'translate(-50%, -50%)',
+                          }}
+                          onClick={(e) => {
+                            if (!hasGraphic) {
+                              e.stopPropagation()
+                              handleInitiateUploadForZone(zone)
+                            }
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            const file = e.dataTransfer.files?.[0]
+                            if (file) {
+                              const reader = new FileReader()
+                              reader.onload = (event) => {
+                                const dataUrl = event.target?.result as string
+                                setUploadModalData({
+                                  dataUrl,
+                                  fileName: file.name.replace(/\.[^/.]+$/, '').slice(0, 24),
+                                  targetZoneId: zone.id,
+                                  technique: activeTechnique || 'bordir',
+                                })
+                              }
+                              reader.readAsDataURL(file)
+                            }
+                          }}
+                          className={`absolute border-2 border-dashed border-[#ff5e00] bg-[#ff5e00]/10 rounded-2xl flex flex-col items-center justify-between p-1.5 shadow-xs transition-all group/zone backdrop-blur-[0.5px] ${
+                            !hasGraphic
+                              ? 'pointer-events-auto cursor-pointer hover:bg-[#ff5e00]/20 hover:border-[#ff5e00] hover:scale-[1.01]'
+                              : 'pointer-events-none'
+                          }`}
+                          title={
+                            !hasGraphic
+                              ? `Klik untuk upload gambar langsung ke titik ${zone.name} (Bordir / Sablon)`
+                              : `Titik Produksi: ${zone.name}`
+                          }
+                        >
+                          {/* Top Label & Price Tag */}
+                          <div className="flex items-center gap-1.5 bg-slate-900/90 text-white px-2 py-0.5 rounded-full text-[9px] font-bold shadow-md border border-slate-700 whitespace-nowrap pointer-events-auto">
+                            <span className="text-[#ff5e00]">⊞</span>
+                            <span>{zone.name}</span>
+                            {zone.price > 0 && (
+                              <span className="text-emerald-400 font-mono">
+                                • Rp {zone.price.toLocaleString('id-ID')}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Center: Upload Area Action Button */}
+                          {!hasGraphic ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleInitiateUploadForZone(zone)
+                              }}
+                              className="pointer-events-auto my-auto flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 bg-white/95 hover:bg-[#ff5e00] text-slate-800 hover:text-white rounded-xl shadow-md border border-orange-300 hover:border-orange-500 transition-all cursor-pointer group-hover/zone:scale-105 active:scale-95"
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <Upload className="w-3.5 h-3.5 text-[#ff5e00] group-hover:text-white transition-colors" />
+                                <span className="text-[10px] font-extrabold tracking-tight">Upload Desain</span>
+                              </div>
+                              <span className="text-[8px] font-semibold text-orange-700 group-hover:text-orange-100 transition-colors">
+                                🪡 Bordir / 🎨 Sablon
+                              </span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleInitiateUploadForZone(zone)
+                              }}
+                              className="pointer-events-auto opacity-0 group-hover/zone:opacity-100 transition-opacity my-auto flex items-center gap-1 px-2.5 py-1 bg-slate-900/95 hover:bg-[#ff5e00] text-white rounded-xl text-[9px] font-bold shadow-lg border border-slate-700 hover:border-orange-500 cursor-pointer"
+                              title={`Tambah atau ganti desain di titik ${zone.name}`}
+                            >
+                              <Upload className="w-3 h-3 text-[#ff5e00] group-hover:text-white" />
+                              <span>+ Ganti / Tambah</span>
+                            </button>
+                          )}
+
+                          {/* Bottom watermark or size info */}
+                          {zone.maxSizeCm && (
+                            <span className="text-[8px] font-mono font-semibold text-orange-700/80 bg-white/85 px-1.5 py-0.2 rounded border border-orange-200 pointer-events-auto">
+                              {zone.maxSizeCm}
                             </span>
                           )}
+
+                          {/* Corner markers */}
+                          <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2 border-[#ff5e00]" />
+                          <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 border-[#ff5e00]" />
+                          <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2 border-[#ff5e00]" />
+                          <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2 border-[#ff5e00]" />
                         </div>
-
-                        {/* Center watermark or size info */}
-                        {zone.maxSizeCm && (
-                          <span className="text-[8px] font-mono font-semibold text-orange-700/80 bg-white/85 px-1.5 py-0.2 rounded border border-orange-200">
-                            {zone.maxSizeCm}
-                          </span>
-                        )}
-
-                        {/* Corner markers */}
-                        <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2 border-[#ff5e00]" />
-                        <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 border-[#ff5e00]" />
-                        <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2 border-[#ff5e00]" />
-                        <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2 border-[#ff5e00]" />
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -3751,9 +3935,26 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                                 >
                                   {g.side}
                                 </span>
-                                <span className="text-[10px] text-slate-500 capitalize flex items-center gap-0.5">
-                                  {g.technique === 'bordir' ? '🧵 Bordir' : '🎨 Sablon'}
-                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    const nextTech = g.technique === 'bordir' ? 'sablon' : 'bordir'
+                                    updateGraphicsWithHistory(
+                                      graphics.map((item) =>
+                                        item.id === g.id ? { ...item, technique: nextTech } : item
+                                      )
+                                    )
+                                  }}
+                                  className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 cursor-pointer transition-colors ${
+                                    g.technique === 'bordir'
+                                      ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300/60'
+                                      : 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200 border border-indigo-300/60'
+                                  }`}
+                                  title="Klik untuk ubah teknik: Bordir / Sablon"
+                                >
+                                  {g.technique === 'bordir' ? '🪡 Bordir 3D' : '🎨 Sablon DTF'}
+                                </button>
                               </div>
                               {renamingGraphicId === g.id ? (
                                 <div className="flex items-center gap-1 mt-0.5" onClick={(e) => e.stopPropagation()}>
@@ -4164,6 +4365,309 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 >
                   Selesai & Terapkan
                 </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* POP-UP MODAL: KONFIGURASI CETAK GAMBAR (PILIHAN BORDIR ATAU SABLON) */}
+      {uploadModalData && (() => {
+        const selectedZone = currentPrintZones.find((z) => z.id === uploadModalData.targetZoneId)
+        const isBordir = uploadModalData.technique === 'bordir'
+
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+            onClick={() => setUploadModalData(null)}
+          >
+            <div
+              className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="p-4 px-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-orange-50/70 to-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-orange-500/10 text-[#ff5e00] flex items-center justify-center shadow-xs">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-base leading-tight">
+                      Pilih Teknik Cetak Desain
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Pilih apakah gambar dijadikan <b>Bordir Komputer (Timbul 3D)</b> atau <b>Sablon DTF Halus</b>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUploadModalData(null)}
+                  className="p-1.5 hover:bg-slate-200 text-slate-400 hover:text-slate-800 rounded-xl transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* Section 1: Live Preview Thumbnail & Layer Name */}
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 flex flex-col sm:flex-row items-center gap-4">
+                  {/* Visual Thumbnail Preview */}
+                  <div className="w-28 h-28 bg-slate-900 rounded-2xl flex items-center justify-center relative overflow-hidden shrink-0 border border-slate-800 shadow-inner">
+                    <img
+                      src={uploadModalData.dataUrl}
+                      alt="preview"
+                      className="max-w-[85px] max-h-[85px] object-contain select-none"
+                      style={{
+                        filter: isBordir
+                          ? 'drop-shadow(0 1px 1px rgba(0,0,0,0.7)) drop-shadow(1px 2px 3px rgba(0,0,0,0.5)) drop-shadow(-1px -1px 0px rgba(255,255,255,0.85)) contrast(1.1) saturate(1.18)'
+                          : 'drop-shadow(0 1.5px 2px rgba(0,0,0,0.35))',
+                      }}
+                    />
+                    {isBordir && (
+                      <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          WebkitMaskImage: `url("${uploadModalData.dataUrl}")`,
+                          maskImage: `url("${uploadModalData.dataUrl}")`,
+                          WebkitMaskSize: 'contain',
+                          maskSize: 'contain',
+                          WebkitMaskRepeat: 'no-repeat',
+                          maskRepeat: 'no-repeat',
+                          WebkitMaskPosition: 'center',
+                          maskPosition: 'center',
+                          backgroundImage:
+                            'repeating-linear-gradient(55deg, rgba(255,255,255,0.45) 0px, rgba(255,255,255,0.45) 1.2px, transparent 1.2px, transparent 2.4px, rgba(0,0,0,0.4) 2.4px, rgba(0,0,0,0.4) 3.6px, transparent 3.6px, transparent 4.8px)',
+                          mixBlendMode: 'overlay',
+                        }}
+                      />
+                    )}
+                    <span className="absolute bottom-1 right-1 bg-black/75 text-white text-[8px] font-mono font-bold px-1.5 py-0.2 rounded">
+                      {isBordir ? '🪡 3D Bordir' : '🎨 Sablon'}
+                    </span>
+                  </div>
+
+                  <div className="flex-1 min-w-0 w-full space-y-2">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Nama Label Layer:
+                    </label>
+                    <input
+                      type="text"
+                      value={uploadModalData.fileName}
+                      onChange={(e) =>
+                        setUploadModalData({ ...uploadModalData, fileName: e.target.value })
+                      }
+                      placeholder="Misal: Logo Dada Kiri..."
+                      className="w-full px-3 py-2 bg-white rounded-xl border border-slate-200 text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-[#ff5e00]/20 focus:border-[#ff5e00]"
+                    />
+                    <p className="text-[11px] text-slate-400">
+                      Ukuran dan posisi otomatis disesuaikan dengan titik yang Anda pilih di bawah.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Section 2: Pilihan Teknik (BORDIR vs SABLON) */}
+                <div>
+                  <label className="block text-xs font-black text-slate-900 uppercase tracking-wider mb-2.5">
+                    1. Pilih Teknik Produksi (Wajib)
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {/* Option A: BORDIR KOMPUTER */}
+                    <button
+                      type="button"
+                      onClick={() => setUploadModalData({ ...uploadModalData, technique: 'bordir' })}
+                      className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer relative flex flex-col justify-between ${
+                        isBordir
+                          ? 'border-amber-500 bg-amber-50/60 shadow-md ring-2 ring-amber-400/30'
+                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xl">🪡</span>
+                          <span
+                            className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                              isBordir
+                                ? 'bg-amber-500 text-white'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            Benang Timbul 3D
+                          </span>
+                        </div>
+                        <h4 className="font-extrabold text-sm text-slate-900 leading-tight">
+                          Bordir Komputer
+                        </h4>
+                        <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                          Efek rajutan serat benang timbul dengan relief 3D dan kilau benang satin. Tahan cuci bertahun-tahun & berkesan formal eksklusif.
+                        </p>
+                      </div>
+
+                      <div className="mt-3 pt-2.5 border-t border-amber-200/60 flex items-center justify-between text-[11px] font-bold">
+                        <span className="text-amber-800">Cocok: Kemeja, Polo, Jaket, Rompi</span>
+                        {isBordir && <Check className="w-4 h-4 text-amber-600 stroke-[3]" />}
+                      </div>
+                    </button>
+
+                    {/* Option B: SABLON DTF / PLASTISOL */}
+                    <button
+                      type="button"
+                      onClick={() => setUploadModalData({ ...uploadModalData, technique: 'sablon' })}
+                      className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer relative flex flex-col justify-between ${
+                        !isBordir
+                          ? 'border-indigo-600 bg-indigo-50/60 shadow-md ring-2 ring-indigo-400/30'
+                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xl">🎨</span>
+                          <span
+                            className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                              !isBordir
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            Plastisol / DTF Halus
+                          </span>
+                        </div>
+                        <h4 className="font-extrabold text-sm text-slate-900 leading-tight">
+                          Sablon DTF / Plastisol
+                        </h4>
+                        <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                          Warna tajam solid & gradasi detail foto, tekstur lentur halus menyatu dengan serat kain seragam.
+                        </p>
+                      </div>
+
+                      <div className="mt-3 pt-2.5 border-t border-indigo-200/60 flex items-center justify-between text-[11px] font-bold">
+                        <span className="text-indigo-800">Cocok: Kaos, Jersey, Desain Besar</span>
+                        {!isBordir && <Check className="w-4 h-4 text-indigo-600 stroke-[3]" />}
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Section 3: Pilihan Titik Penempatan (Print Zones) */}
+                <div>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <label className="block text-xs font-black text-slate-900 uppercase tracking-wider">
+                      2. Titik Penempatan Desain ({currentPrintZones.length} Titik Blangko)
+                    </label>
+                    <span className="text-[11px] font-bold text-slate-500 uppercase">
+                      Sisi: {currentSide}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {currentPrintZones.map((zone) => {
+                      const isZoneSelected = uploadModalData.targetZoneId === zone.id
+
+                      return (
+                        <button
+                          key={zone.id}
+                          type="button"
+                          onClick={() =>
+                            setUploadModalData({ ...uploadModalData, targetZoneId: zone.id })
+                          }
+                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                            isZoneSelected
+                              ? 'border-[#ff5e00] bg-orange-50/80 shadow-xs ring-1 ring-[#ff5e00]/30'
+                              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div
+                              className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                                isZoneSelected
+                                  ? 'bg-[#ff5e00] text-white'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              ⊞
+                            </div>
+                            <div className="min-w-0">
+                              <h5 className="font-extrabold text-xs text-slate-900 truncate">
+                                {zone.name}
+                              </h5>
+                              <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500">
+                                {zone.maxSizeCm && <span>{zone.maxSizeCm}</span>}
+                                <span>•</span>
+                                <span className="font-bold text-emerald-600 font-mono">
+                                  Rp {zone.price.toLocaleString('id-ID')}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          {isZoneSelected && <Check className="w-4 h-4 text-[#ff5e00] stroke-[3] shrink-0" />}
+                        </button>
+                      )
+                    })}
+
+                    {/* Opsi Titik Kustom Bebas */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setUploadModalData({ ...uploadModalData, targetZoneId: 'custom' })
+                      }
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                        uploadModalData.targetZoneId === 'custom'
+                          ? 'border-[#ff5e00] bg-orange-50/80 shadow-xs ring-1 ring-[#ff5e00]/30'
+                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                            uploadModalData.targetZoneId === 'custom'
+                              ? 'bg-[#ff5e00] text-white'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          ✦
+                        </div>
+                        <div className="min-w-0">
+                          <h5 className="font-extrabold text-xs text-slate-900 truncate">
+                            Titik Bebas (Tengah Kanvas)
+                          </h5>
+                          <span className="text-[10px] text-slate-500">
+                            Bisa digeser bebas ke mana saja
+                          </span>
+                        </div>
+                      </div>
+                      {uploadModalData.targetZoneId === 'custom' && (
+                        <Check className="w-4 h-4 text-[#ff5e00] stroke-[3] shrink-0" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 px-6 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+                <div className="text-xs text-slate-600">
+                  Biaya Titik: <strong className="text-slate-900 font-mono text-sm">Rp {(selectedZone ? selectedZone.price : 15000).toLocaleString('id-ID')}</strong>
+                  <span className="text-slate-400 mx-1.5">•</span>
+                  Teknik: <strong className={isBordir ? 'text-amber-700' : 'text-indigo-700'}>{isBordir ? '🪡 Bordir 3D' : '🎨 Sablon DTF'}</strong>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setUploadModalData(null)}
+                    className="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmUploadGraphic}
+                    className="px-5 py-2 bg-[#ff5e00] hover:bg-[#e05300] text-white font-extrabold rounded-xl text-xs transition-all shadow-md shadow-orange-500/25 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Check className="w-4 h-4 stroke-[2.5]" />
+                    <span>Pasang Desain ke Seragam</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
