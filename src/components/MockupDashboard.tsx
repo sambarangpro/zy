@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
-import type { MockupTemplate, ViewSide, ColorablePart } from '../types'
+import type { MockupTemplate, ViewSide, ColorablePart, PrintZone } from '../types'
+import { PRINT_ZONES } from '../data/garments'
 import {
   saveMockup,
   deleteMockup,
@@ -40,6 +41,7 @@ import {
   Sliders,
   RotateCcw,
   RotateCw,
+  Grid,
 } from 'lucide-react'
 
 // CorelDRAW Style Spline & Curve Helpers (Cubic Catmull-Rom & Bézier Curves)
@@ -151,6 +153,7 @@ interface DashboardSnapshot {
   penPoints: { x: number; y: number }[]
   editingExistingPartId: string | null
   side: ViewSide
+  printZones?: PrintZone[]
 }
 
 interface MockupDashboardProps {
@@ -234,7 +237,6 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const [showGrid, setShowGrid] = useState<boolean>(true)
   const [showCenterGuide, setShowCenterGuide] = useState<boolean>(true)
   const [showInfoModal, setShowInfoModal] = useState<boolean>(false)
-  const [showLogoSlot, setShowLogoSlot] = useState<boolean>(true)
   const [showMonogramSlot, setShowMonogramSlot] = useState<boolean>(true)
   const [showScotlight, setShowScotlight] = useState<boolean>(false)
   const [autoSync4Sides, setAutoSync4Sides] = useState<boolean>(true)
@@ -256,6 +258,18 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     colorPartsRef.current = editFormData.colorParts || []
   }, [editFormData.colorParts])
 
+  // Titik Garis Panduan Sablon (Print Zones) yang diatur oleh Owner saat pembuatan blangko
+  const [printZones, setPrintZones] = useState<PrintZone[]>(editFormData.printZones || [...PRINT_ZONES])
+  const [selectedPrintZoneId, setSelectedPrintZoneId] = useState<string | null>(null)
+  const [showPrintZones, setShowPrintZones] = useState<boolean>(true)
+  const [activeInspectorTab, setActiveInspectorTab] = useState<'masking' | 'printZones'>('masking')
+
+  useEffect(() => {
+    if (editFormData.printZones && editFormData.printZones.length > 0) {
+      setPrintZones(editFormData.printZones)
+    }
+  }, [editFormData.printZones])
+
   // UNIFIED GLOBAL UNDO & REDO STACK FOR ALL MOCKUP DASHBOARD ACTIONS
   const [dashboardUndoStack, setDashboardUndoStack] = useState<DashboardSnapshot[]>([])
   const [dashboardRedoStack, setDashboardRedoStack] = useState<DashboardSnapshot[]>([])
@@ -270,6 +284,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       penPoints: [...penPoints],
       editingExistingPartId,
       side: selectedSide,
+      printZones: JSON.parse(JSON.stringify(printZones)),
     }
   }
 
@@ -277,6 +292,78 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     const snap = takeDashboardSnapshot()
     setDashboardUndoStack((prev) => [...prev.slice(-40), snap])
     setDashboardRedoStack([])
+  }
+
+  // Print zones untuk sudut pandang aktif
+  const currentSidePrintZones = useMemo(() => {
+    return printZones.filter((z) => z.side === selectedSide)
+  }, [printZones, selectedSide])
+
+  const selectedPrintZone = useMemo(() => {
+    return printZones.find((z) => z.id === selectedPrintZoneId) || null
+  }, [printZones, selectedPrintZoneId])
+
+  const handleAddPrintZone = (preset?: Partial<PrintZone>) => {
+    pushDashboardSnapshot()
+    const newId = 'pz_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)
+    const newZone: PrintZone = {
+      id: newId,
+      name:
+        preset?.name ||
+        (selectedSide === 'front'
+          ? 'Dada Kiri (10×10cm)'
+          : selectedSide === 'back'
+          ? 'Punggung A3'
+          : 'Patch Lengan'),
+      x: preset?.x ?? (selectedSide === 'front' ? 68 : 50),
+      y: preset?.y ?? (selectedSide === 'front' ? 32 : 45),
+      width: preset?.width ?? 20,
+      height: preset?.height ?? 18,
+      side: selectedSide,
+      price: preset?.price ?? 15000,
+      maxSizeCm: preset?.maxSizeCm ?? '10×10 cm',
+      description: preset?.description,
+    }
+    const updated = [...printZones, newZone]
+    setPrintZones(updated)
+    setEditFormData((f) => ({ ...f, printZones: updated }))
+    setSelectedPrintZoneId(newId)
+    setActiveInspectorTab('printZones')
+    setShowPrintZones(true)
+  }
+
+  const handleUpdatePrintZone = (zoneId: string, updates: Partial<PrintZone>) => {
+    const updated = printZones.map((z) => (z.id === zoneId ? { ...z, ...updates } : z))
+    setPrintZones(updated)
+    setEditFormData((f) => ({ ...f, printZones: updated }))
+  }
+
+  const handleDeletePrintZone = (zoneId: string) => {
+    pushDashboardSnapshot()
+    const updated = printZones.filter((z) => z.id !== zoneId)
+    setPrintZones(updated)
+    setEditFormData((f) => ({ ...f, printZones: updated }))
+    if (selectedPrintZoneId === zoneId) {
+      setSelectedPrintZoneId(null)
+    }
+  }
+
+  const handleDuplicatePrintZone = (zoneId: string) => {
+    const target = printZones.find((z) => z.id === zoneId)
+    if (!target) return
+    pushDashboardSnapshot()
+    const newId = 'pz_' + Date.now()
+    const duplicated: PrintZone = {
+      ...target,
+      id: newId,
+      name: `${target.name} (Salinan)`,
+      x: Math.min(target.x + 3, 90),
+      y: Math.min(target.y + 3, 90),
+    }
+    const updated = [...printZones, duplicated]
+    setPrintZones(updated)
+    setEditFormData((f) => ({ ...f, printZones: updated }))
+    setSelectedPrintZoneId(newId)
   }
 
   const handleGlobalDashboardUndo = () => {
@@ -290,6 +377,10 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
     colorPartsRef.current = prev.colorParts
     setEditFormData((f) => ({ ...f, colorParts: prev.colorParts }))
+    if (prev.printZones) {
+      setPrintZones(prev.printZones)
+      setEditFormData((f) => ({ ...f, printZones: prev.printZones }))
+    }
     setHiddenPartIds(prev.hiddenPartIds)
     setPenPoints(prev.penPoints)
     setEditingExistingPartId(prev.editingExistingPartId)
@@ -340,6 +431,10 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
     colorPartsRef.current = next.colorParts
     setEditFormData((f) => ({ ...f, colorParts: next.colorParts }))
+    if (next.printZones) {
+      setPrintZones(next.printZones)
+      setEditFormData((f) => ({ ...f, printZones: next.printZones }))
+    }
     setHiddenPartIds(next.hiddenPartIds)
     setPenPoints(next.penPoints)
     setEditingExistingPartId(next.editingExistingPartId)
@@ -451,6 +546,10 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
   const handleOpenCreateNew = () => {
     colorPartsRef.current = []
+    const defaultZones = [...PRINT_ZONES]
+    setPrintZones(defaultZones)
+    setSelectedPrintZoneId(null)
+    setActiveInspectorTab('masking')
     setEditFormData({
       id: 'mockup_' + Date.now(),
       name: '',
@@ -459,6 +558,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       description: '',
       enableClippingMask: true,
       colorParts: [],
+      printZones: defaultZones,
       discount12: 5000,
       discount50: 10000,
       discount100: 15000,
@@ -471,8 +571,13 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
   const handleOpenEdit = (item: MockupTemplate) => {
     const parts = item.colorParts ? [...item.colorParts] : []
+    const zones =
+      item.printZones && item.printZones.length > 0 ? [...item.printZones] : [...PRINT_ZONES]
     colorPartsRef.current = parts
-    setEditFormData({ ...item, colorParts: parts })
+    setPrintZones(zones)
+    setSelectedPrintZoneId(null)
+    setActiveInspectorTab('masking')
+    setEditFormData({ ...item, colorParts: parts, printZones: zones })
     setSelectedSide('front')
     handleClearMaskDraft()
     setIsEditing(true)
@@ -1496,7 +1601,9 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       leftImg: editFormData.leftImg,
       rightImg: editFormData.rightImg,
       enableClippingMask: editFormData.enableClippingMask ?? true,
+      defaultBaseColor: editFormData.defaultBaseColor || '#ffffff',
       colorParts: validColorParts,
+      printZones: printZones.length > 0 ? printZones : (editFormData.printZones || [...PRINT_ZONES]),
       discount12: Number(editFormData.discount12) || 5000,
       discount50: Number(editFormData.discount50) || 10000,
       discount100: Number(editFormData.discount100) || 15000,
@@ -2038,20 +2145,27 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
 
                 <div className="w-8 h-px bg-[#e2e8f0] my-1"></div>
 
-                {/* 5. Tambah Slot Logo */}
+                {/* 5. Titik Garis Panduan Sablon (Print Safe Zones) */}
                 <button
                   type="button"
-                  onClick={() => setShowLogoSlot((prev) => !prev)}
+                  onClick={() => {
+                    setShowPrintZones((prev) => !prev)
+                    if (!showPrintZones) {
+                      setActiveInspectorTab('printZones')
+                    }
+                  }}
                   className={`w-10 h-10 rounded-lg flex items-center justify-center relative group transition-colors cursor-pointer ${
-                    showLogoSlot
+                    showPrintZones && activeInspectorTab === 'printZones'
+                      ? 'bg-orange-50 text-[#ff5e00] border border-orange-200'
+                      : showPrintZones
                       ? 'bg-indigo-50 text-indigo-600 border border-indigo-200'
                       : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/80'
                   }`}
-                  title="Toggle Slot Logo Dada"
+                  title="Atur Titik Garis Panduan Sablon, Posisi, Ukuran & Harga"
                 >
-                  <span className="material-symbols-outlined text-[20px]">crop_free</span>
+                  <Grid className="w-5 h-5" />
                   <span className="absolute left-14 px-2 py-1 bg-slate-800 text-white text-[11px] rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity">
-                    {showLogoSlot ? 'Sembunyikan Slot Logo' : 'Tampilkan Slot Logo'}
+                    Titik Panduan Sablon ({showPrintZones ? 'Aktif' : 'Nonaktif'})
                   </span>
                 </button>
 
@@ -2485,47 +2599,63 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                         )
                       })}
 
-                    {/* SLOT AKTIF: LOGO DADA KIRI (BOUNDING BOX BERSIH) */}
-                    {showLogoSlot && selectedSide === 'front' && (
-                      <div
-                        className="absolute border-2 border-indigo-500 bg-indigo-500/10 rounded-md cursor-pointer flex flex-col items-center justify-center z-20 shadow-xs pointer-events-none"
-                        style={{
-                          top: `${(132 / 640) * stageDisplayHeight}px`,
-                          left: `${(148 / 540) * stageDisplayWidth}px`,
-                          width: `${(94 / 540) * stageDisplayWidth}px`,
-                          height: `${(62 / 640) * stageDisplayHeight}px`,
-                        }}
-                      >
-                        <div className="flex items-center gap-1 opacity-90">
-                          <svg className="w-4 h-4 text-amber-400 drop-shadow" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-                          </svg>
-                        </div>
-                        <span className="font-tech-data font-bold text-[7px] text-white bg-slate-900/70 px-1 rounded mt-0.5">
-                          SLOT #1 LOGO
-                        </span>
-                        <div className="absolute -top-1 -left-1 w-2 h-2 bg-white border-2 border-indigo-600 rounded-xs"></div>
-                        <div className="absolute -top-1 -right-1 w-2 h-2 bg-white border-2 border-indigo-600 rounded-xs"></div>
-                        <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-white border-2 border-indigo-600 rounded-xs"></div>
-                        <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-white border-2 border-indigo-600 rounded-xs"></div>
-                      </div>
-                    )}
+                    {/* TITIK GARIS PANDUAN SABLON (PRINT SAFE ZONES) - DI DEPAN OBJEK */}
+                    {showPrintZones && (
+                      <div className="absolute inset-0 w-full h-full pointer-events-none z-30">
+                        {currentSidePrintZones.map((zone) => {
+                          const isSelected = selectedPrintZoneId === zone.id
+                          return (
+                            <div
+                              key={zone.id}
+                              style={{
+                                left: `${zone.x}%`,
+                                top: `${zone.y}%`,
+                                width: `${zone.width}%`,
+                                height: `${zone.height}%`,
+                                transform: 'translate(-50%, -50%)',
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedPrintZoneId(zone.id)
+                                setActiveInspectorTab('printZones')
+                              }}
+                              className={`absolute border-2 pointer-events-auto transition-all cursor-pointer rounded-2xl flex flex-col items-center justify-between p-1.5 ${
+                                isSelected
+                                  ? 'border-[#ff5e00] bg-[#ff5e00]/15 ring-2 ring-[#ff5e00]/40 shadow-md z-40'
+                                  : 'border-dashed border-indigo-500/80 bg-indigo-500/10 hover:border-[#ff5e00] hover:bg-[#ff5e00]/10 z-30'
+                              }`}
+                            >
+                              {/* Top pill badge */}
+                              <div className="flex items-center gap-1.5 bg-slate-900/95 text-white px-2 py-0.5 rounded-full text-[9px] font-bold shadow-md border border-slate-700 whitespace-nowrap pointer-events-none">
+                                <span className={isSelected ? 'text-[#ff5e00]' : 'text-indigo-400'}>⊞</span>
+                                <span>{zone.name}</span>
+                                {zone.price > 0 && (
+                                  <span className="text-emerald-400 font-mono">
+                                    • Rp {zone.price.toLocaleString('id-ID')}
+                                  </span>
+                                )}
+                              </div>
 
-                    {/* SLOT 2: NAMA BORDIR (DADA KANAN) */}
-                    {showMonogramSlot && selectedSide === 'front' && (
-                      <div
-                        className="absolute border border-dashed border-amber-400 bg-amber-400/15 px-2 py-1 rounded text-left pointer-events-none z-20"
-                        style={{
-                          top: `${(136 / 640) * stageDisplayHeight}px`,
-                          right: `${(152 / 540) * stageDisplayWidth}px`,
-                        }}
-                      >
-                        <span className="font-tech-data font-bold text-[8px] tracking-wider text-amber-600 block leading-tight">
-                          NAMA PETUGAS
-                        </span>
-                        <span className="font-tech-data text-[6px] text-slate-500 block opacity-90 uppercase">
-                          JABATAN / DIVISI
-                        </span>
+                              {/* Center size info */}
+                              <div className="flex flex-col items-center pointer-events-none">
+                                {zone.maxSizeCm && (
+                                  <span className="text-[8px] font-mono font-semibold text-slate-800 bg-white/90 px-1.5 py-0.2 rounded border border-slate-200 shadow-2xs">
+                                    {zone.maxSizeCm}
+                                  </span>
+                                )}
+                                <span className="text-[7.5px] font-mono text-slate-500 mt-0.5">
+                                  {Math.round(zone.width)}% × {Math.round(zone.height)}%
+                                </span>
+                              </div>
+
+                              {/* Corner markers */}
+                              <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2 border-current" />
+                              <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 border-current" />
+                              <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2 border-current" />
+                              <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2 border-current" />
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
 
@@ -2734,6 +2864,441 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
             {/* 3. PANEL KANAN: INSPECTOR BLANGKO (CLEAN, WHITE & MINIMALIS) */}
             <aside className="w-80 bg-white border-l border-[#e2e8f0] flex flex-col justify-between flex-shrink-0 z-30 select-none overflow-y-auto shadow-[-1px_0_2px_rgba(0,0,0,0.02)]">
               <div className="p-3.5 flex flex-col gap-3.5">
+                {/* TAB SWITCHER: PEWARNAAN KAIN vs TITIK PANDUAN SABLON */}
+                <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setActiveInspectorTab('masking')}
+                    className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      activeInspectorTab === 'masking'
+                        ? 'bg-white text-indigo-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Palette className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Pewarnaan Kain</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveInspectorTab('printZones')
+                      setShowPrintZones(true)
+                    }}
+                    className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      activeInspectorTab === 'printZones'
+                        ? 'bg-white text-[#ff5e00] shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Grid className="w-3.5 h-3.5 text-[#ff5e00]" />
+                    <span>Titik Sablon</span>
+                    {currentSidePrintZones.length > 0 && (
+                      <span className="text-[9px] bg-orange-100 text-[#ff5e00] px-1.5 rounded-full font-mono">
+                        {currentSidePrintZones.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {activeInspectorTab === 'printZones' ? (
+                  <div className="space-y-3 animate-in fade-in duration-150 text-[12px]">
+                    {/* CARD A: KONTROL TITIK SABLON AKTIF */}
+                    <div className="bg-white rounded-xl border border-orange-200 bg-orange-50/15 p-3 shadow-xs space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-orange-100">
+                        <div className="flex items-center gap-1.5">
+                          <Grid className="w-4 h-4 text-[#ff5e00]" />
+                          <span className="font-title-md font-bold text-xs text-slate-900">
+                            Titik Panduan Sablon
+                          </span>
+                        </div>
+                        <span className="text-[9px] font-tech-data font-bold bg-[#ff5e00] text-white px-1.5 py-0.5 rounded shadow-2xs">
+                          {selectedSide.toUpperCase()}
+                        </span>
+                      </div>
+
+                      {/* Tombol Tambah Titik Sablon Baru */}
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => handleAddPrintZone()}
+                          className="w-full py-2 px-3 rounded-lg bg-[#ff5e00] hover:bg-[#e05300] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4 stroke-[2.5]" />
+                          <span>+ Tambah Titik Sablon ({selectedSide.toUpperCase()})</span>
+                        </button>
+                      </div>
+
+                      {/* Quick Presets untuk sisi saat ini */}
+                      <div>
+                        <span className="text-[10px] text-slate-500 font-medium block mb-1">
+                          Preset Titik Cepat:
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {selectedSide === 'front' ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAddPrintZone({
+                                    name: 'Dada Kiri (10×10cm)',
+                                    x: 68,
+                                    y: 32,
+                                    width: 20,
+                                    height: 18,
+                                    price: 15000,
+                                    maxSizeCm: '10×10 cm',
+                                  })
+                                }
+                                className="px-2 py-1 rounded bg-white hover:bg-orange-50 text-slate-700 hover:text-[#ff5e00] border border-slate-200 text-[10px] font-semibold cursor-pointer shadow-2xs"
+                              >
+                                + Dada Kiri
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAddPrintZone({
+                                    name: 'Dada Kanan (10×10cm)',
+                                    x: 32,
+                                    y: 32,
+                                    width: 20,
+                                    height: 18,
+                                    price: 15000,
+                                    maxSizeCm: '10×10 cm',
+                                  })
+                                }
+                                className="px-2 py-1 rounded bg-white hover:bg-orange-50 text-slate-700 hover:text-[#ff5e00] border border-slate-200 text-[10px] font-semibold cursor-pointer shadow-2xs"
+                              >
+                                + Dada Kanan
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAddPrintZone({
+                                    name: 'Area Cetak Depan Maks (A3)',
+                                    x: 50,
+                                    y: 45,
+                                    width: 52,
+                                    height: 58,
+                                    price: 35000,
+                                    maxSizeCm: 'A3 (30×42 cm)',
+                                  })
+                                }
+                                className="px-2 py-1 rounded bg-white hover:bg-orange-50 text-slate-700 hover:text-[#ff5e00] border border-slate-200 text-[10px] font-semibold cursor-pointer shadow-2xs"
+                              >
+                                + Depan A3
+                              </button>
+                            </>
+                          ) : selectedSide === 'back' ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAddPrintZone({
+                                    name: 'Area Punggung Maks (A3+)',
+                                    x: 50,
+                                    y: 45,
+                                    width: 54,
+                                    height: 62,
+                                    price: 45000,
+                                    maxSizeCm: 'A3+ (32×48 cm)',
+                                  })
+                                }
+                                className="px-2 py-1 rounded bg-white hover:bg-orange-50 text-slate-700 hover:text-[#ff5e00] border border-slate-200 text-[10px] font-semibold cursor-pointer shadow-2xs"
+                              >
+                                + Punggung A3+
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAddPrintZone({
+                                    name: 'Tengkuk Belakang (8×8cm)',
+                                    x: 50,
+                                    y: 16,
+                                    width: 16,
+                                    height: 12,
+                                    price: 10000,
+                                    maxSizeCm: '8×8 cm',
+                                  })
+                                }
+                                className="px-2 py-1 rounded bg-white hover:bg-orange-50 text-slate-700 hover:text-[#ff5e00] border border-slate-200 text-[10px] font-semibold cursor-pointer shadow-2xs"
+                              >
+                                + Tengkuk
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAddPrintZone({
+                                    name: selectedSide === 'left' ? 'Patch Lengan Kiri' : 'Patch Lengan Kanan',
+                                    x: 50,
+                                    y: 35,
+                                    width: 40,
+                                    height: 40,
+                                    price: 15000,
+                                    maxSizeCm: '8×8 cm',
+                                  })
+                                }
+                                className="px-2 py-1 rounded bg-white hover:bg-orange-50 text-slate-700 hover:text-[#ff5e00] border border-slate-200 text-[10px] font-semibold cursor-pointer shadow-2xs"
+                              >
+                                + Patch Lengan
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Detail Editor Titik Terpilih */}
+                      {selectedPrintZone ? (
+                        <div className="bg-slate-50 p-2.5 rounded-lg border border-orange-200 space-y-2.5">
+                          <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                            <span className="font-bold text-[11px] text-slate-800 flex items-center gap-1 truncate">
+                              <Edit3 className="w-3 h-3 text-[#ff5e00] shrink-0" />
+                              <span className="truncate">{selectedPrintZone.name}</span>
+                            </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleDuplicatePrintZone(selectedPrintZone.id)}
+                                className="p-1 hover:bg-slate-200 text-slate-600 rounded cursor-pointer"
+                                title="Duplikat Titik Ini"
+                              >
+                                <Copy className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePrintZone(selectedPrintZone.id)}
+                                className="p-1 hover:bg-red-100 text-red-600 rounded cursor-pointer"
+                                title="Hapus Titik Ini"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Nama Titik */}
+                          <div>
+                            <label className="block text-[10px] text-slate-500 font-medium mb-0.5">
+                              Nama Titik Panduan:
+                            </label>
+                            <input
+                              type="text"
+                              value={selectedPrintZone.name}
+                              onChange={(e) =>
+                                handleUpdatePrintZone(selectedPrintZone.id, { name: e.target.value })
+                              }
+                              className="w-full h-7 px-2 rounded border border-slate-300 bg-white text-slate-900 text-xs font-semibold focus:outline-hidden focus:border-[#ff5e00]"
+                              placeholder="Contoh: Dada Kiri, Saku Kemeja..."
+                            />
+                          </div>
+
+                          {/* Harga Sablon Tiap Titik & Ukuran Fisik */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[10px] text-slate-500 font-medium mb-0.5">
+                                Harga Sablon (Rp):
+                              </label>
+                              <input
+                                type="number"
+                                step="1000"
+                                value={selectedPrintZone.price}
+                                onChange={(e) =>
+                                  handleUpdatePrintZone(selectedPrintZone.id, {
+                                    price: Number(e.target.value) || 0,
+                                  })
+                                }
+                                className="w-full h-7 px-2 rounded border border-slate-300 bg-white text-slate-900 text-xs font-mono font-bold focus:outline-hidden focus:border-[#ff5e00]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-slate-500 font-medium mb-0.5">
+                                Ukuran Fisik (cm):
+                              </label>
+                              <input
+                                type="text"
+                                value={selectedPrintZone.maxSizeCm || ''}
+                                onChange={(e) =>
+                                  handleUpdatePrintZone(selectedPrintZone.id, {
+                                    maxSizeCm: e.target.value,
+                                  })
+                                }
+                                placeholder="10×10 cm, A4, A3"
+                                className="w-full h-7 px-2 rounded border border-slate-300 bg-white text-slate-900 text-xs font-medium focus:outline-hidden focus:border-[#ff5e00]"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Posisi X & Y (%) */}
+                          <div className="space-y-1.5 pt-1 border-t border-slate-200">
+                            <div>
+                              <div className="flex items-center justify-between text-[10px] text-slate-600 mb-0.5">
+                                <span>Posisi Horizontal (X):</span>
+                                <span className="font-mono font-bold text-slate-800">{Math.round(selectedPrintZone.x)}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={5}
+                                max={95}
+                                value={selectedPrintZone.x}
+                                onChange={(e) =>
+                                  handleUpdatePrintZone(selectedPrintZone.id, {
+                                    x: Number(e.target.value),
+                                  })
+                                }
+                                className="w-full h-1 accent-[#ff5e00] cursor-pointer"
+                              />
+                            </div>
+                            <div>
+                              <div className="flex items-center justify-between text-[10px] text-slate-600 mb-0.5">
+                                <span>Posisi Vertikal (Y):</span>
+                                <span className="font-mono font-bold text-slate-800">{Math.round(selectedPrintZone.y)}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={5}
+                                max={95}
+                                value={selectedPrintZone.y}
+                                onChange={(e) =>
+                                  handleUpdatePrintZone(selectedPrintZone.id, {
+                                    y: Number(e.target.value),
+                                  })
+                                }
+                                className="w-full h-1 accent-[#ff5e00] cursor-pointer"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Lebar & Tinggi (%) */}
+                          <div className="space-y-1.5 pt-1 border-t border-slate-200">
+                            <div>
+                              <div className="flex items-center justify-between text-[10px] text-slate-600 mb-0.5">
+                                <span>Lebar Area Sablon (Width):</span>
+                                <span className="font-mono font-bold text-slate-800">{Math.round(selectedPrintZone.width)}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={5}
+                                max={90}
+                                value={selectedPrintZone.width}
+                                onChange={(e) =>
+                                  handleUpdatePrintZone(selectedPrintZone.id, {
+                                    width: Number(e.target.value),
+                                  })
+                                }
+                                className="w-full h-1 accent-[#ff5e00] cursor-pointer"
+                              />
+                            </div>
+                            <div>
+                              <div className="flex items-center justify-between text-[10px] text-slate-600 mb-0.5">
+                                <span>Tinggi Area Sablon (Height):</span>
+                                <span className="font-mono font-bold text-slate-800">{Math.round(selectedPrintZone.height)}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={5}
+                                max={90}
+                                value={selectedPrintZone.height}
+                                onChange={(e) =>
+                                  handleUpdatePrintZone(selectedPrintZone.id, {
+                                    height: Number(e.target.value),
+                                  })
+                                }
+                                className="w-full h-1 accent-[#ff5e00] cursor-pointer"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-slate-50 border border-dashed border-slate-200 rounded-lg text-center text-slate-400 text-xs">
+                          <p>Klik titik pada kanvas atau pilih dari daftar di bawah untuk mengedit posisi & harga.</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* CARD B: DAFTAR SEMUA TITIK SABLON SISI INI */}
+                    <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-xs space-y-2">
+                      <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                        <span className="font-bold text-xs text-slate-900">
+                          Daftar Titik Sablon ({currentSidePrintZones.length})
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          Sisi {selectedSide.toUpperCase()}
+                        </span>
+                      </div>
+
+                      {currentSidePrintZones.length === 0 ? (
+                        <div className="p-4 text-center text-slate-400 text-xs">
+                          Belum ada titik sablon di sisi ini. Klik tombol tambah di atas.
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
+                          {currentSidePrintZones.map((zone) => {
+                            const isSelected = selectedPrintZoneId === zone.id
+                            return (
+                              <div
+                                key={zone.id}
+                                onClick={() => setSelectedPrintZoneId(zone.id)}
+                                className={`p-2 rounded-lg border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                                  isSelected
+                                    ? 'bg-orange-50/90 border-[#ff5e00] shadow-2xs'
+                                    : 'bg-slate-50/80 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-bold text-xs text-slate-900 truncate">
+                                      {zone.name}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 flex items-center gap-1.5 font-mono">
+                                    <span className="text-emerald-600 font-bold">
+                                      Rp {zone.price.toLocaleString('id-ID')}
+                                    </span>
+                                    <span>•</span>
+                                    <span>{Math.round(zone.width)}×{Math.round(zone.height)}%</span>
+                                    {zone.maxSizeCm && (
+                                      <>
+                                        <span>•</span>
+                                        <span>{zone.maxSizeCm}</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleDuplicatePrintZone(zone.id)
+                                    }}
+                                    className="p-1 hover:bg-slate-200 text-slate-500 rounded cursor-pointer"
+                                    title="Duplikat Titik"
+                                  >
+                                    <Copy className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleDeletePrintZone(zone.id)
+                                    }}
+                                    className="p-1 hover:bg-red-100 text-red-600 rounded cursor-pointer"
+                                    title="Hapus Titik"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <>
                 {/* CARD 1: PENGATURAN ZONA PEWARNAAN (COLOR MASK TOOL) */}
                 <div className="bg-white rounded-xl border border-indigo-200 bg-indigo-50/15 p-3 shadow-xs">
                   <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-indigo-100">
@@ -3414,6 +3979,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                     )}
                   </div>
                 </div>
+                  </>
+                )}
               </div>
 
               {/* Bottom Action Bar di Inspector */}

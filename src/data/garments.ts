@@ -1,4 +1,5 @@
-import type { FabricOption, GarmentColorParts, GarmentType, PrintSizeCategory, ViewSide } from '../types'
+import type { FabricOption, GarmentColorParts, GarmentType, PrintSizeCategory, ViewSide, PrintZone } from '../types'
+export type { PrintZone }
 
 export interface GarmentDef {
   id: GarmentType
@@ -311,30 +312,20 @@ export const POSITION_PRESETS: Array<{
   { id: 'right_sleeve_patch', label: 'Patch Lambang Lengan Kanan', side: 'right', x: 50, y: 28, scale: 0.5 },
 ]
 
-// Definisi Garis Panduan Area Sablon Aman (Print Safe Zones)
-export interface PrintZone {
-  id: string
-  name: string
-  x: number // percentage
-  y: number
-  width: number
-  height: number
-  side: ViewSide
-}
-
+// Definisi Garis Panduan Area Sablon Aman (Print Safe Zones Standar)
 export const PRINT_ZONES: PrintZone[] = [
   // Tampak Depan
-  { id: 'z_left_chest', name: 'Dada Kiri (10×10cm)', x: 68, y: 32, width: 20, height: 18, side: 'front' },
-  { id: 'z_right_chest', name: 'Dada Kanan (10×10cm)', x: 32, y: 32, width: 20, height: 18, side: 'front' },
-  { id: 'z_front_a3', name: 'Area Cetak Depan Maks (A3)', x: 50, y: 45, width: 52, height: 58, side: 'front' },
+  { id: 'z_left_chest', name: 'Dada Kiri (10×10cm)', x: 68, y: 32, width: 20, height: 18, side: 'front', price: 15000, maxSizeCm: '10×10 cm' },
+  { id: 'z_right_chest', name: 'Dada Kanan (10×10cm)', x: 32, y: 32, width: 20, height: 18, side: 'front', price: 15000, maxSizeCm: '10×10 cm' },
+  { id: 'z_front_a3', name: 'Area Cetak Depan Maks (A3)', x: 50, y: 45, width: 52, height: 58, side: 'front', price: 35000, maxSizeCm: 'A3 (30×42 cm)' },
 
   // Tampak Belakang
-  { id: 'z_back_a3', name: 'Area Cetak Punggung Maks (A3+)', x: 50, y: 45, width: 54, height: 62, side: 'back' },
-  { id: 'z_neck_back', name: 'Tengkuk Belakang (8×8cm)', x: 50, y: 16, width: 16, height: 12, side: 'back' },
+  { id: 'z_back_a3', name: 'Area Cetak Punggung Maks (A3+)', x: 50, y: 45, width: 54, height: 62, side: 'back', price: 45000, maxSizeCm: 'A3+ (32×48 cm)' },
+  { id: 'z_neck_back', name: 'Tengkuk Belakang (8×8cm)', x: 50, y: 16, width: 16, height: 12, side: 'back', price: 10000, maxSizeCm: '8×8 cm' },
 
   // Tampak Lengan Kiri & Kanan
-  { id: 'z_left_sleeve', name: 'Area Patch Lengan Kiri', x: 50, y: 35, width: 40, height: 40, side: 'left' },
-  { id: 'z_right_sleeve', name: 'Area Patch Lengan Kanan', x: 50, y: 35, width: 40, height: 40, side: 'right' },
+  { id: 'z_left_sleeve', name: 'Area Patch Lengan Kiri', x: 50, y: 35, width: 40, height: 40, side: 'left', price: 15000, maxSizeCm: '8×8 cm' },
+  { id: 'z_right_sleeve', name: 'Area Patch Lengan Kanan', x: 50, y: 35, width: 40, height: 40, side: 'right', price: 15000, maxSizeCm: '8×8 cm' },
 ]
 
 // ZY Clothes Smart Pricing Engine by Graphic Size
@@ -353,6 +344,40 @@ export function calculateGraphicPrice(scale: number): {
   } else {
     return { sizeCategory: 'Sablon A3+ (32×48cm)', price: 45000 }
   }
+}
+
+// Menghitung harga sablon berdasarkan titik panduan yang diatur Owner (atau skala ukuran fisik)
+export function getGraphicPriceForZoneOrScale(
+  g: { x: number; y: number; side: ViewSide; scale: number },
+  printZones?: PrintZone[]
+): {
+  sizeCategory: string
+  price: number
+  zoneName?: string
+} {
+  if (printZones && printZones.length > 0) {
+    const matchingZone = printZones.find((z) => {
+      if (z.side !== g.side) return false
+      const halfW = z.width / 2
+      const halfH = z.height / 2
+      return (
+        g.x >= z.x - halfW &&
+        g.x <= z.x + halfW &&
+        g.y >= z.y - halfH &&
+        g.y <= z.y + halfH
+      )
+    })
+    if (matchingZone && matchingZone.price > 0) {
+      return {
+        sizeCategory: matchingZone.maxSizeCm
+          ? `${matchingZone.name} (${matchingZone.maxSizeCm})`
+          : matchingZone.name,
+        price: matchingZone.price,
+        zoneName: matchingZone.name,
+      }
+    }
+  }
+  return calculateGraphicPrice(g.scale)
 }
 
 export const SIZE_CHART = {

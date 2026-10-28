@@ -1,4 +1,5 @@
 import type { MockupTemplate } from '../types'
+import { PRINT_ZONES } from '../data/garments'
 
 const STORAGE_KEY = 'zy_custom_mockup_templates'
 const ACTIVE_MOCKUP_KEY = 'zy_active_mockup_id'
@@ -116,6 +117,9 @@ export async function syncMockupsWithDisk(): Promise<MockupTemplate[]> {
     const partsB = b.colorParts || []
     // Pick the version that actually has colorParts
     const bestParts = partsB.length > 0 ? partsB : partsA
+    const zonesA = a.printZones || []
+    const zonesB = b.printZones || []
+    const bestZones = zonesB.length > 0 ? zonesB : zonesA
     return {
       ...a,
       ...b,
@@ -124,6 +128,7 @@ export async function syncMockupsWithDisk(): Promise<MockupTemplate[]> {
       leftImg: b.leftImg || a.leftImg,
       rightImg: b.rightImg || a.rightImg,
       colorParts: bestParts,
+      printZones: bestZones,
     }
   }
 
@@ -386,6 +391,7 @@ export function createDemoSampleMockup(): MockupTemplate {
         maskImg: `data:image/svg+xml;utf8,${encodeURIComponent(shoulderMaskSvg)}`,
       },
     ],
+    printZones: [...PRINT_ZONES],
     createdAt: Date.now(),
   }
 }

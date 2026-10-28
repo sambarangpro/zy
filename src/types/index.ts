@@ -71,6 +71,20 @@ export interface ColorablePart {
   icon?: string // ID icon bagian pakaian (e.g. 'collar', 'pocket', 'buttons', dll.)
 }
 
+// Definisi Titik Garis Panduan Area Sablon Aman (Print Safe Zones)
+export interface PrintZone {
+  id: string
+  name: string
+  x: number // percentage (0 - 100) center x
+  y: number // percentage (0 - 100) center y
+  width: number // percentage (0 - 100)
+  height: number // percentage (0 - 100)
+  side: ViewSide // 'front' | 'back' | 'left' | 'right'
+  price: number // Harga sablon / cetak pada titik ini (Rp)
+  maxSizeCm?: string // Ukuran fisik misal "10×10 cm", "A4 (21×30 cm)", "A3 (30×42 cm)"
+  description?: string
+}
+
 // Model Mockup Seragam Custom yang dibuat oleh pengguna di Dashboard
 export interface MockupTemplate {
   id: string
@@ -85,6 +99,7 @@ export interface MockupTemplate {
   enableClippingMask?: boolean // metode clipping mask otomatis
   defaultBaseColor?: string // Warna dasar keseluruhan seragam (di bawah semua layer)
   colorParts?: ColorablePart[] // Area / bagian baju yang bisa diganti warnanya secara instan
+  printZones?: PrintZone[] // Garis panduan sablon (posisi, ukuran, dan harga tiap titik diatur owner)
   discount12?: number // default: 5000
   discount50?: number // default: 10000
   discount100?: number // default: 15000

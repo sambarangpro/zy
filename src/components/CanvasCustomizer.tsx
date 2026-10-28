@@ -10,6 +10,7 @@ import {
   POSITION_PRESETS,
   PRINT_ZONES,
   calculateGraphicPrice,
+  getGraphicPriceForZoneOrScale,
 } from '../data/garments'
 import { saveMockup } from '../services/mockupStorage'
 import {
@@ -347,7 +348,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
   const currentSideGraphics = graphics.filter((g) => g.side === currentSide)
   const selectedGraphic = graphics.find((g) => g.id === selectedGraphicId)
-  const currentPrintZones = PRINT_ZONES.filter((z) => z.side === currentSide)
+  const currentPrintZones = useMemo(() => {
+    const zones =
+      activeMockup?.printZones && activeMockup.printZones.length > 0
+        ? activeMockup.printZones
+        : PRINT_ZONES
+    return zones.filter((z) => z.side === currentSide)
+  }, [activeMockup?.printZones, currentSide])
 
   // Sync clipping mask when activeMockup changes
   useEffect(() => {
@@ -924,9 +931,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     setPaintLayers((prev) => ({ ...prev, [currentSide]: null }))
   }
 
-  // Calculate live total print cost
+  // Calculate live total print cost (menggunakan harga zona cetak blangko jika ada)
   const totalPrintCost = graphics.reduce((sum, g) => {
-    const calc = calculateGraphicPrice(g.scale)
+    const calc = getGraphicPriceForZoneOrScale(g, activeMockup?.printZones)
     return sum + calc.price
   }, 0)
 
@@ -2969,34 +2976,6 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             backgroundSize: '24px 24px',
           }}
         >
-          {/* Printable Safe Zones Overlay */}
-          {showGuidelines && (
-            <div
-              className="absolute inset-0 pointer-events-none transition-transform flex items-center justify-center"
-              style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
-            >
-              <div className="w-full h-full max-w-[680px] max-h-[760px] relative">
-                {currentPrintZones.map((zone) => (
-                  <div
-                    key={zone.id}
-                    style={{
-                      left: `${zone.x}%`,
-                      top: `${zone.y}%`,
-                      width: `${zone.width}%`,
-                      height: `${zone.height}%`,
-                      transform: 'translate(-50%, -50%)',
-                    }}
-                    className="absolute border border-dashed border-orange-400/60 bg-orange-500/5 rounded-xl flex items-start justify-center p-1 pointer-events-none"
-                  >
-                    <span className="text-[9px] font-bold text-orange-600 bg-white/95 border border-orange-200 px-1.5 py-0.5 rounded shadow-2xs">
-                      {zone.name}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* FLOATING QUICK BAR FOR COLOR PARTS (Sinkron Lintas Sudut Pandang) */}
           {(unifiedPartGroups.length > 0 || baseGarmentColor) && (
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl shadow-lg px-3.5 py-1.5 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -3173,7 +3152,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                     .filter((g) => !hiddenGraphicIds.includes(g.id))
                     .map((g, idx) => {
                       const isSelected = g.id === selectedGraphicId
-                      const calc = calculateGraphicPrice(g.scale)
+                      const calc = getGraphicPriceForZoneOrScale(g, activeMockup?.printZones)
                       const scaleX = (g.scaleX || 1) * g.scale
                       const scaleY = (g.scaleY || 1) * g.scale
 
@@ -3400,6 +3379,49 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                     )
                   })}
                 </div>
+
+                {/* 5. GARIS PANDUAN SABLON (PRINT SAFE ZONES) - DI DEPAN OBJEK SERAGAM */}
+                {showGuidelines && (
+                  <div className="absolute inset-0 w-full h-full pointer-events-none z-30">
+                    {currentPrintZones.map((zone) => (
+                      <div
+                        key={zone.id}
+                        style={{
+                          left: `${zone.x}%`,
+                          top: `${zone.y}%`,
+                          width: `${zone.width}%`,
+                          height: `${zone.height}%`,
+                          transform: 'translate(-50%, -50%)',
+                        }}
+                        className="absolute border-2 border-dashed border-[#ff5e00] bg-[#ff5e00]/10 rounded-2xl flex flex-col items-center justify-between p-1.5 shadow-xs pointer-events-none transition-all group/zone backdrop-blur-[0.5px]"
+                      >
+                        {/* Top Label & Price Tag */}
+                        <div className="flex items-center gap-1.5 bg-slate-900/90 text-white px-2 py-0.5 rounded-full text-[9px] font-bold shadow-md border border-slate-700 whitespace-nowrap">
+                          <span className="text-[#ff5e00]">⊞</span>
+                          <span>{zone.name}</span>
+                          {zone.price > 0 && (
+                            <span className="text-emerald-400 font-mono">
+                              • Rp {zone.price.toLocaleString('id-ID')}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Center watermark or size info */}
+                        {zone.maxSizeCm && (
+                          <span className="text-[8px] font-mono font-semibold text-orange-700/80 bg-white/85 px-1.5 py-0.2 rounded border border-orange-200">
+                            {zone.maxSizeCm}
+                          </span>
+                        )}
+
+                        {/* Corner markers */}
+                        <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2 border-[#ff5e00]" />
+                        <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 border-[#ff5e00]" />
+                        <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2 border-[#ff5e00]" />
+                        <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2 border-[#ff5e00]" />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -3682,7 +3704,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       .reverse()
                       .map(({ g, origIdx }) => {
                         const isSelected = g.id === selectedGraphicId
-                        const calc = calculateGraphicPrice(g.scale)
+                        const calc = getGraphicPriceForZoneOrScale(g, activeMockup?.printZones)
                         const isCurrentSide = g.side === currentSide
                         const isHidden = hiddenGraphicIds.includes(g.id)
 
