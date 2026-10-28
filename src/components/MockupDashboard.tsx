@@ -800,34 +800,45 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     }))
   }
 
-  // Custom Nama Layer: Inline Rename untuk Daftar Layer / Zona
-  const [renamingPartId, setRenamingPartId] = useState<string | null>(null)
-  const [renamingPartName, setRenamingPartName] = useState<string>('')
+  // Update Keterangan / Nama Layer Langsung (Owner Mode)
+  const handleUpdatePartNameDirectly = (partId: string, newName: string) => {
+    const current = colorPartsRef.current || editFormData.colorParts || []
+    const target = current.find((p) => p.id === partId)
+    if (!target) return
 
-  const handleStartRenamePart = (part: ColorablePart) => {
-    setRenamingPartId(part.id)
-    setRenamingPartName(part.name)
-  }
-
-  const handleSavePartName = (partId: string) => {
-    if (!renamingPartId) return
-    const trimmed = renamingPartName.trim()
-    if (!trimmed) {
-      setRenamingPartId(null)
-      return
-    }
-
-    const currentPart = (editFormData.colorParts || []).find((p) => p.id === partId)
-    if (currentPart && currentPart.name !== trimmed) {
-      handleUpdateColorPart(partId, { name: trimmed })
-      if (editingExistingPartId === partId) {
-        setNewPartName(trimmed)
+    const updated = current.map((p) => {
+      if (p.id === partId) {
+        return { ...p, name: newName }
       }
-      setBackupStatusMessage(`Nama layer berhasil diubah menjadi "${trimmed}"!`)
-      setTimeout(() => setBackupStatusMessage(null), 3000)
+      if (
+        autoSync4Sides &&
+        ((target.groupId && p.groupId && target.groupId === p.groupId) ||
+          (p.name && target.name && p.name.trim().toLowerCase() === target.name.trim().toLowerCase()))
+      ) {
+        return { ...p, name: newName }
+      }
+      return p
+    })
+
+    colorPartsRef.current = updated
+    setEditFormData((prev) => ({ ...prev, colorParts: updated }))
+
+    if (editingExistingPartId === partId) {
+      setNewPartName(newName)
     }
 
-    setRenamingPartId(null)
+    if (editFormData.id) {
+      const currentMockup = mockups.find((m) => m.id === editFormData.id)
+      if (currentMockup) {
+        const updatedMockup: MockupTemplate = {
+          ...currentMockup,
+          ...editFormData,
+          colorParts: updated.filter((p) => p.maskImg && p.maskImg.trim().length > 5),
+        }
+        const updatedList = saveMockup(updatedMockup)
+        onMockupsChange(updatedList)
+      }
+    }
   }
 
   const handleRemoveColorPart = (id: string) => {
@@ -3057,7 +3068,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-1.5 text-[11px] max-h-56 overflow-y-auto pr-0.5">
+                  <div className="flex flex-col gap-2 text-[11px] max-h-[380px] overflow-y-auto pr-0.5">
                     {(editFormData.colorParts || []).filter((p) => p.side === selectedSide).length === 0 ? (
                       <div className="text-center py-3 text-slate-400 text-[11px] space-y-2">
                         <p>Belum ada zona warna di sisi ini.</p>
@@ -3101,171 +3112,110 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                               onDragOver={(e) => handleDragOver(e, part.id)}
                               onDrop={(e) => handleDrop(e, part.id)}
                               onDragEnd={handleDragEnd}
-                              className={`p-2 rounded-lg border transition-all ${
+                              className={`p-2.5 rounded-xl border transition-all flex flex-col gap-2 ${
                                 isTarget
-                                  ? 'bg-indigo-50/90 border-indigo-400 shadow-xs'
-                                  : 'bg-[#f8fafc] border-[#e2e8f0] hover:bg-slate-50'
+                                  ? 'bg-indigo-50/90 border-indigo-400 shadow-xs ring-1 ring-indigo-400/30'
+                                  : 'bg-[#f8fafc] border-[#e2e8f0] hover:bg-slate-50 hover:border-slate-300'
                               }`}
                             >
-                              <div className="flex items-center justify-between gap-1">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  <GripVertical className="w-3.5 h-3.5 text-slate-400 cursor-grab shrink-0" />
-                                  <div
-                                    className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0"
-                                    style={{
-                                      backgroundColor:
-                                        editingExistingPartId === part.id
-                                          ? simulatedPreviewColor
-                                          : part.defaultColor,
-                                    }}
+                              {/* BARIS 1: Grip, Warna, Keterangan / Nama Layer (Input), Visibility, Hapus */}
+                              <div className="flex items-center gap-1.5 w-full">
+                                <span title="Geser urutan layer" className="cursor-grab shrink-0">
+                                  <GripVertical className="w-3.5 h-3.5 text-slate-400" />
+                                </span>
+                                <div
+                                  className="w-4 h-4 rounded-full border border-black/15 shrink-0 shadow-2xs"
+                                  style={{
+                                    backgroundColor:
+                                      editingExistingPartId === part.id
+                                        ? simulatedPreviewColor
+                                        : part.defaultColor,
+                                  }}
+                                  title={`Warna dasar: ${part.defaultColor}`}
+                                />
+
+                                {/* Input Keterangan / Nama Layer (Owner Mode: Bebas beri nama/keterangan layer) */}
+                                <div className="flex-1 min-w-0">
+                                  <input
+                                    type="text"
+                                    value={part.name || ''}
+                                    onFocus={() => pushDashboardSnapshot()}
+                                    onChange={(e) => handleUpdatePartNameDirectly(part.id, e.target.value)}
+                                    placeholder="Keterangan layer (misal: Kerah)..."
+                                    className={`w-full h-7 px-2 text-xs font-bold rounded-lg border transition-all ${
+                                      isTarget
+                                        ? 'bg-white border-indigo-400 text-indigo-950 focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600'
+                                        : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500'
+                                    }`}
+                                    title="Ketik keterangan atau nama layer bagian seragam ini"
                                   />
-                                  {renamingPartId === part.id ? (
-                                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                      <input
-                                        type="text"
-                                        value={renamingPartName}
-                                        onChange={(e) => setRenamingPartName(e.target.value)}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter') handleSavePartName(part.id)
-                                          if (e.key === 'Escape') setRenamingPartId(null)
-                                        }}
-                                        onBlur={() => handleSavePartName(part.id)}
-                                        autoFocus
-                                        className="h-6 px-1.5 text-xs font-bold rounded border border-indigo-500 bg-white text-slate-900 focus:outline-hidden w-28 shadow-2xs"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSavePartName(part.id)}
-                                        className="p-1 hover:bg-emerald-100 text-emerald-700 rounded cursor-pointer"
-                                        title="Simpan Nama Layer"
-                                      >
-                                        <Check className="w-3 h-3 stroke-[2.5]" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => setRenamingPartId(null)}
-                                        className="p-1 hover:bg-red-100 text-red-600 rounded cursor-pointer"
-                                        title="Batal"
-                                      >
-                                        <X className="w-3 h-3" />
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-1 group/partname min-w-0">
-                                      <span
-                                        onDoubleClick={() => handleStartRenamePart(part)}
-                                        className={`font-semibold truncate max-w-[105px] cursor-pointer hover:underline ${
-                                          isTarget ? 'text-indigo-900' : 'text-slate-800'
-                                        }`}
-                                        title={`${part.name} (Klik 2x atau pensil untuk ubah nama layer)`}
-                                      >
-                                        {part.name}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleStartRenamePart(part)}
-                                        className="opacity-0 group-hover/partname:opacity-100 p-0.5 text-slate-400 hover:text-indigo-600 rounded transition-opacity cursor-pointer shrink-0"
-                                        title="Ubah nama layer ini"
-                                      >
-                                        <Edit3 className="w-2.5 h-2.5" />
-                                      </button>
-                                    </div>
-                                  )}
-                                  {isTarget && (
-                                    <span className="text-[8px] px-1.5 py-0.2 rounded-full bg-cyan-100 text-cyan-800 font-extrabold border border-cyan-300 animate-pulse shrink-0">
-                                      Edit Aktif
-                                    </span>
-                                  )}
                                 </div>
 
-                                <div className="flex items-center gap-1 shrink-0">
-                                  {/* Defringe / Rapikan Tepi Button */}
+                                {isTarget && (
+                                  <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-cyan-100 text-cyan-800 font-extrabold border border-cyan-300 animate-pulse shrink-0">
+                                    Aktif
+                                  </span>
+                                )}
+
+                                {/* Visibility Toggle */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleTogglePartVisibility(part.id)}
+                                  className="p-1 hover:bg-slate-200/80 rounded-lg text-slate-500 hover:text-slate-900 cursor-pointer shrink-0"
+                                  title={isHidden ? 'Tampilkan Layer' : 'Sembunyikan Layer'}
+                                >
+                                  {isHidden ? (
+                                    <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                                  ) : (
+                                    <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                                  )}
+                                </button>
+
+                                {/* Delete Layer */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveColorPart(part.id)}
+                                  className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-lg cursor-pointer shrink-0"
+                                  title="Hapus Layer Bagian Ini"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              {/* BARIS 2: Toolbar Tindakan (Urutan Naik/Turun, Rapikan Tepi, Upload, Duplicate, Edit Masker) */}
+                              <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-slate-200/70 text-[10px]">
+                                <div className="flex items-center gap-1">
+                                  {/* Move Up / Down */}
+                                  <div className="flex items-center bg-white border border-slate-200 rounded-md p-0.5">
+                                    <button
+                                      type="button"
+                                      disabled={index === 0}
+                                      onClick={() => handleMovePart(part.id, 'up')}
+                                      className="p-0.5 text-slate-500 hover:text-slate-900 disabled:opacity-20 cursor-pointer"
+                                      title="Naikkan Urutan Layer"
+                                    >
+                                      <ChevronUp className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={index === arr.length - 1}
+                                      onClick={() => handleMovePart(part.id, 'down')}
+                                      className="p-0.5 text-slate-500 hover:text-slate-900 disabled:opacity-20 cursor-pointer"
+                                      title="Turunkan Urutan Layer"
+                                    >
+                                      <ChevronDown className="w-3 h-3" />
+                                    </button>
+                                  </div>
+
+                                  {/* Rapikan Tepi (Defringe) */}
                                   {hasMask && (
                                     <button
                                       type="button"
                                       onClick={() => handleDefringePartMask(part.id)}
-                                      className="px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[9px] font-bold border border-emerald-200 transition-colors cursor-pointer"
+                                      className="px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold border border-emerald-200 transition-colors cursor-pointer flex items-center gap-0.5"
                                       title="Rapikan tepi masker (hilangkan sisa garis tebal stroke)"
                                     >
-                                      ✨ Rapikan Tepi
-                                    </button>
-                                  )}
-
-                                  {/* Status Masker / Gambar Masker */}
-                                  {!hasMask && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleStartDrawingForSlot(part.id)}
-                                      className="px-1.5 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 text-[9px] font-bold border border-amber-200 transition-colors cursor-pointer"
-                                      title="Mulai gambar masker untuk slot ini"
-                                    >
-                                      ✏️ Gambar Masker
-                                    </button>
-                                  )}
-
-                                  {/* Move Up / Down */}
-                                  <button
-                                    type="button"
-                                    disabled={index === 0}
-                                    onClick={() => handleMovePart(part.id, 'up')}
-                                    className="p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
-                                    title="Geser ke Atas"
-                                  >
-                                    <ChevronUp className="w-3 h-3" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={index === arr.length - 1}
-                                    onClick={() => handleMovePart(part.id, 'down')}
-                                    className="p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
-                                    title="Geser ke Bawah"
-                                  >
-                                    <ChevronDown className="w-3 h-3" />
-                                  </button>
-
-                                  {/* Visibility Toggle */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleTogglePartVisibility(part.id)}
-                                    className="p-0.5 text-slate-400 hover:text-slate-700 cursor-pointer"
-                                    title={isHidden ? 'Tampilkan Layer' : 'Sembunyikan Layer'}
-                                  >
-                                    {isHidden ? (
-                                      <EyeOff className="w-3 h-3 text-slate-400" />
-                                    ) : (
-                                      <Eye className="w-3 h-3 text-indigo-600" />
-                                    )}
-                                  </button>
-
-                                  {/* Edit / Tambah Masker di Kanvas */}
-                                  {hasMask && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (isTarget) {
-                                          commitCurrentMaskToPart()
-                                        } else {
-                                          handleLoadPartMaskToCanvas(part)
-                                        }
-                                      }}
-                                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-2xs ${
-                                        isTarget
-                                          ? 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black'
-                                          : 'bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-200 hover:border-indigo-600'
-                                      }`}
-                                      title={isTarget ? 'Simpan perubahan masker sekarang' : 'Edit dan tambah area pewarnaan masker ini (bisa pakai kuas & pen tool)'}
-                                    >
-                                      {isTarget ? (
-                                        <>
-                                          <Check className="w-3 h-3 stroke-[3]" />
-                                          <span>Simpan</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Edit3 className="w-3 h-3" />
-                                          <span>Edit Masker</span>
-                                        </>
-                                      )}
+                                      <span>✨ Rapikan</span>
                                     </button>
                                   )}
 
@@ -3273,7 +3223,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => triggerPartMaskUpload(part.id)}
-                                    className="p-0.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+                                    className="p-1 bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-800 border border-slate-200 rounded-md cursor-pointer transition-colors"
                                     title="Upload file PNG masker transparan"
                                   >
                                     <Upload className="w-3 h-3" />
@@ -3283,21 +3233,58 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => handleDuplicatePart(part.id)}
-                                    className="p-0.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+                                    className="p-1 bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-800 border border-slate-200 rounded-md cursor-pointer transition-colors"
                                     title="Duplikat Layer"
                                   >
                                     <Copy className="w-3 h-3" />
                                   </button>
+                                </div>
 
-                                  {/* Delete */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveColorPart(part.id)}
-                                    className="p-0.5 text-red-400 hover:text-red-600 cursor-pointer"
-                                    title="Hapus Layer"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
+                                <div className="flex items-center gap-1">
+                                  {!hasMask ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStartDrawingForSlot(part.id)}
+                                      className="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                                      title="Mulai gambar masker untuk slot ini"
+                                    >
+                                      <Edit3 className="w-3 h-3 stroke-[2.5]" />
+                                      <span>Gambar Masker</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (isTarget) {
+                                          commitCurrentMaskToPart()
+                                        } else {
+                                          handleLoadPartMaskToCanvas(part)
+                                        }
+                                      }}
+                                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-2xs ${
+                                        isTarget
+                                          ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black'
+                                          : 'bg-indigo-600 hover:bg-indigo-700 text-white font-bold'
+                                      }`}
+                                      title={
+                                        isTarget
+                                          ? 'Simpan perubahan masker sekarang'
+                                          : 'Edit dan tambah area pewarnaan masker ini (pakai kuas / pen tool)'
+                                      }
+                                    >
+                                      {isTarget ? (
+                                        <>
+                                          <Check className="w-3 h-3 stroke-[3]" />
+                                          <span>Simpan Masker</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Edit3 className="w-3 h-3" />
+                                          <span>Edit Masker</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>

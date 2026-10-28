@@ -461,6 +461,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       const key = getPartMatchKey(part, allParts)
       const existing = groupsMap.get(key)
       const currentColor = getPartColor(part)
+      const cleanPartName = (part.name || '').trim()
 
       if (existing) {
         existing.parts.push(part)
@@ -470,10 +471,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         if (partColors[part.id]) {
           existing.currentColor = partColors[part.id]
         }
+        // Prioritaskan nama spesifik dari Owner Mode jika ada
+        const existingIsGeneric = !existing.name || /^bagian\s*\d+$/i.test(existing.name.trim())
+        const partIsGeneric = !cleanPartName || /^bagian\s*\d+$/i.test(cleanPartName)
+        if (cleanPartName && (existingIsGeneric || !partIsGeneric)) {
+          existing.name = cleanPartName
+        }
       } else {
         groupsMap.set(key, {
           key,
-          name: part.name || 'Bagian 1',
+          name: cleanPartName || `Bagian ${groupsMap.size + 1}`,
           defaultColor: part.defaultColor || '#1e3a8a',
           currentColor,
           primaryPartId: part.id,
@@ -3296,42 +3303,29 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                                   </button>
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-1.5">
-                                  <div className="flex items-center gap-1 group/partname min-w-0">
-                                    <span
-                                      onDoubleClick={(e) => {
-                                        e.stopPropagation()
-                                        handleStartRenameGroup(group.key, group.name)
-                                      }}
-                                      className="font-extrabold text-xs text-slate-900 truncate cursor-pointer hover:underline"
-                                      title={`${group.name} (Klik 2x atau pensil untuk ganti nama layer)`}
-                                    >
-                                      {group.name}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleStartRenameGroup(group.key, group.name)
-                                      }}
-                                      className="opacity-0 group-hover/partname:opacity-100 p-0.5 text-slate-400 hover:text-indigo-600 rounded transition-opacity cursor-pointer shrink-0"
-                                      title="Ganti nama layer bagian ini"
-                                    >
-                                      <Edit3 className="w-2.5 h-2.5" />
-                                    </button>
-                                  </div>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span
+                                    onDoubleClick={(e) => {
+                                      e.stopPropagation()
+                                      handleStartRenameGroup(group.key, group.name)
+                                    }}
+                                    className="font-black text-xs text-slate-900 truncate cursor-pointer hover:underline"
+                                    title={`${group.name} (Klik 2x untuk ganti nama layer)`}
+                                  >
+                                    {group.name}
+                                  </span>
                                   {group.sides.length === 4 ? (
-                                    <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 shrink-0">
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 shrink-0">
                                       4 Sisi
                                     </span>
                                   ) : (
-                                    <span className="text-[9px] px-1 py-0.2 rounded bg-slate-200 text-slate-600 font-medium shrink-0">
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 font-medium shrink-0">
                                       {group.sides.length} Sisi
                                     </span>
                                   )}
                                 </div>
                               )}
-                              <div className="text-[10px] text-slate-500 truncate flex items-center gap-1">
+                              <div className="text-[10px] text-slate-500 truncate flex items-center gap-1 mt-0.5">
                                 {swatchInfo ? (
                                   <span className="font-medium text-slate-700">
                                     {swatchInfo.code} • {swatchInfo.name}
@@ -3343,36 +3337,19 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             </div>
                           </div>
 
-                          {/* Tombol Aksi: Edit Masker & Pilih Warna */}
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                const currentSidePart =
-                                  group.parts.find((p) => p.side === currentSide) || group.parts[0]
-                                if (currentSidePart) {
-                                  onOpenDashboard(currentSidePart.id, currentSide)
-                                }
-                              }}
-                              className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-200 hover:border-indigo-600 text-[10px] font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
-                              title={`Edit masker / bentuk pewarnaan ${group.name} di sudut ${currentSide}`}
-                            >
-                              <Edit3 className="w-3 h-3" />
-                              <span>Edit Masker</span>
-                            </button>
-
+                          {/* Tombol Aksi: Pilih Warna (Public Studio Canvas: Hanya Nama, Layer & Warna - Edit Masker hanya wewenang Owner) */}
+                          <div className="flex items-center shrink-0">
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 setActiveColorPickerGroupKey(group.key)
                               }}
-                              className="px-2 py-1 rounded-lg bg-white group-hover:bg-[#ff5e00] text-slate-600 group-hover:text-white border border-slate-200 group-hover:border-[#ff5e00] text-[10px] font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
+                              className="px-2.5 py-1.5 rounded-lg bg-white group-hover:bg-[#ff5e00] text-slate-700 group-hover:text-white border border-slate-200 group-hover:border-[#ff5e00] text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
                               title="Pilih warna kain dari database katalog resmi"
                             >
-                              <Palette className="w-3 h-3" />
-                              <span>Warna</span>
+                              <Palette className="w-3.5 h-3.5 text-[#ff5e00] group-hover:text-white transition-colors" />
+                              <span>Pilih Warna</span>
                             </button>
                           </div>
                         </div>
@@ -3689,30 +3666,14 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={() => {
-                      const currentSidePart =
-                        activeGroup.parts.find((p) => p.side === currentSide) || activeGroup.parts[0]
-                      setActiveColorPickerGroupKey(null)
-                      if (currentSidePart) {
-                        onOpenDashboard(currentSidePart.id, currentSide)
-                      }
-                    }}
-                    className="text-[10px] font-bold text-indigo-700 hover:text-white flex items-center gap-1 cursor-pointer bg-indigo-50 hover:bg-indigo-600 px-2.5 py-1 rounded-lg border border-indigo-200 hover:border-indigo-600 transition-colors shadow-2xs"
-                    title={`Edit bentuk/area masker ${activeGroup.name} dengan Kuas atau Pen Tool`}
-                  >
-                    <Edit3 className="w-3 h-3" />
-                    <span>Edit Masker</span>
-                  </button>
-                  <button
-                    type="button"
                     onClick={handleResetPartColors}
-                    className="text-[10px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer bg-white px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors shadow-2xs"
+                    className="text-[10px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors shadow-2xs"
                     title="Kembalikan semua bagian seragam ke warna bawaan awal"
                   >
-                    <RotateCcw className="w-3 h-3 text-slate-400" />
+                    <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
                     <span>Reset Bawaan</span>
                   </button>
-                  <label className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1.5 cursor-pointer shadow-2xs">
+                  <label className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-full flex items-center gap-1.5 cursor-pointer shadow-2xs">
                     <input
                       type="checkbox"
                       checked={syncColorPartsAcrossSides}
