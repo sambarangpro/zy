@@ -373,7 +373,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   }, [activeMockup?.printZones, currentSide])
 
   // Proyeksi Otomatis Lengan Kiri & Kanan Lintas Sudut Pandang (Depan, Samping, Belakang)
-  // Satu kali upload di sisi mana saja langsung otomatis tampil di tampak depan secara menyamping 3D realistis!
+  // Satu kali upload di sisi mana saja langsung otomatis tampil di tampak depan secara menyamping 3D realistis & rapi!
   const sleeveProjectedGraphics = useMemo(() => {
     if (currentSide !== 'front' && currentSide !== 'back') {
       return []
@@ -386,10 +386,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       isViewerRight: boolean
       x: number
       y: number
-      scale: number
-      angleY: number
-      angleZ: number
-      skewY: number
+      scaleX: number
+      scaleY: number
     }> = []
 
     graphics.forEach((g) => {
@@ -423,6 +421,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         const anchorX = Math.max(minX, Math.min(maxX, baseX + (isViewerRight ? -offsetX : offsetX)))
         const anchorY = Math.max(18, Math.min(62, baseY + offsetY))
 
+        const baseScale = g.scale || 0.8
+        const flipX = g.scaleX || 1
+        const flipY = g.scaleY || 1
+
         projected.push({
           graphic: g,
           sourceSide: 'left',
@@ -430,11 +432,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           isViewerRight,
           x: Math.round(anchorX * 10) / 10,
           y: Math.round(anchorY * 10) / 10,
-          scale: g.scale * 0.78,
-          // Sudut perspektif 3D natural, rapi, dan proporsional (tidak gepeng ekstrem)
-          angleY: isViewerRight ? -28 : 28,
-          angleZ: isViewerRight ? 7 : -7,
-          skewY: isViewerRight ? 3 : -3,
+          // Kompresi horizontal tampak menyamping yang rapi, simetris, dan tegak (tidak miring/penyok)
+          scaleX: Number((baseScale * flipX * 0.62).toFixed(3)),
+          scaleY: Number((baseScale * flipY * 0.86).toFixed(3)),
         })
       }
 
@@ -466,6 +466,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         const anchorX = Math.max(minX, Math.min(maxX, baseX + (isViewerRight ? -offsetX : offsetX)))
         const anchorY = Math.max(18, Math.min(62, baseY + offsetY))
 
+        const baseScale = g.scale || 0.8
+        const flipX = g.scaleX || 1
+        const flipY = g.scaleY || 1
+
         projected.push({
           graphic: g,
           sourceSide: 'right',
@@ -473,11 +477,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           isViewerRight,
           x: Math.round(anchorX * 10) / 10,
           y: Math.round(anchorY * 10) / 10,
-          scale: g.scale * 0.78,
-          // Sudut perspektif 3D natural, rapi, dan proporsional (tidak gepeng ekstrem)
-          angleY: isViewerRight ? -28 : 28,
-          angleZ: isViewerRight ? 7 : -7,
-          skewY: isViewerRight ? 3 : -3,
+          // Kompresi horizontal tampak menyamping yang rapi, simetris, dan tegak (tidak miring/penyok)
+          scaleX: Number((baseScale * flipX * 0.62).toFixed(3)),
+          scaleY: Number((baseScale * flipY * 0.86).toFixed(3)),
         })
       }
     })
@@ -1713,19 +1715,17 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         }
       })
 
-      // 2. Gambar Desain Proyeksi 3D Lengan (Menyamping Realistis di Tampak Depan / Belakang)
+      // 2. Gambar Desain Proyeksi Lengan (Menyamping Realistis di Tampak Depan / Belakang)
       visibleProjected.forEach((proj) => {
         const posX = (proj.x / 100) * canvas.width
         const posY = (proj.y / 100) * canvas.height
-        const rotRad = ((proj.angleZ + (proj.graphic.rotation || 0)) * Math.PI) / 180
-        const skewRad = (proj.skewY * Math.PI) / 180
-        const scaleX = proj.scale * Math.cos((proj.angleY * Math.PI) / 180)
-        const scaleY = proj.scale
+        const rotRad = ((proj.graphic.rotation || 0) * Math.PI) / 180
+        const scaleX = proj.scaleX
+        const scaleY = proj.scaleY
 
         ctx.save()
         ctx.translate(posX, posY)
         ctx.rotate(rotRad)
-        ctx.transform(1, Math.tan(skewRad), 0, 1, 0, 0)
         ctx.scale(scaleX, scaleY)
 
         if (proj.graphic.type === 'text') {
@@ -1745,34 +1745,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           img.onload = () => {
             const w = 240
             const h = (img.height / img.width) * w
-
-            // Masking gradien kain silinder khusus pada piksel gambar (tanpa bocor keluar)
-            const off = document.createElement('canvas')
-            off.width = w
-            off.height = h
-            const offCtx = off.getContext('2d')
-            if (offCtx) {
-              offCtx.drawImage(img, 0, 0, w, h)
-              offCtx.globalCompositeOperation = 'source-atop'
-              const grad = offCtx.createLinearGradient(0, 0, w, 0)
-              if (proj.isViewerRight) {
-                grad.addColorStop(0, 'rgba(0,0,0,0.3)')
-                grad.addColorStop(0.35, 'rgba(0,0,0,0.05)')
-                grad.addColorStop(0.7, 'rgba(255,255,255,0.15)')
-                grad.addColorStop(1, 'rgba(0,0,0,0.25)')
-              } else {
-                grad.addColorStop(0, 'rgba(0,0,0,0.25)')
-                grad.addColorStop(0.35, 'rgba(255,255,255,0.15)')
-                grad.addColorStop(0.7, 'rgba(0,0,0,0.05)')
-                grad.addColorStop(1, 'rgba(0,0,0,0.3)')
-              }
-              offCtx.fillStyle = grad
-              offCtx.fillRect(0, 0, w, h)
-              ctx.drawImage(off, -w / 2, -h / 2, w, h)
-            } else {
-              ctx.drawImage(img, -w / 2, -h / 2, w, h)
-            }
-
+            ctx.drawImage(img, -w / 2, -h / 2, w, h)
             ctx.restore()
             checkFinished()
           }
@@ -3807,44 +3780,29 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                     )
                   })}
 
-                  {/* 4.5. LIVE 3D PERSPECTIVE SLEEVE PROJECTIONS (Tampak Menyamping Realistis) */}
+                  {/* 4.5. LIVE 3D SLEEVE PROJECTIONS (Tampak Menyamping Rapi & Proporsional) */}
                   {sleeveProjectedGraphics.map((proj) => {
                     const isSelected = proj.graphic.id === selectedGraphicId
 
                     return (
-                      <div
-                        key={`proj-${proj.graphic.id}`}
-                        onMouseDown={(e) => handleStartMove(e, proj.graphic.id)}
-                        style={{
-                          left: `${proj.x}%`,
-                          top: `${proj.y}%`,
-                          transform: `translate(-50%, -50%) perspective(450px) rotateY(${proj.angleY}deg) rotateZ(${proj.angleZ + (proj.graphic.rotation || 0)}deg) skewY(${proj.skewY}deg) scale(${proj.scale})`,
-                          transformOrigin: 'center center',
-                          zIndex: isSelected ? 40 : 25,
-                          opacity: (proj.graphic.opacity !== undefined ? proj.graphic.opacity : 100) / 100,
-                          mixBlendMode: proj.graphic.blendMode || 'normal',
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedGraphicId(proj.graphic.id)
-                        }}
-                        className={`absolute select-none pointer-events-auto cursor-grab active:cursor-grabbing group/proj transition-all duration-150 ${
-                          isSelected ? 'ring-2 ring-[#ff5e00] rounded-lg p-0.5 shadow-md' : 'hover:ring-1 hover:ring-orange-400/60 rounded'
-                        }`}
-                        title={`Proyeksi Lengan ${proj.isWearerLeft ? 'Kiri' : 'Kanan'} (Tampak Menyamping) - Drag untuk geser, atau gunakan tombol di toolbar`}
-                      >
-                        {/* Floating Action Quickbar when Selected in Projected View */}
+                      <React.Fragment key={`proj-wrap-${proj.graphic.id}`}>
+                        {/* A. FLOATING ACTION QUICKBAR - BEBAS TRANSFORMASI (100% DATAR & RAPI) */}
                         {isSelected && (
                           <div
                             onMouseDown={(e) => e.stopPropagation()}
                             style={{
-                              transform: `translate(-50%, 0) rotate(-${proj.angleZ + (proj.graphic.rotation || 0)}deg)`,
-                              transformOrigin: 'center bottom',
+                              left: `${proj.x}%`,
+                              top: `${proj.y}%`,
+                              transform: 'translate(-50%, -100%) translateY(-54px)',
+                              zIndex: 60,
                             }}
-                            className="absolute -top-15 left-1/2 flex items-center gap-1.5 bg-slate-900 text-white px-2.5 py-1.5 rounded-xl text-[10px] shadow-2xl whitespace-nowrap z-50 border border-slate-800"
+                            className="absolute flex items-center gap-1.5 bg-slate-900/95 backdrop-blur-md text-white px-3 py-1.5 rounded-xl text-[10px] shadow-2xl whitespace-nowrap border border-slate-700/80 pointer-events-auto select-none"
                           >
                             <div className="flex items-center gap-1 text-[9px] font-bold text-amber-300 mr-0.5">
                               <span>🔗 Lengan {proj.isWearerLeft ? 'Kiri' : 'Kanan'}</span>
+                              <span className="text-[8px] bg-amber-500/30 text-amber-300 px-1 py-0.2 rounded font-mono">
+                                3D
+                              </span>
                             </div>
 
                             {/* Technique Switch: Bordir vs Sablon */}
@@ -3859,19 +3817,19 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                                 )
                               }}
                               title={`Teknik saat ini: ${proj.graphic.technique === 'bordir' ? '🪡 Bordir Komputer' : '🎨 Sablon DTF'}. Klik untuk ubah mode.`}
-                              className={`px-1.5 py-0.5 rounded font-bold text-[9px] flex items-center gap-1 cursor-pointer transition-colors ${
+                              className={`px-2 py-0.5 rounded font-bold text-[9px] flex items-center gap-1 cursor-pointer transition-colors ${
                                 proj.graphic.technique === 'bordir'
-                                  ? 'bg-amber-500/40 text-amber-300 hover:bg-amber-500/60'
-                                  : 'bg-indigo-500/40 text-indigo-300 hover:bg-indigo-500/60'
+                                  ? 'bg-amber-500/40 text-amber-200 hover:bg-amber-500/60'
+                                  : 'bg-indigo-500/40 text-indigo-200 hover:bg-indigo-500/60'
                               }`}
                             >
                               <span>{proj.graphic.technique === 'bordir' ? '🪡 Bordir' : '🎨 Sablon'}</span>
                             </button>
 
-                            <div className="w-px h-3.5 bg-slate-700" />
+                            <div className="w-px h-3.5 bg-slate-700 mx-0.5" />
 
                             {/* Precise Nudge Arrow Controls */}
-                            <div className="flex items-center gap-0.5 bg-slate-800/90 p-0.5 rounded-lg border border-slate-700">
+                            <div className="flex items-center gap-0.5 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
                               <button
                                 type="button"
                                 onClick={() => handleNudgeGraphic(proj.graphic.id, 'left')}
@@ -3907,21 +3865,21 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                               <button
                                 type="button"
                                 onClick={() => handleResetSleevePosition(proj.graphic.id)}
-                                className="px-1 py-0.5 hover:bg-slate-700 text-slate-400 hover:text-amber-300 rounded font-bold text-[8.5px] cursor-pointer"
+                                className="px-1.5 py-0.5 hover:bg-slate-700 text-slate-400 hover:text-amber-300 rounded font-bold text-[8.5px] cursor-pointer"
                                 title="Kembalikan posisi ke titik tengah lengan (50, 35)"
                               >
                                 Reset
                               </button>
                             </div>
 
-                            <div className="w-px h-3.5 bg-slate-700" />
+                            <div className="w-px h-3.5 bg-slate-700 mx-0.5" />
 
                             {/* Jump to Sleeve View to edit directly */}
                             <button
                               type="button"
                               onClick={() => setCurrentSide(proj.graphic.side)}
                               title="Buka Tampak Samping untuk edit langsung secara datar"
-                              className="px-2 py-0.5 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded font-bold text-[9px] flex items-center gap-1 cursor-pointer"
+                              className="px-2 py-0.5 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded font-bold text-[9px] flex items-center gap-1 cursor-pointer shadow-xs"
                             >
                               <span>Buka Samping →</span>
                             </button>
@@ -3937,104 +3895,111 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           </div>
                         )}
 
-                        {/* Visual Content: Image with Bordir / Sablon */}
-                        <div className="relative inline-block select-none">
-                          <img
-                            src={proj.graphic.content}
-                            alt="projected-sleeve-logo"
-                            className="max-w-[140px] max-h-[140px] object-contain select-none pointer-events-none block"
-                            style={{
-                              filter:
-                                proj.graphic.technique === 'bordir'
-                                  ? 'drop-shadow(0 1px 1px rgba(0,0,0,0.7)) drop-shadow(1px 3px 5px rgba(0,0,0,0.5)) drop-shadow(-1px -1px 0px rgba(255,255,255,0.85)) contrast(1.1) saturate(1.18)'
-                                  : 'drop-shadow(0 1.5px 2px rgba(0,0,0,0.35))',
-                            }}
-                          />
+                        {/* B. VISUAL ELEMENT - FORESHORTENED SLEEVE GRAPHIC */}
+                        <div
+                          key={`proj-${proj.graphic.id}`}
+                          onMouseDown={(e) => handleStartMove(e, proj.graphic.id)}
+                          style={{
+                            left: `${proj.x}%`,
+                            top: `${proj.y}%`,
+                            transform: `translate(-50%, -50%) rotate(${proj.graphic.rotation || 0}deg) scale(${proj.scaleX}, ${proj.scaleY})`,
+                            transformOrigin: 'center center',
+                            zIndex: isSelected ? 40 : 25,
+                            opacity: (proj.graphic.opacity !== undefined ? proj.graphic.opacity : 100) / 100,
+                            mixBlendMode: proj.graphic.blendMode || 'normal',
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedGraphicId(proj.graphic.id)
+                          }}
+                          className={`absolute select-none pointer-events-auto cursor-grab active:cursor-grabbing group/proj transition-all duration-150 ${
+                            isSelected
+                              ? 'ring-2 ring-[#ff5e00] rounded-xl p-1 shadow-md bg-orange-500/5'
+                              : 'hover:ring-1 hover:ring-orange-400/60 rounded-lg'
+                          }`}
+                          title={`Desain Lengan ${proj.isWearerLeft ? 'Kiri' : 'Kanan'} (Tampak Menyamping) - Klik untuk pilih, drag untuk geser`}
+                        >
+                          {/* Visual Content: Image with Bordir / Sablon */}
+                          <div className="relative inline-block select-none">
+                            <img
+                              src={proj.graphic.content}
+                              alt="projected-sleeve-logo"
+                              className="max-w-[140px] max-h-[140px] object-contain select-none pointer-events-none block"
+                              style={{
+                                filter:
+                                  proj.graphic.technique === 'bordir'
+                                    ? 'drop-shadow(0 1px 1px rgba(0,0,0,0.65)) drop-shadow(1px 2px 4px rgba(0,0,0,0.4)) drop-shadow(-1px -1px 0px rgba(255,255,255,0.85)) contrast(1.1) saturate(1.15)'
+                                    : 'drop-shadow(0 2px 3px rgba(0,0,0,0.3))',
+                              }}
+                            />
 
-                          {/* Realistic 3D Computer Embroidery Overlay (Bordir) */}
-                          {proj.graphic.technique === 'bordir' && (
-                            <>
-                              <div
-                                className="absolute inset-0 pointer-events-none"
-                                style={{
-                                  WebkitMaskImage: `url("${proj.graphic.content}")`,
-                                  maskImage: `url("${proj.graphic.content}")`,
-                                  WebkitMaskSize: 'contain',
-                                  maskSize: 'contain',
-                                  WebkitMaskRepeat: 'no-repeat',
-                                  maskRepeat: 'no-repeat',
-                                  WebkitMaskPosition: 'center',
-                                  maskPosition: 'center',
-                                  backgroundImage:
-                                    'repeating-linear-gradient(55deg, rgba(255,255,255,0.42) 0px, rgba(255,255,255,0.42) 1.2px, transparent 1.2px, transparent 2.4px, rgba(0,0,0,0.38) 2.4px, rgba(0,0,0,0.38) 3.6px, transparent 3.6px, transparent 4.8px)',
-                                  mixBlendMode: 'overlay',
-                                }}
-                              />
-                              <div
-                                className="absolute inset-0 pointer-events-none opacity-55"
-                                style={{
-                                  WebkitMaskImage: `url("${proj.graphic.content}")`,
-                                  maskImage: `url("${proj.graphic.content}")`,
-                                  WebkitMaskSize: 'contain',
-                                  maskSize: 'contain',
-                                  WebkitMaskRepeat: 'no-repeat',
-                                  maskRepeat: 'no-repeat',
-                                  WebkitMaskPosition: 'center',
-                                  maskPosition: 'center',
-                                  backgroundImage:
-                                    'repeating-linear-gradient(-35deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 1.5px, transparent 1.5px, transparent 6px)',
-                                  mixBlendMode: 'soft-light',
-                                }}
-                              />
-                            </>
-                          )}
+                            {/* Realistic 3D Computer Embroidery Overlay (Bordir) */}
+                            {proj.graphic.technique === 'bordir' && (
+                              <>
+                                <div
+                                  className="absolute inset-0 pointer-events-none"
+                                  style={{
+                                    WebkitMaskImage: `url("${proj.graphic.content}")`,
+                                    maskImage: `url("${proj.graphic.content}")`,
+                                    WebkitMaskSize: 'contain',
+                                    maskSize: 'contain',
+                                    WebkitMaskRepeat: 'no-repeat',
+                                    maskRepeat: 'no-repeat',
+                                    WebkitMaskPosition: 'center',
+                                    maskPosition: 'center',
+                                    backgroundImage:
+                                      'repeating-linear-gradient(55deg, rgba(255,255,255,0.42) 0px, rgba(255,255,255,0.42) 1.2px, transparent 1.2px, transparent 2.4px, rgba(0,0,0,0.38) 2.4px, rgba(0,0,0,0.38) 3.6px, transparent 3.6px, transparent 4.8px)',
+                                    mixBlendMode: 'overlay',
+                                  }}
+                                />
+                                <div
+                                  className="absolute inset-0 pointer-events-none opacity-55"
+                                  style={{
+                                    WebkitMaskImage: `url("${proj.graphic.content}")`,
+                                    maskImage: `url("${proj.graphic.content}")`,
+                                    WebkitMaskSize: 'contain',
+                                    maskSize: 'contain',
+                                    WebkitMaskRepeat: 'no-repeat',
+                                    maskRepeat: 'no-repeat',
+                                    WebkitMaskPosition: 'center',
+                                    maskPosition: 'center',
+                                    backgroundImage:
+                                      'repeating-linear-gradient(-35deg, rgba(255,255,255,0.35) 0px, rgba(255,255,255,0.35) 1.5px, transparent 1.5px, transparent 6px)',
+                                    mixBlendMode: 'soft-light',
+                                  }}
+                                />
+                              </>
+                            )}
 
-                          {/* Realistic 3D Cylindrical Ambient Shading (Masked tightly to logo alpha) */}
-                          <div
-                            className="absolute inset-0 pointer-events-none"
-                            style={{
-                              WebkitMaskImage: `url("${proj.graphic.content}")`,
-                              maskImage: `url("${proj.graphic.content}")`,
-                              WebkitMaskSize: 'contain',
-                              maskSize: 'contain',
-                              WebkitMaskRepeat: 'no-repeat',
-                              maskRepeat: 'no-repeat',
-                              WebkitMaskPosition: 'center',
-                              maskPosition: 'center',
-                              background: proj.isViewerRight
-                                ? 'linear-gradient(to right, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.05) 35%, rgba(255,255,255,0.15) 70%, rgba(0,0,0,0.25) 100%)'
-                                : 'linear-gradient(to left, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.05) 35%, rgba(255,255,255,0.15) 70%, rgba(0,0,0,0.25) 100%)',
-                              mixBlendMode: 'multiply',
-                            }}
-                          />
-                          {/* Ambient Sheen Along Sleeve Ridge (Masked tightly to logo alpha) */}
-                          <div
-                            className="absolute inset-0 pointer-events-none opacity-25"
-                            style={{
-                              WebkitMaskImage: `url("${proj.graphic.content}")`,
-                              maskImage: `url("${proj.graphic.content}")`,
-                              WebkitMaskSize: 'contain',
-                              maskSize: 'contain',
-                              WebkitMaskRepeat: 'no-repeat',
-                              maskRepeat: 'no-repeat',
-                              WebkitMaskPosition: 'center',
-                              maskPosition: 'center',
-                              background: proj.isViewerRight
-                                ? 'linear-gradient(to right, transparent 35%, rgba(255,255,255,0.4) 55%, transparent 75%)'
-                                : 'linear-gradient(to left, transparent 35%, rgba(255,255,255,0.4) 55%, transparent 75%)',
-                              mixBlendMode: 'screen',
-                            }}
-                          />
-                        </div>
-
-                        {/* Mini Hover Pill when not selected */}
-                        {!isSelected && (
-                          <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 opacity-0 group-hover/proj:opacity-100 transition-opacity bg-slate-900/90 text-white px-2 py-0.5 rounded-full text-[8.5px] font-bold shadow-lg border border-slate-700 whitespace-nowrap pointer-events-auto flex items-center gap-1 z-30">
-                            <span className="text-[#ff5e00]">🔗 Lengan {proj.isWearerLeft ? 'Kiri' : 'Kanan'}</span>
-                            <span className="text-slate-400">• Menyamping</span>
+                            {/* Soft Cylindrical Highlight Sheen on fabric curve (NO dark dirty shadow) */}
+                            <div
+                              className="absolute inset-0 pointer-events-none opacity-20"
+                              style={{
+                                WebkitMaskImage: `url("${proj.graphic.content}")`,
+                                maskImage: `url("${proj.graphic.content}")`,
+                                WebkitMaskSize: 'contain',
+                                maskSize: 'contain',
+                                WebkitMaskRepeat: 'no-repeat',
+                                maskRepeat: 'no-repeat',
+                                WebkitMaskPosition: 'center',
+                                maskPosition: 'center',
+                                background: proj.isViewerRight
+                                  ? 'linear-gradient(to right, transparent 30%, rgba(255,255,255,0.6) 65%, transparent 85%)'
+                                  : 'linear-gradient(to left, transparent 30%, rgba(255,255,255,0.6) 65%, transparent 85%)',
+                                mixBlendMode: 'screen',
+                              }}
+                            />
                           </div>
-                        )}
-                      </div>
+
+                          {/* Mini Hover Pill when not selected */}
+                          {!isSelected && (
+                            <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 opacity-0 group-hover/proj:opacity-100 transition-opacity bg-slate-900/90 text-white px-2 py-0.5 rounded-full text-[8.5px] font-bold shadow-lg border border-slate-700 whitespace-nowrap pointer-events-auto flex items-center gap-1 z-30">
+                              <span className="text-[#ff5e00]">🔗 Lengan {proj.isWearerLeft ? 'Kiri' : 'Kanan'}</span>
+                              <span className="text-slate-400">• Menyamping</span>
+                            </div>
+                          )}
+                        </div>
+                      </React.Fragment>
                     )
                   })}
                 </div>
