@@ -71,6 +71,11 @@ interface CanvasCustomizerProps {
   onMockupUpdate?: (updatedMockup: MockupTemplate) => void
 }
 
+// Emblem Bordir Bendera Indonesia Standar PDH Nasional (dengan bordir tepi dan jahitan benang emas realistis)
+export const INDONESIA_FLAG_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" width="96" height="64"><rect x="2" y="2" width="92" height="60" rx="4" fill="#0f172a" stroke="#d97706" stroke-width="2.5"/><rect x="4" y="4" width="88" height="28" rx="1.5" fill="#dc2626"/><rect x="4" y="32" width="88" height="28" rx="1.5" fill="#f8fafc"/><rect x="5.5" y="5.5" width="85" height="53" rx="2" fill="none" stroke="#fbbf24" stroke-width="0.9" stroke-dasharray="2.5 1.5"/></svg>`
+
+export const INDONESIA_FLAG_DATA_URL = `data:image/svg+xml;utf8,${encodeURIComponent(INDONESIA_FLAG_SVG)}`
+
 export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   activeMockup,
   graphics,
@@ -1165,20 +1170,135 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     return sum + calc.price
   }, 0)
 
+  // Helper: Deteksi apakah Bendera Indonesia sudah terpasang di seragam
+  const indonesianFlag = graphics.find(
+    (g) =>
+      g.id.startsWith('flag_id_') ||
+      (g.label && g.label.toLowerCase().includes('bendera')) ||
+      (g.label && g.label.toLowerCase().includes('merah putih'))
+  )
+
+  const flagLocation: 'sleeve' | 'chest' | null = indonesianFlag
+    ? indonesianFlag.side === 'right' ||
+      (indonesianFlag.label && indonesianFlag.label.toLowerCase().includes('bahu')) ||
+      (indonesianFlag.label && indonesianFlag.label.toLowerCase().includes('lengan'))
+      ? 'sleeve'
+      : 'chest'
+    : null
+
+  // Pasang atau Pindahkan Bendera Indonesia ke Bahu Kanan atau Dada Kanan (Standar PDH)
+  const handleApplyIndonesianFlag = (targetLocation: 'sleeve' | 'chest') => {
+    let targetSide: ViewSide = 'right'
+    let targetX = 50
+    let targetY = 35
+    let targetScale = 0.72
+    let rotX = 0
+    let rotY = 0
+    let rotZ = 0
+    let label = 'Bendera Indonesia (Bahu Kanan)'
+
+    if (targetLocation === 'chest') {
+      targetSide = 'front'
+      const chestZone = activeMockup?.printZones?.find(
+        (z) => z.side === 'front' && (z.name.toLowerCase().includes('dada kanan') || (z.x < 45 && z.x > 15))
+      )
+      targetX = chestZone ? chestZone.x : 31
+      targetY = chestZone ? chestZone.y : 28
+      rotX = chestZone?.rotationX || 0
+      rotY = chestZone?.rotationY !== undefined ? chestZone.rotationY : -4
+      rotZ = chestZone?.rotationZ !== undefined ? chestZone.rotationZ : -7
+      targetScale = 0.52
+      label = 'Bendera Indonesia (Dada Kanan)'
+      if (currentSide !== 'front') {
+        setCurrentSide('front')
+      }
+    } else {
+      targetSide = 'right'
+      const sleeveZone = activeMockup?.printZones?.find(
+        (z) => z.side === 'right' || z.name.toLowerCase().includes('lengan kanan')
+      )
+      targetX = sleeveZone ? sleeveZone.x : 50
+      targetY = sleeveZone ? sleeveZone.y : 35
+      targetScale = 0.72
+      label = 'Bendera Indonesia (Bahu Kanan)'
+    }
+
+    const calc = calculateGraphicPrice(targetScale)
+
+    if (indonesianFlag) {
+      const updated = graphics.map((g) => {
+        if (g.id === indonesianFlag.id) {
+          return {
+            ...g,
+            side: targetSide,
+            content: INDONESIA_FLAG_DATA_URL,
+            x: targetX,
+            y: targetY,
+            scale: targetScale,
+            rotation: rotZ,
+            rotationX: rotX,
+            rotationY: rotY,
+            rotationZ: rotZ,
+            enableAutoClipping: true,
+            technique: 'bordir' as const,
+            label,
+            calculatedPrice: calc.price,
+            sizeCategory: calc.sizeCategory,
+          }
+        }
+        return g
+      })
+      updateGraphicsWithHistory(updated)
+      setSelectedGraphicId(indonesianFlag.id)
+    } else {
+      const newFlagId = 'flag_id_' + Date.now()
+      const newGraphic: CanvasGraphic = {
+        id: newFlagId,
+        type: 'image',
+        side: targetSide,
+        content: INDONESIA_FLAG_DATA_URL,
+        x: targetX,
+        y: targetY,
+        scale: targetScale,
+        scaleX: 1,
+        scaleY: 1,
+        rotation: rotZ,
+        rotationX: rotX,
+        rotationY: rotY,
+        rotationZ: rotZ,
+        enableAutoClipping: true,
+        technique: 'bordir',
+        label,
+        sizeCategory: calc.sizeCategory,
+        calculatedPrice: calc.price,
+        opacity: 100,
+        blendMode: 'normal',
+        isLocked: false,
+      }
+      updateGraphicsWithHistory([...graphics, newGraphic])
+      setSelectedGraphicId(newFlagId)
+    }
+  }
+
+  const handleRemoveIndonesianFlag = () => {
+    if (!indonesianFlag) return
+    const filtered = graphics.filter((g) => g.id !== indonesianFlag.id)
+    updateGraphicsWithHistory(filtered)
+    if (selectedGraphicId === indonesianFlag.id) {
+      setSelectedGraphicId(null)
+    }
+  }
+
   // Add preset badges
   const handleAddPresetLogo = (type: 'flag' | 'k3') => {
-    let url = ''
-    let label = ''
-
     if (type === 'flag') {
-      const flagSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 60"><rect width="90" height="30" fill="#dc2626"/><rect y="30" width="90" height="30" fill="#ffffff"/><rect width="90" height="60" fill="none" stroke="#000000" stroke-width="1.5"/></svg>`
-      url = `data:image/svg+xml;utf8,${encodeURIComponent(flagSvg)}`
-      label = 'Bendera Merah Putih'
-    } else {
-      const k3Svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80"><circle cx="40" cy="40" r="38" fill="#15803d" stroke="#ffffff" stroke-width="2"/><path d="M 33 18 H 47 V 33 H 62 V 47 H 47 V 62 H 33 V 47 H 18 V 33 H 33 Z" fill="#ffffff"/></svg>`
-      url = `data:image/svg+xml;utf8,${encodeURIComponent(k3Svg)}`
-      label = 'Emblem K3 Keselamatan'
+      handleApplyIndonesianFlag('sleeve')
+      return
     }
+
+    const k3Svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80"><circle cx="40" cy="40" r="38" fill="#15803d" stroke="#ffffff" stroke-width="2"/><path d="M 33 18 H 47 V 33 H 62 V 47 H 47 V 62 H 33 V 47 H 18 V 33 H 33 Z" fill="#ffffff"/></svg>`
+    const url = `data:image/svg+xml;utf8,${encodeURIComponent(k3Svg)}`
+    const label = 'Emblem K3 Keselamatan'
 
     const calc = calculateGraphicPrice(0.55)
     const newGraphic: CanvasGraphic = {
@@ -3420,20 +3540,41 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => {
-                      handleAddPresetLogo('flag')
+                      handleApplyIndonesianFlag('sleeve')
                       setActiveFlyout(null)
                     }}
                     className="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl flex items-center gap-2.5 transition-all cursor-pointer group text-left"
+                    title="Pasang Bordir Bendera Indonesia di Bahu / Lengan Kanan"
                   >
-                    <div className="w-7 h-5 rounded overflow-hidden shrink-0 border border-slate-200 shadow-2xs">
-                      <div className="h-2.5 bg-red-600" />
-                      <div className="h-2.5 bg-white" />
+                    <div className="w-7 h-5 rounded overflow-hidden shrink-0 border border-amber-600 shadow-2xs relative bg-slate-900 flex flex-col justify-between p-0.5">
+                      <div className="h-1.5 bg-red-600 rounded-2xs" />
+                      <div className="h-1.5 bg-white rounded-2xs" />
                     </div>
                     <div>
                       <div className="font-bold text-xs text-slate-800 group-hover:text-black">
                         Bendera RI
                       </div>
-                      <div className="text-[9px] text-slate-500">Merah Putih</div>
+                      <div className="text-[9px] text-slate-500">Bahu Kanan</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      handleApplyIndonesianFlag('chest')
+                      setActiveFlyout(null)
+                    }}
+                    className="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl flex items-center gap-2.5 transition-all cursor-pointer group text-left"
+                    title="Pasang Bordir Bendera Indonesia di Dada Kanan"
+                  >
+                    <div className="w-7 h-5 rounded overflow-hidden shrink-0 border border-amber-600 shadow-2xs relative bg-slate-900 flex flex-col justify-between p-0.5">
+                      <div className="h-1.5 bg-red-600 rounded-2xs" />
+                      <div className="h-1.5 bg-white rounded-2xs" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-slate-800 group-hover:text-black">
+                        Bendera RI
+                      </div>
+                      <div className="text-[9px] text-slate-500">Dada Kanan</div>
                     </div>
                   </button>
 
@@ -3442,7 +3583,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       handleAddPresetLogo('k3')
                       setActiveFlyout(null)
                     }}
-                    className="p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl flex items-center gap-2.5 transition-all cursor-pointer group text-left"
+                    className="col-span-2 p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl flex items-center gap-2.5 transition-all cursor-pointer group text-left"
                   >
                     <div className="w-7 h-7 rounded-full bg-emerald-700 flex items-center justify-center shrink-0 border border-white/40 shadow-2xs">
                       <span className="text-white text-xs font-black">+</span>
@@ -3451,7 +3592,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       <div className="font-bold text-xs text-slate-800 group-hover:text-black">
                         Logo K3
                       </div>
-                      <div className="text-[9px] text-slate-500">Keselamatan</div>
+                      <div className="text-[9px] text-slate-500">Keselamatan Kerja</div>
                     </div>
                   </button>
                 </div>
@@ -5065,10 +5206,106 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   <span className="text-[10px] text-slate-400 font-medium">Bordir & Sablon</span>
                 </div>
 
+                {/* BADGE EMBLEM STANDAR PDH: BENDERA INDONESIA (SIAP PAKAI) */}
+                <div className="p-2.5 bg-gradient-to-br from-slate-50 to-amber-50/40 border border-slate-200/90 rounded-2xl shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {/* Real Flag Badge Mini Thumbnail */}
+                      <div className="w-8 h-5.5 rounded overflow-hidden shrink-0 border border-amber-600/90 shadow-2xs relative bg-slate-900 flex flex-col justify-between p-0.5">
+                        <div className="w-full h-2 bg-red-600 rounded-2xs" />
+                        <div className="w-full h-2 bg-white rounded-2xs" />
+                        <div className="absolute inset-0 border border-dashed border-amber-300/60 rounded-sm pointer-events-none" />
+                      </div>
+                      <div>
+                        <div className="text-[11px] font-black text-slate-800 flex items-center gap-1">
+                          <span>Bendera Indonesia</span>
+                          <span className="text-[9px] font-semibold text-amber-700 bg-amber-100/90 px-1 py-0.2 rounded">Bordir</span>
+                        </div>
+                        <div className="text-[9.5px] text-slate-500">
+                          {indonesianFlag ? (
+                            <span className="text-emerald-700 font-bold flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
+                              Terpasang di {flagLocation === 'sleeve' ? 'Bahu Kanan' : 'Dada Kanan'}
+                            </span>
+                          ) : (
+                            'Standar Seragam PDH Nasional'
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {indonesianFlag && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleRemoveIndonesianFlag()
+                        }}
+                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                        title="Hapus Bendera Indonesia"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 1-Click Positioning Buttons */}
+                  <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => handleApplyIndonesianFlag('sleeve')}
+                      className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                        flagLocation === 'sleeve'
+                          ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-500'
+                          : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 hover:border-slate-300'
+                      }`}
+                      title="Pasang di Bahu / Lengan Kanan seragam PDH"
+                    >
+                      <span>{flagLocation === 'sleeve' ? '✓ Bahu Kanan' : '📍 Bahu Kanan'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleApplyIndonesianFlag('chest')}
+                      className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                        flagLocation === 'chest'
+                          ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-500'
+                          : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 hover:border-slate-300'
+                      }`}
+                      title="Pasang di Dada Kanan seragam PDH"
+                    >
+                      <span>{flagLocation === 'chest' ? '✓ Dada Kanan' : '📍 Dada Kanan'}</span>
+                    </button>
+                  </div>
+                </div>
+
                 {graphics.length === 0 ? (
-                  <div className="p-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center text-slate-400 text-xs">
-                    <p className="font-semibold text-slate-600">Belum Ada Elemen Desain</p>
-                    <p className="text-[10px] mt-0.5">Upload logo atau tambah teks dari menu sebelah kiri.</p>
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTool('select')
+                        if (fileInputRef.current) {
+                          fileInputRef.current.value = ''
+                          fileInputRef.current.click()
+                        }
+                      }}
+                      className="flex-1 py-1.5 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 hover:text-slate-900 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Upload className="w-3 h-3 text-[#ff5e00]" />
+                      <span>+ Upload Logo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTool('select')
+                        setActiveFlyout('text')
+                      }}
+                      className="flex-1 py-1.5 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 hover:text-slate-900 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Type className="w-3 h-3 text-indigo-600" />
+                      <span>+ Tambah Teks</span>
+                    </button>
                   </div>
                 ) : (
                   <div className="space-y-1.5">
