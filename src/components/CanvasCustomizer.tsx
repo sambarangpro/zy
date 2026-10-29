@@ -1838,17 +1838,36 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   }
 
   // Toggle Auto Clipping Mask grafik (Potong siluet kain baju)
-    // Ubah skala / ukuran grafis secara presisi
+    // Ubah skala / ukuran grafis secara presisi (skala bebas 8% sampai 500%)
   const handleScaleGraphic = (gId: string, delta: number) => {
     pushHistorySnapshot()
     onGraphicsChange(
       graphics.map((g) => {
         if (g.id !== gId) return g
-        const newScale = Math.max(0.2, Math.min(2.5, Number(((g.scale || 1) + delta).toFixed(2))))
+        const currentScale = g.scale || 1
+        const newScale = Math.max(0.08, Math.min(5.0, Number((currentScale + delta).toFixed(2))))
         const calc = calculateGraphicPrice(newScale)
         return {
           ...g,
           scale: newScale,
+          sizeCategory: calc.sizeCategory,
+          calculatedPrice: calc.price,
+        }
+      })
+    )
+  }
+
+  // Set langsung nilai skala grafis dari slider atau preset satu-klik (8% sampai 500%)
+  const handleSetGraphicScale = (gId: string, targetScale: number) => {
+    pushHistorySnapshot()
+    const clampedScale = Math.max(0.08, Math.min(5.0, Number(targetScale.toFixed(2))))
+    const calc = calculateGraphicPrice(clampedScale)
+    onGraphicsChange(
+      graphics.map((g) => {
+        if (g.id !== gId) return g
+        return {
+          ...g,
+          scale: clampedScale,
           sizeCategory: calc.sizeCategory,
           calculatedPrice: calc.price,
         }
@@ -1946,8 +1965,14 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         })
       )
     } else if (dragState.mode === 'resize') {
-      const scaleDelta = (deltaPixelX + deltaPixelY) / 200
-      const newScale = Math.max(0.3, Math.min(2.5, dragState.initialScale + scaleDelta))
+      const handle = dragState.handle || 'se'
+      let factor = deltaPixelX + deltaPixelY
+      if (handle === 'nw') factor = -deltaPixelX - deltaPixelY
+      else if (handle === 'ne') factor = deltaPixelX - deltaPixelY
+      else if (handle === 'sw') factor = -deltaPixelX + deltaPixelY
+
+      const scaleDelta = factor / 180
+      const newScale = Math.max(0.08, Math.min(5.0, dragState.initialScale + scaleDelta))
       const roundedScale = parseFloat(newScale.toFixed(2))
       const calc = calculateGraphicPrice(roundedScale)
 
@@ -5000,45 +5025,57 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       </div>
                     </div>
 
-                    {/* GRUP 2: POSISI & UKURAN */}
+                    {/* GRUP 2: POSISI ELEMEN */}
                     <div className="space-y-1.5">
                       <div className="text-[10px] font-black uppercase text-slate-700 tracking-wider flex items-center justify-between">
-                        <span>Posisi & Ukuran</span>
-                        <button
-                          type="button"
-                          onClick={() => handleAlign(selectedGraphic.id, 'center_h')}
-                          className="text-[9px] font-bold text-[#ff5e00] hover:underline cursor-pointer"
-                          title="Rata tengah horizontal"
-                        >
-                          Rata Tengah
-                        </button>
+                        <span>Posisi Elemen</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleAlign(selectedGraphic.id, 'center_h')}
+                            className="text-[9px] font-bold text-[#ff5e00] hover:underline cursor-pointer"
+                            title="Rata tengah horizontal"
+                          >
+                            Rata Tengah
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleResetSleevePosition(selectedGraphic.id)}
+                            className="text-[9px] font-bold text-slate-400 hover:text-slate-700 cursor-pointer"
+                            title="Reset koordinat ke 50%, 35%"
+                          >
+                            Reset
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        {/* Nudge Panah Arah */}
-                        <div className="grid grid-cols-3 gap-1 bg-slate-50 border border-slate-200 rounded-xl p-1 w-24 shrink-0">
+                      <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-1.5">
+                        <div className="text-[10px] font-semibold text-slate-500">
+                          Posisi: <span className="font-mono font-bold text-slate-800">X:{Math.round(selectedGraphic.x)}% Y:{Math.round(selectedGraphic.y)}%</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-0.5 w-[76px]">
                           <div />
                           <button
                             type="button"
                             onClick={() => handleNudgeGraphic(selectedGraphic.id, 'up')}
-                            className="w-6 h-6 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
+                            className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
                             title="Geser Naik (2%)"
                           >
-                            <ArrowUp className="w-3 h-3" />
+                            <ArrowUp className="w-2.5 h-2.5" />
                           </button>
                           <div />
                           <button
                             type="button"
                             onClick={() => handleNudgeGraphic(selectedGraphic.id, 'left')}
-                            className="w-6 h-6 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
+                            className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
                             title="Geser Kiri (2%)"
                           >
-                            <ArrowLeft className="w-3 h-3" />
+                            <ArrowLeft className="w-2.5 h-2.5" />
                           </button>
                           <button
                             type="button"
                             onClick={() => handleResetSleevePosition(selectedGraphic.id)}
-                            className="w-6 h-6 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-500 rounded text-[8px] font-bold cursor-pointer"
+                            className="w-5 h-5 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-500 rounded text-[8px] font-bold cursor-pointer"
                             title="Pusatkan posisi"
                           >
                             •
@@ -5046,50 +5083,130 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           <button
                             type="button"
                             onClick={() => handleNudgeGraphic(selectedGraphic.id, 'right')}
-                            className="w-6 h-6 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
+                            className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
                             title="Geser Kanan (2%)"
                           >
-                            <ArrowRight className="w-3 h-3" />
+                            <ArrowRight className="w-2.5 h-2.5" />
                           </button>
                           <div />
                           <button
                             type="button"
                             onClick={() => handleNudgeGraphic(selectedGraphic.id, 'down')}
-                            className="w-6 h-6 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
+                            className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
                             title="Geser Turun (2%)"
                           >
-                            <ArrowDown className="w-3 h-3" />
+                            <ArrowDown className="w-2.5 h-2.5" />
                           </button>
                           <div />
                         </div>
+                      </div>
+                    </div>
 
-                        {/* Skala / Ukuran */}
-                        <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2 flex flex-col justify-between h-full">
-                          <div className="flex items-center justify-between text-[10px]">
-                            <span className="font-semibold text-slate-500">Ukuran / Skala:</span>
-                            <span className="font-mono font-bold text-[#ff5e00]">
-                              {Math.round((selectedGraphic.scale || 1) * 100)}%
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 mt-1">
-                            <button
-                              type="button"
-                              onClick={() => handleScaleGraphic(selectedGraphic.id, -0.05)}
-                              className="flex-1 py-1 bg-white hover:bg-slate-200 border border-slate-200 rounded-lg text-slate-700 font-bold text-xs cursor-pointer"
-                              title="Perkecil (-5%)"
-                            >
-                              -
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleScaleGraphic(selectedGraphic.id, 0.05)}
-                              className="flex-1 py-1 bg-white hover:bg-slate-200 border border-slate-200 rounded-lg text-slate-700 font-bold text-xs cursor-pointer"
-                              title="Perbesar (+5%)"
-                            >
-                              +
-                            </button>
-                          </div>
+                    {/* GRUP 2.5: UKURAN / SKALA (MINIMAL HINGGA MAKSIMAL 8% - 500%) */}
+                    <div className="space-y-1.5 bg-slate-50 border border-slate-200 rounded-xl p-2">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="font-black uppercase text-slate-700 tracking-wider">Ukuran / Skala</span>
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono font-black text-xs text-[#ff5e00] bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-500/20">
+                            {Math.round((selectedGraphic.scale || 1) * 100)}%
+                          </span>
                         </div>
+                      </div>
+
+                      {/* Interactive Range Slider (8% s/d 500%) */}
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <span className="text-[8.5px] font-bold text-slate-400">8%</span>
+                        <input
+                          type="range"
+                          min="0.08"
+                          max="5.0"
+                          step="0.02"
+                          value={selectedGraphic.scale || 1}
+                          onChange={(e) => handleSetGraphicScale(selectedGraphic.id, parseFloat(e.target.value))}
+                          className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#ff5e00]"
+                          title="Geser slider untuk memperkecil atau memperbesar ukuran secara bebas"
+                        />
+                        <span className="text-[8.5px] font-bold text-slate-400">500%</span>
+                      </div>
+
+                      {/* Step Adjust Buttons */}
+                      <div className="grid grid-cols-4 gap-1 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleScaleGraphic(selectedGraphic.id, -0.25)}
+                          className="py-1 bg-white hover:bg-slate-200 border border-slate-200 rounded-lg text-slate-600 font-bold text-[9.5px] cursor-pointer"
+                          title="Perkecil cepat (-25%)"
+                        >
+                          -25%
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleScaleGraphic(selectedGraphic.id, -0.05)}
+                          className="py-1 bg-white hover:bg-slate-200 border border-slate-200 rounded-lg text-slate-700 font-bold text-xs cursor-pointer"
+                          title="Perkecil halus (-5%)"
+                        >
+                          -5%
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleScaleGraphic(selectedGraphic.id, 0.05)}
+                          className="py-1 bg-white hover:bg-slate-200 border border-slate-200 rounded-lg text-slate-700 font-bold text-xs cursor-pointer"
+                          title="Perbesar halus (+5%)"
+                        >
+                          +5%
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleScaleGraphic(selectedGraphic.id, 0.25)}
+                          className="py-1 bg-white hover:bg-slate-200 border border-slate-200 rounded-lg text-slate-600 font-bold text-[9.5px] cursor-pointer"
+                          title="Perbesar cepat (+25%)"
+                        >
+                          +25%
+                        </button>
+                      </div>
+
+                      {/* Preset Skala Cepat */}
+                      <div className="flex items-center gap-1 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleSetGraphicScale(selectedGraphic.id, 0.25)}
+                          className="flex-1 py-0.5 bg-white hover:bg-orange-50 hover:border-orange-300 border border-slate-200 rounded text-[8.5px] font-semibold text-slate-600 hover:text-[#ff5e00] cursor-pointer transition-colors"
+                          title="Ukuran mini / emblem kecil (25%)"
+                        >
+                          Mini
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSetGraphicScale(selectedGraphic.id, 0.75)}
+                          className="flex-1 py-0.5 bg-white hover:bg-orange-50 hover:border-orange-300 border border-slate-200 rounded text-[8.5px] font-semibold text-slate-600 hover:text-[#ff5e00] cursor-pointer transition-colors"
+                          title="Ukuran standar dada/bahu (75%)"
+                        >
+                          Standar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSetGraphicScale(selectedGraphic.id, 1.5)}
+                          className="flex-1 py-0.5 bg-white hover:bg-orange-50 hover:border-orange-300 border border-slate-200 rounded text-[8.5px] font-semibold text-slate-600 hover:text-[#ff5e00] cursor-pointer transition-colors"
+                          title="Ukuran sablon sedang A4 (150%)"
+                        >
+                          A4
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSetGraphicScale(selectedGraphic.id, 2.5)}
+                          className="flex-1 py-0.5 bg-white hover:bg-orange-50 hover:border-orange-300 border border-slate-200 rounded text-[8.5px] font-semibold text-slate-600 hover:text-[#ff5e00] cursor-pointer transition-colors"
+                          title="Ukuran sablon punggung A3+ (250%)"
+                        >
+                          A3+
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSetGraphicScale(selectedGraphic.id, 4.5)}
+                          className="flex-1 py-0.5 bg-white hover:bg-orange-50 hover:border-orange-300 border border-slate-200 rounded text-[8.5px] font-semibold text-slate-600 hover:text-[#ff5e00] cursor-pointer transition-colors"
+                          title="Ukuran maksimal jumbo / full seragam (450%)"
+                        >
+                          Maks
+                        </button>
                       </div>
                     </div>
 
