@@ -404,17 +404,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       if (hiddenGraphicIds.includes(g.id)) return
 
       // Abaikan rotasi front legacy (36 atau -38 derajat) yang terbawa dari zone depan lama
-      const userRot =
-        g.rotation !== undefined && g.rotation !== 0
-          ? g.rotation
-          : g.rotationZ !== undefined && Math.abs(g.rotationZ) !== 38 && Math.abs(g.rotationZ) !== 36 && g.rotationZ !== 0
-          ? g.rotationZ
-          : 0
+      const rawRot = g.rotation !== undefined && g.rotation !== 0 ? g.rotation : (g.rotationZ || 0)
+      const userRot = Math.abs(rawRot) === 38 || Math.abs(rawRot) === 36 ? 0 : rawRot
 
       // 1. Jika ada logo di Lengan Kiri (Wearer's Left Arm)
       if (g.side === 'left') {
-        // Di Tampak Depan: lengan kiri pemakai terlihat di sebelah KANAN layar (Viewer Right, x > 50)
-        // Di Tampak Belakang: lengan kiri pemakai terlihat di sebelah KIRI layar (Viewer Left, x < 50)
         const isViewerRight = currentSide === 'front'
         const matchingSleeveZone = currentPrintZones.find((z) => {
           const n = z.name.toLowerCase()
@@ -425,15 +419,20 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           }
         })
 
-        // Base anchor titik tengah kain lengan
+        // Ambil titik tengah zona lengan kiri asli yang dipasang Owner di Tampak Samping (z_left_sleeve)
+        const nativeSideZone = activeMockup?.printZones?.find((z) => z.side === 'left')
+        const nativeCenterX = nativeSideZone ? nativeSideZone.x : 53
+        const nativeCenterY = nativeSideZone ? nativeSideZone.y : 31
+
+        // Base anchor titik tengah kain lengan pada tampak aktif (Depan / Belakang)
         const defaultBaseX = currentSide === 'front' ? 88 : 23
         const defaultBaseY = currentSide === 'front' ? 33 : 34
         const baseX = matchingSleeveZone ? matchingSleeveZone.x : defaultBaseX
         const baseY = matchingSleeveZone ? matchingSleeveZone.y : defaultBaseY
 
-        // Presisi offset horizontal & vertikal mengikuti pergeseran pengguna di Tampak Samping (g.x dan g.y)
-        const offsetX = ((g.x - 50) / 50) * 4.5
-        const offsetY = ((g.y - 35) / 50) * 16
+        // Presisi offset horizontal & vertikal relatif terhadap titik tengah area yang dipasang Owner di Tampak Samping
+        const offsetX = ((g.x - nativeCenterX) / 50) * 4.5
+        const offsetY = ((g.y - nativeCenterY) / 50) * 16
 
         // Batasi batas aman agar desain selalu berada di atas kain lengan
         const minX = isViewerRight ? 72 : 8
@@ -473,8 +472,6 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
       // 2. Jika ada logo di Lengan Kanan (Wearer's Right Arm)
       if (g.side === 'right') {
-        // Di Tampak Depan: lengan kanan pemakai terlihat di sebelah KIRI layar (Viewer Left, x < 50)
-        // Di Tampak Belakang: lengan kanan pemakai terlihat di sebelah KANAN layar (Viewer Right, x > 50)
         const isViewerRight = currentSide === 'back'
         const matchingSleeveZone = currentPrintZones.find((z) => {
           const n = z.name.toLowerCase()
@@ -485,15 +482,20 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           }
         })
 
-        // Base anchor titik tengah kain lengan
+        // Ambil titik tengah zona lengan kanan asli yang dipasang Owner di Tampak Samping (z_right_sleeve)
+        const nativeSideZone = activeMockup?.printZones?.find((z) => z.side === 'right')
+        const nativeCenterX = nativeSideZone ? nativeSideZone.x : 48
+        const nativeCenterY = nativeSideZone ? nativeSideZone.y : 32
+
+        // Base anchor titik tengah kain lengan pada tampak aktif (Depan / Belakang)
         const defaultBaseX = currentSide === 'front' ? 12 : 77
         const defaultBaseY = currentSide === 'front' ? 33 : 34
         const baseX = matchingSleeveZone ? matchingSleeveZone.x : defaultBaseX
         const baseY = matchingSleeveZone ? matchingSleeveZone.y : defaultBaseY
 
-        // Presisi offset horizontal & vertikal mengikuti pergeseran pengguna di Tampak Samping (g.x dan g.y)
-        const offsetX = ((g.x - 50) / 50) * 4.5
-        const offsetY = ((g.y - 35) / 50) * 16
+        // Presisi offset horizontal & vertikal relatif terhadap titik tengah area yang dipasang Owner di Tampak Samping
+        const offsetX = ((g.x - nativeCenterX) / 50) * 4.5
+        const offsetY = ((g.y - nativeCenterY) / 50) * 16
 
         // Batasi batas aman agar desain selalu berada di atas kain lengan
         const minX = isViewerRight ? 62 : 6
@@ -535,10 +537,56 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     return projected
   }, [graphics, currentSide, hiddenGraphicIds, currentPrintZones])
 
-  // Sync clipping mask when activeMockup changes
+  // Sync clipping mask and harmonize sleeve graphic coordinates with owner-configured zones
   useEffect(() => {
     if (activeMockup?.enableClippingMask !== undefined) {
       setIsClippingMaskActive(activeMockup.enableClippingMask)
+    }
+
+    if (activeMockup?.printZones && activeMockup.printZones.length > 0) {
+      const leftZone = activeMockup.printZones.find((z) => z.side === 'left')
+      const rightZone = activeMockup.printZones.find((z) => z.side === 'right')
+
+      let hasChanges = false
+      const harmonized = graphics.map((g) => {
+        if (g.side === 'left' && leftZone) {
+          const isAtOldDefault = Math.abs(g.x - 50) < 0.1 && Math.abs(g.y - 35) < 0.1
+          const isLegacyRot = Math.abs(g.rotation || 0) === 38 || Math.abs(g.rotationZ || 0) === 38
+          if (isAtOldDefault || isLegacyRot || (g.rotationX && g.rotationX !== 0) || (g.rotationY && g.rotationY !== 0)) {
+            hasChanges = true
+            return {
+              ...g,
+              x: isAtOldDefault ? leftZone.x : g.x,
+              y: isAtOldDefault ? leftZone.y : g.y,
+              rotation: isLegacyRot ? (leftZone.rotationZ || 0) : (g.rotation || 0),
+              rotationZ: isLegacyRot ? (leftZone.rotationZ || 0) : (g.rotationZ || 0),
+              rotationX: 0,
+              rotationY: 0,
+            }
+          }
+        }
+        if (g.side === 'right' && rightZone) {
+          const isAtOldDefault = Math.abs(g.x - 50) < 0.1 && Math.abs(g.y - 35) < 0.1
+          const isLegacyRot = Math.abs(g.rotation || 0) === 36 || Math.abs(g.rotationZ || 0) === 36
+          if (isAtOldDefault || isLegacyRot || (g.rotationX && g.rotationX !== 0) || (g.rotationY && g.rotationY !== 0)) {
+            hasChanges = true
+            return {
+              ...g,
+              x: isAtOldDefault ? rightZone.x : g.x,
+              y: isAtOldDefault ? rightZone.y : g.y,
+              rotation: isLegacyRot ? (rightZone.rotationZ || 0) : (g.rotation || 0),
+              rotationZ: isLegacyRot ? (rightZone.rotationZ || 0) : (g.rotationZ || 0),
+              rotationX: 0,
+              rotationY: 0,
+            }
+          }
+        }
+        return g
+      })
+
+      if (hasChanges) {
+        onGraphicsChange(harmonized)
+      }
     }
   }, [activeMockup?.id])
 
@@ -1193,8 +1241,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       const sleeveZone = activeMockup?.printZones?.find(
         (z) => z.side === 'right' || z.name.toLowerCase().includes('lengan kanan')
       )
-      targetX = sleeveZone ? sleeveZone.x : 50
-      targetY = sleeveZone ? sleeveZone.y : 35
+      targetX = sleeveZone ? sleeveZone.x : 48
+      targetY = sleeveZone ? sleeveZone.y : 32
+      rotX = 0
+      rotY = 0
+      rotZ = sleeveZone?.rotationZ || 0
       targetScale = 0.72
       label = 'Bendera Indonesia (Bahu Kanan)'
     }
@@ -1424,12 +1475,14 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       // Jika upload ditujukan ke Bahu/Lengan Kiri (meskipun diunggah dari Tampak Depan atau Belakang)
       if (zoneNameLower.includes('lengan kiri') || zoneNameLower.includes('bahu kiri')) {
         targetSide = 'left'
-        graphicX = 50
-        graphicY = 35
+        const sideZone = activeMockup?.printZones?.find((z) => z.side === 'left')
+        graphicX = sideZone ? sideZone.x : 53
+        graphicY = sideZone ? sideZone.y : 31
       } else if (zoneNameLower.includes('lengan kanan') || zoneNameLower.includes('bahu kanan')) {
         targetSide = 'right'
-        graphicX = 50
-        graphicY = 35
+        const sideZone = activeMockup?.printZones?.find((z) => z.side === 'right')
+        graphicX = sideZone ? sideZone.x : 48
+        graphicY = sideZone ? sideZone.y : 32
       } else {
         graphicX = chosenZone.x
         graphicY = chosenZone.y
@@ -1629,8 +1682,14 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       graphics.map((g) => {
         if (g.id !== id) return g
         switch (align) {
-          case 'center_h':
+          case 'center_h': {
+            const isSleeve = g.side === 'left' || g.side === 'right'
+            if (isSleeve) {
+              const sideZone = activeMockup?.printZones?.find((z) => z.side === g.side)
+              return { ...g, x: sideZone ? sideZone.x : (g.side === 'left' ? 53 : 48) }
+            }
             return { ...g, x: 50 }
+          }
           case 'center_v':
             return { ...g, y: 50 }
           case 'left':
@@ -1906,11 +1965,21 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     )
   }
 
-  // Reset posisi lengan ke titik tengah default (50, 35)
+  // Reset posisi lengan ke titik tengah area yang dipasang Owner
   const handleResetSleevePosition = (gId: string) => {
     pushHistorySnapshot()
     onGraphicsChange(
-      graphics.map((g) => (g.id === gId ? { ...g, x: 50, y: 35 } : g))
+      graphics.map((g) => {
+        if (g.id !== gId) return g
+        const isSleeve = g.side === 'left' || g.side === 'right'
+        if (isSleeve) {
+          const sideZone = activeMockup?.printZones?.find((z) => z.side === g.side)
+          const targetX = sideZone ? sideZone.x : (g.side === 'left' ? 53 : 48)
+          const targetY = sideZone ? sideZone.y : (g.side === 'left' ? 31 : 32)
+          return { ...g, x: targetX, y: targetY, rotation: 0, rotationZ: 0, rotationX: 0, rotationY: 0 }
+        }
+        return { ...g, x: 50, y: 50, rotation: 0, rotationZ: 0, rotationX: 0, rotationY: 0 }
+      })
     )
   }
 
@@ -3863,14 +3932,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       .filter((g) => !hiddenGraphicIds.includes(g.id) && (g.enableAutoClipping ?? true))
                       .map((g) => {
                         const isSleeve = g.side === 'left' || g.side === 'right'
+                        const sideZone = isSleeve ? activeMockup?.printZones?.find((z) => z.side === g.side) : null
                         const effRotX = isSleeve ? 0 : (g.rotationX || 0)
                         const effRotY = isSleeve ? 0 : (g.rotationY || 0)
+                        const rawRot = g.rotation !== undefined && g.rotation !== 0 ? g.rotation : (g.rotationZ || 0)
+                        const userRot = Math.abs(rawRot) === 38 || Math.abs(rawRot) === 36 ? 0 : rawRot
                         const effRotZ = isSleeve
-                          ? (g.rotation !== undefined && g.rotation !== 0
-                              ? g.rotation
-                              : (g.rotationZ !== undefined && Math.abs(g.rotationZ) !== 38 && Math.abs(g.rotationZ) !== 36 && g.rotationZ !== 0
-                                  ? g.rotationZ
-                                  : 0))
+                          ? (sideZone?.rotationZ || 0) + userRot
                           : (g.rotationZ !== undefined ? g.rotationZ : (g.rotation || 0))
                         const scaleX = (g.scaleX || 1) * g.scale
                         const scaleY = (g.scaleY || 1) * g.scale
@@ -4164,14 +4232,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
                       const isClipped = isClippingMaskActive && (g.enableAutoClipping ?? true)
                       const isSleeve = g.side === 'left' || g.side === 'right'
+                      const sideZone = isSleeve ? activeMockup?.printZones?.find((z) => z.side === g.side) : null
                       const effRotX = isSleeve ? 0 : (g.rotationX || 0)
                       const effRotY = isSleeve ? 0 : (g.rotationY || 0)
+                      const rawRot = g.rotation !== undefined && g.rotation !== 0 ? g.rotation : (g.rotationZ || 0)
+                      const userRot = Math.abs(rawRot) === 38 || Math.abs(rawRot) === 36 ? 0 : rawRot
                       const effRotZ = isSleeve
-                        ? (g.rotation !== undefined && g.rotation !== 0
-                            ? g.rotation
-                            : (g.rotationZ !== undefined && Math.abs(g.rotationZ) !== 38 && Math.abs(g.rotationZ) !== 36 && g.rotationZ !== 0
-                                ? g.rotationZ
-                                : 0))
+                        ? (sideZone?.rotationZ || 0) + userRot
                         : (g.rotationZ !== undefined ? g.rotationZ : (g.rotation || 0))
 
                       return (
