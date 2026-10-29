@@ -1302,8 +1302,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     setSelectedGraphicId(newGraphic.id)
   }
 
-  // Initiate image upload targeting a specific print zone
-  const handleInitiateUploadForZone = (zone: PrintZone) => {
+  // Initiate image upload targeting a specific print zone (bisa dipanggil dari menu jika diperlukan)
+  const _handleInitiateUploadForZone = (zone: PrintZone) => {
     setTargetZoneForUpload(zone)
     setActiveTool('select')
     setActiveFlyout(null)
@@ -1312,6 +1312,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       fileInputRef.current.click()
     }
   }
+  void _handleInitiateUploadForZone;
 
   // Render Contoh Area Gambar Logo / Patch Realistis (Identik 1:1 dengan MockupDashboard)
   const renderSampleEmblem = (zone: PrintZone) => {
@@ -4454,11 +4455,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   })}
                 </div>
 
-                {/* 5. GARIS PANDUAN SABLON & TITIK UPLOAD (PRINT SAFE ZONES) - DI DEPAN OBJEK SERAGAM */}
+                {/* 5. GARIS PANDUAN AREA CETAK (PRINT SAFE ZONES) - PANDUAN VISUAL TANPA INTERFERENSI KLIK */}
                 {showGuidelines && (
-                  <div className="absolute inset-0 w-full h-full pointer-events-none z-30">
+                  <div className="absolute inset-0 w-full h-full pointer-events-none select-none z-15">
                     {currentPrintZones.map((zone) => {
-                      // Check whether a graphic currently occupies this print safe zone
                       const graphicsInZone = currentSideGraphics.filter(
                         (g) =>
                           Math.abs(g.x - zone.x) <= Math.max(zone.width / 2, 4) &&
@@ -4482,80 +4482,30 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             transform: `translate(-50%, -50%) perspective(500px) rotateX(${zone.rotationX || 0}deg) rotateY(${zone.rotationY || 0}deg) rotateZ(${zone.rotationZ || 0}deg)`,
                             transformOrigin: 'center center',
                           }}
-                          onClick={(e) => {
-                            if (!hasGraphic) {
-                              e.stopPropagation()
-                              handleInitiateUploadForZone(zone)
-                            }
-                          }}
-                          onDragOver={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                          }}
-                          onDrop={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            const file = e.dataTransfer.files?.[0]
-                            if (file) {
-                              const reader = new FileReader()
-                              reader.onload = (event) => {
-                                const dataUrl = event.target?.result as string
-                                setUploadModalData({
-                                  dataUrl,
-                                  fileName: file.name.replace(/\.[^/.]+$/, '').slice(0, 24),
-                                  targetZoneId: zone.id,
-                                  technique: activeTechnique || 'bordir',
-                                })
-                              }
-                              reader.readAsDataURL(file)
-                            }
-                          }}
-                          className={`absolute border-2 rounded-2xl flex flex-col items-center justify-between p-1.5 transition-all group/zone ${
+                          className={`absolute border rounded-2xl flex flex-col items-center justify-between p-1 pointer-events-none select-none transition-all ${
                             !hasGraphic
-                              ? 'border-dashed border-indigo-500/80 bg-indigo-500/10 hover:border-[#ff5e00] hover:bg-[#ff5e00]/15 pointer-events-auto cursor-pointer shadow-xs backdrop-blur-[0.5px]'
-                              : 'border-transparent pointer-events-none'
+                              ? 'border-dashed border-indigo-400/40 bg-indigo-500/5'
+                              : 'border-transparent'
                           }`}
-                          title={
-                            !hasGraphic
-                              ? `Klik untuk upload desain ke titik ${zone.name}`
-                              : `Titik Produksi: ${zone.name}`
-                          }
                         >
-                          {/* Center size info matching Canvas Owner */}
-                          <div className="flex flex-col items-center pointer-events-none z-10">
-                            {zone.maxSizeCm && (
-                              <span className="text-[8px] font-mono font-semibold text-slate-800 bg-white/90 px-1.5 py-0.2 rounded border border-slate-200 shadow-2xs">
+                          {/* Label Ukuran Area Cetak (Panduan Dimensi) */}
+                          {!hasGraphic && zone.maxSizeCm && (
+                            <div className="flex flex-col items-center pointer-events-none z-10">
+                              <span className="text-[8px] font-mono font-semibold text-slate-700 bg-white/90 px-1.5 py-0.2 rounded border border-slate-200/80 shadow-2xs">
                                 {zone.maxSizeCm}
                               </span>
-                            )}
-                          </div>
-
-                          {/* Hover Upload Button */}
-                          {!hasGraphic ? (
-                            <div className="pointer-events-auto opacity-0 group-hover/zone:opacity-100 transition-opacity my-auto flex items-center gap-1 px-2.5 py-1 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded-lg text-[9px] font-bold shadow-md transform group-hover/zone:scale-105 active:scale-95 cursor-pointer">
-                              <Upload className="w-3 h-3 text-white" />
-                              <span>Upload Desain</span>
                             </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleInitiateUploadForZone(zone)
-                              }}
-                              className="pointer-events-auto opacity-0 group-hover/zone:opacity-100 transition-opacity my-auto flex items-center gap-1 px-2.5 py-1 bg-slate-900/95 hover:bg-[#ff5e00] text-white rounded-xl text-[9px] font-bold shadow-lg border border-slate-700 hover:border-orange-500 cursor-pointer"
-                              title={`Tambah atau ganti desain di titik ${zone.name}`}
-                            >
-                              <Upload className="w-3 h-3 text-[#ff5e00] group-hover:text-white" />
-                              <span>+ Ganti / Tambah</span>
-                            </button>
                           )}
 
                           {/* Corner markers matching Canvas Owner */}
-                          <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2 border-slate-700 pointer-events-none" />
-                          <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 border-slate-700 pointer-events-none" />
-                          <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2 border-slate-700 pointer-events-none" />
-                          <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2 border-slate-700 pointer-events-none" />
+                          {!hasGraphic && (
+                            <>
+                              <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2 border-slate-600/60 pointer-events-none" />
+                              <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 border-slate-600/60 pointer-events-none" />
+                              <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2 border-slate-600/60 pointer-events-none" />
+                              <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2 border-slate-600/60 pointer-events-none" />
+                            </>
+                          )}
                         </div>
                       )
                     })}
@@ -5486,6 +5436,36 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                           </div>
                         )
                       })}
+                    {/* Tombol Tambah Elemen Tambahan di Panel Kanan */}
+                    <div className="flex items-center gap-1.5 pt-1.5 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTool('select')
+                          if (fileInputRef.current) {
+                            fileInputRef.current.value = ''
+                            fileInputRef.current.click()
+                          }
+                        }}
+                        className="flex-1 py-1.5 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 hover:text-slate-900 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                        title="Unggah logo / gambar baru dari komputer"
+                      >
+                        <Upload className="w-3 h-3 text-[#ff5e00]" />
+                        <span>+ Upload Logo</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTool('select')
+                          setActiveFlyout('text')
+                        }}
+                        className="flex-1 py-1.5 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 hover:text-slate-900 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                        title="Tambah teks bordir / sablon baru"
+                      >
+                        <Type className="w-3 h-3 text-indigo-600" />
+                        <span>+ Tambah Teks</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
