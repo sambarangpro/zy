@@ -36,6 +36,8 @@ function mockupPersistencePlugin() {
             try {
               const parsed = JSON.parse(body)
               fs.writeFileSync(DB_FILE, body, 'utf-8')
+              const publicDb = path.resolve(__dirname, 'public', 'mockups-db.json')
+              fs.writeFileSync(publicDb, body, 'utf-8')
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({ success: true, count: Array.isArray(parsed) ? parsed.length : 1 }))
             } catch (err: any) {

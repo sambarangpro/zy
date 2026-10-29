@@ -100,15 +100,28 @@ export async function syncMockupsWithDisk(): Promise<MockupTemplate[]> {
   let diskList: MockupTemplate[] = []
 
   try {
-    const res = await fetch('/api/mockups')
+    let res = await fetch('/api/mockups')
+    if (!res.ok) {
+      res = await fetch('./mockups-db.json')
+    }
     if (res.ok) {
       const data = await res.json()
       if (Array.isArray(data)) {
         diskList = data
       }
     }
-  } catch (e) {
-    console.warn('Could not sync with disk mockups API', e)
+  } catch {
+    try {
+      const fallbackRes = await fetch('./mockups-db.json')
+      if (fallbackRes.ok) {
+        const data = await fallbackRes.json()
+        if (Array.isArray(data)) {
+          diskList = data
+        }
+      }
+    } catch (e) {
+      console.warn('Could not sync with mockups database file', e)
+    }
   }
 
   // Merge helper: always preserve colorParts with actual items and all 4 photos
