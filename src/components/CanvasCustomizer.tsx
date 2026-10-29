@@ -403,6 +403,14 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     graphics.forEach((g) => {
       if (hiddenGraphicIds.includes(g.id)) return
 
+      // Abaikan rotasi front legacy (36 atau -38 derajat) yang terbawa dari zone depan lama
+      const userRot =
+        g.rotation !== undefined && g.rotation !== 0
+          ? g.rotation
+          : g.rotationZ !== undefined && Math.abs(g.rotationZ) !== 38 && Math.abs(g.rotationZ) !== 36 && g.rotationZ !== 0
+          ? g.rotationZ
+          : 0
+
       // 1. Jika ada logo di Lengan Kiri (Wearer's Left Arm)
       if (g.side === 'left') {
         // Di Tampak Depan: lengan kiri pemakai terlihat di sebelah KANAN layar (Viewer Right, x > 50)
@@ -417,50 +425,35 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           }
         })
 
-        // Base anchor titik tengah kain lengan (bukan tepi terluar agar tidak menggantung di luar kain)
-        const baseX = matchingSleeveZone ? matchingSleeveZone.x : (isViewerRight ? 77 : 23)
-        const baseY = matchingSleeveZone ? matchingSleeveZone.y : 34
+        // Base anchor titik tengah kain lengan
+        const defaultBaseX = currentSide === 'front' ? 88 : 23
+        const defaultBaseY = currentSide === 'front' ? 33 : 34
+        const baseX = matchingSleeveZone ? matchingSleeveZone.x : defaultBaseX
+        const baseY = matchingSleeveZone ? matchingSleeveZone.y : defaultBaseY
 
         // Presisi offset horizontal & vertikal mengikuti pergeseran pengguna di Tampak Samping (g.x dan g.y)
         const offsetX = ((g.x - 50) / 50) * 4.5
         const offsetY = ((g.y - 35) / 50) * 16
 
         // Batasi batas aman agar desain selalu berada di atas kain lengan
-        const minX = isViewerRight ? 50 : 2
-        const maxX = isViewerRight ? 98 : 50
+        const minX = isViewerRight ? 72 : 8
+        const maxX = isViewerRight ? 96 : 38
         const anchorX = Math.max(minX, Math.min(maxX, baseX + (isViewerRight ? -offsetX : offsetX)))
-        const anchorY = Math.max(5, Math.min(95, baseY + offsetY))
+        const anchorY = Math.max(15, Math.min(75, baseY + offsetY))
 
         const baseScale = g.scale || 0.8
         const flipX = g.scaleX || 1
         const flipY = g.scaleY || 1
 
-        const rotX =
-          g.rotationX !== undefined && g.rotationX !== 0
-            ? g.rotationX
-            : matchingSleeveZone?.rotationX !== undefined
-            ? matchingSleeveZone.rotationX
-            : 0
-
-        const rotY =
-          g.rotationY !== undefined && g.rotationY !== 0
-            ? g.rotationY
-            : matchingSleeveZone?.rotationY !== undefined && matchingSleeveZone.rotationY !== 0
-            ? matchingSleeveZone.rotationY
-            : isViewerRight
-            ? -35
-            : 35
-
-        const rotZ =
-          g.rotationZ !== undefined && g.rotationZ !== 0
-            ? g.rotationZ
-            : g.rotation !== undefined && g.rotation !== 0
-            ? g.rotation
-            : matchingSleeveZone?.rotationZ !== undefined
-            ? matchingSleeveZone.rotationZ
-            : 0
+        // Sudut 3D perspektif mengikuti sudut mockup kamera aktif (Front vs Back)
+        const rotX = matchingSleeveZone?.rotationX !== undefined ? matchingSleeveZone.rotationX : (currentSide === 'front' ? 29 : 0)
+        const rotY = matchingSleeveZone?.rotationY !== undefined && matchingSleeveZone.rotationY !== 0 ? matchingSleeveZone.rotationY : (currentSide === 'front' ? 72 : 35)
+        const zoneRotZ = matchingSleeveZone?.rotationZ !== undefined ? matchingSleeveZone.rotationZ : (currentSide === 'front' ? -38 : 0)
+        const rotZ = zoneRotZ + userRot
 
         const autoClip = matchingSleeveZone?.enableAutoClipping ?? g.enableAutoClipping ?? true
+        const scaleMulX = currentSide === 'front' ? 0.95 : 0.88
+        const scaleMulY = 0.95
 
         projected.push({
           graphic: g,
@@ -469,9 +462,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           isViewerRight,
           x: Math.round(anchorX * 10) / 10,
           y: Math.round(anchorY * 10) / 10,
-          // Kompresi horizontal tampak menyamping yang rapi, simetris, dan tegak (tidak miring/penyok)
-          scaleX: Number((baseScale * flipX * 0.62).toFixed(3)),
-          scaleY: Number((baseScale * flipY * 0.86).toFixed(3)),
+          scaleX: Number((baseScale * flipX * scaleMulX).toFixed(3)),
+          scaleY: Number((baseScale * flipY * scaleMulY).toFixed(3)),
           rotationX: rotX,
           rotationY: rotY,
           rotationZ: rotZ,
@@ -493,50 +485,35 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           }
         })
 
-        // Base anchor titik tengah kain lengan (bukan tepi terluar agar tidak menggantung di luar kain)
-        const baseX = matchingSleeveZone ? matchingSleeveZone.x : (isViewerRight ? 77 : 23)
-        const baseY = matchingSleeveZone ? matchingSleeveZone.y : 34
+        // Base anchor titik tengah kain lengan
+        const defaultBaseX = currentSide === 'front' ? 12 : 77
+        const defaultBaseY = currentSide === 'front' ? 33 : 34
+        const baseX = matchingSleeveZone ? matchingSleeveZone.x : defaultBaseX
+        const baseY = matchingSleeveZone ? matchingSleeveZone.y : defaultBaseY
 
         // Presisi offset horizontal & vertikal mengikuti pergeseran pengguna di Tampak Samping (g.x dan g.y)
         const offsetX = ((g.x - 50) / 50) * 4.5
         const offsetY = ((g.y - 35) / 50) * 16
 
         // Batasi batas aman agar desain selalu berada di atas kain lengan
-        const minX = isViewerRight ? 50 : 2
-        const maxX = isViewerRight ? 98 : 50
+        const minX = isViewerRight ? 62 : 6
+        const maxX = isViewerRight ? 92 : 26
         const anchorX = Math.max(minX, Math.min(maxX, baseX + (isViewerRight ? -offsetX : offsetX)))
-        const anchorY = Math.max(5, Math.min(95, baseY + offsetY))
+        const anchorY = Math.max(15, Math.min(75, baseY + offsetY))
 
         const baseScale = g.scale || 0.8
         const flipX = g.scaleX || 1
         const flipY = g.scaleY || 1
 
-        const rotX =
-          g.rotationX !== undefined && g.rotationX !== 0
-            ? g.rotationX
-            : matchingSleeveZone?.rotationX !== undefined
-            ? matchingSleeveZone.rotationX
-            : 0
-
-        const rotY =
-          g.rotationY !== undefined && g.rotationY !== 0
-            ? g.rotationY
-            : matchingSleeveZone?.rotationY !== undefined && matchingSleeveZone.rotationY !== 0
-            ? matchingSleeveZone.rotationY
-            : isViewerRight
-            ? -35
-            : 35
-
-        const rotZ =
-          g.rotationZ !== undefined && g.rotationZ !== 0
-            ? g.rotationZ
-            : g.rotation !== undefined && g.rotation !== 0
-            ? g.rotation
-            : matchingSleeveZone?.rotationZ !== undefined
-            ? matchingSleeveZone.rotationZ
-            : 0
+        // Sudut 3D perspektif mengikuti sudut mockup kamera aktif (Front vs Back)
+        const rotX = matchingSleeveZone?.rotationX !== undefined ? matchingSleeveZone.rotationX : (currentSide === 'front' ? 33 : 0)
+        const rotY = matchingSleeveZone?.rotationY !== undefined && matchingSleeveZone.rotationY !== 0 ? matchingSleeveZone.rotationY : (currentSide === 'front' ? -71 : -35)
+        const zoneRotZ = matchingSleeveZone?.rotationZ !== undefined ? matchingSleeveZone.rotationZ : (currentSide === 'front' ? 36 : 0)
+        const rotZ = zoneRotZ + userRot
 
         const autoClip = matchingSleeveZone?.enableAutoClipping ?? g.enableAutoClipping ?? true
+        const scaleMulX = currentSide === 'front' ? 0.95 : 0.88
+        const scaleMulY = 0.95
 
         projected.push({
           graphic: g,
@@ -545,9 +522,8 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           isViewerRight,
           x: Math.round(anchorX * 10) / 10,
           y: Math.round(anchorY * 10) / 10,
-          // Kompresi horizontal tampak menyamping yang rapi, simetris, dan tegak (tidak miring/penyok)
-          scaleX: Number((baseScale * flipX * 0.62).toFixed(3)),
-          scaleY: Number((baseScale * flipY * 0.86).toFixed(3)),
+          scaleX: Number((baseScale * flipX * scaleMulX).toFixed(3)),
+          scaleY: Number((baseScale * flipY * scaleMulY).toFixed(3)),
           rotationX: rotX,
           rotationY: rotY,
           rotationZ: rotZ,
@@ -1467,6 +1443,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       sizeCat = calc.sizeCategory
     }
 
+    const isSleeveTarget = targetSide === 'left' || targetSide === 'right'
     const newGraphic: CanvasGraphic = {
       id: 'g_' + Date.now(),
       type: 'image',
@@ -1477,10 +1454,10 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       scale,
       scaleX: 1,
       scaleY: 1,
-      rotation: chosenZone?.rotationZ !== undefined ? chosenZone.rotationZ : 0,
-      rotationX: chosenZone?.rotationX || 0,
-      rotationY: chosenZone?.rotationY || 0,
-      rotationZ: chosenZone?.rotationZ !== undefined ? chosenZone.rotationZ : 0,
+      rotation: isSleeveTarget ? 0 : (chosenZone?.rotationZ !== undefined ? chosenZone.rotationZ : 0),
+      rotationX: isSleeveTarget ? 0 : (chosenZone?.rotationX || 0),
+      rotationY: isSleeveTarget ? 0 : (chosenZone?.rotationY || 0),
+      rotationZ: isSleeveTarget ? 0 : (chosenZone?.rotationZ !== undefined ? chosenZone.rotationZ : 0),
       enableAutoClipping: chosenZone?.enableAutoClipping ?? true,
       technique,
       label: fileName.trim() || (technique === 'bordir' ? 'Bordir Komputer' : 'Sablon DTF'),
@@ -2065,8 +2042,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       visibleCurrentGraphics.forEach((g) => {
         const posX = (g.x / 100) * canvas.width
         const posY = (g.y / 100) * canvas.height
-        const rotYRad = ((g.rotationY || 0) * Math.PI) / 180
-        const rotXRad = ((g.rotationX || 0) * Math.PI) / 180
+        const isSleeve = g.side === 'left' || g.side === 'right'
+        const rotYRad = isSleeve ? 0 : (((g.rotationY || 0) * Math.PI) / 180)
+        const rotXRad = isSleeve ? 0 : (((g.rotationX || 0) * Math.PI) / 180)
+        const effRotZ = isSleeve
+          ? (g.rotation !== undefined && g.rotation !== 0
+              ? g.rotation
+              : (g.rotationZ !== undefined && Math.abs(g.rotationZ) !== 38 && Math.abs(g.rotationZ) !== 36 && g.rotationZ !== 0
+                  ? g.rotationZ
+                  : 0))
+          : (g.rotationZ !== undefined ? g.rotationZ : (g.rotation || 0))
         const cosY = Math.cos(rotYRad)
         const cosX = Math.cos(rotXRad)
         const scaleX = (g.scaleX || 1) * g.scale * Math.max(0.15, Math.abs(cosY))
@@ -2074,7 +2059,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
         ctx.save()
         ctx.translate(posX, posY)
-        ctx.rotate(((g.rotationZ !== undefined ? g.rotationZ : g.rotation) * Math.PI) / 180)
+        ctx.rotate((effRotZ * Math.PI) / 180)
         ctx.scale(scaleX, scaleY)
 
         if (g.type === 'text') {
@@ -3851,6 +3836,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                     {currentSideGraphics
                       .filter((g) => !hiddenGraphicIds.includes(g.id) && (g.enableAutoClipping ?? true))
                       .map((g) => {
+                        const isSleeve = g.side === 'left' || g.side === 'right'
+                        const effRotX = isSleeve ? 0 : (g.rotationX || 0)
+                        const effRotY = isSleeve ? 0 : (g.rotationY || 0)
+                        const effRotZ = isSleeve
+                          ? (g.rotation !== undefined && g.rotation !== 0
+                              ? g.rotation
+                              : (g.rotationZ !== undefined && Math.abs(g.rotationZ) !== 38 && Math.abs(g.rotationZ) !== 36 && g.rotationZ !== 0
+                                  ? g.rotationZ
+                                  : 0))
+                          : (g.rotationZ !== undefined ? g.rotationZ : (g.rotation || 0))
                         const scaleX = (g.scaleX || 1) * g.scale
                         const scaleY = (g.scaleY || 1) * g.scale
                         return (
@@ -3859,7 +3854,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             style={{
                               left: `${g.x}%`,
                               top: `${g.y}%`,
-                              transform: `translate(-50%, -50%) perspective(500px) rotateX(${g.rotationX || 0}deg) rotateY(${g.rotationY || 0}deg) rotate(${g.rotationZ !== undefined ? g.rotationZ : g.rotation}deg)`,
+                              transform: `translate(-50%, -50%) perspective(500px) rotateX(${effRotX}deg) rotateY(${effRotY}deg) rotate(${effRotZ}deg)`,
                               transformOrigin: 'center center',
                               opacity: (g.opacity !== undefined ? g.opacity : 100) / 100,
                               mixBlendMode: g.blendMode || 'normal',
@@ -4142,6 +4137,16 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       const scaleY = (g.scaleY || 1) * g.scale
 
                       const isClipped = isClippingMaskActive && (g.enableAutoClipping ?? true)
+                      const isSleeve = g.side === 'left' || g.side === 'right'
+                      const effRotX = isSleeve ? 0 : (g.rotationX || 0)
+                      const effRotY = isSleeve ? 0 : (g.rotationY || 0)
+                      const effRotZ = isSleeve
+                        ? (g.rotation !== undefined && g.rotation !== 0
+                            ? g.rotation
+                            : (g.rotationZ !== undefined && Math.abs(g.rotationZ) !== 38 && Math.abs(g.rotationZ) !== 36 && g.rotationZ !== 0
+                                ? g.rotationZ
+                                : 0))
+                        : (g.rotationZ !== undefined ? g.rotationZ : (g.rotation || 0))
 
                       return (
                         <React.Fragment key={`graphic-frag-${g.id}`}>
@@ -4151,7 +4156,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                             style={{
                               left: `${g.x}%`,
                               top: `${g.y}%`,
-                              transform: `translate(-50%, -50%) perspective(500px) rotateX(${g.rotationX || 0}deg) rotateY(${g.rotationY || 0}deg) rotate(${g.rotationZ !== undefined ? g.rotationZ : g.rotation}deg)`,
+                              transform: `translate(-50%, -50%) perspective(500px) rotateX(${effRotX}deg) rotateY(${effRotY}deg) rotate(${effRotZ}deg)`,
                               transformOrigin: 'center center',
                               zIndex: isSelected ? 40 : 10 + idx,
                               opacity: (g.opacity !== undefined ? g.opacity : 100) / 100,

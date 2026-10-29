@@ -40,24 +40,7 @@ export function App() {
 
   const [selectedGarment, setSelectedGarment] = useState<GarmentType>('kaos')
   const [colors, setColors] = useState<GarmentColorParts>(GARMENTS[1].defaultColors)
-  const [graphics, setGraphics] = useState<CanvasGraphic[]>([
-    {
-      id: 'default_flag',
-      type: 'image',
-      side: 'front',
-      content: `data:image/svg+xml;utf8,${encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 60"><rect width="90" height="30" fill="#dc2626"/><rect y="30" width="90" height="30" fill="#ffffff"/><rect width="90" height="60" fill="none" stroke="#000000" stroke-width="1.5"/></svg>'
-      )}`,
-      x: 88,
-      y: 36,
-      scale: 0.45,
-      rotation: 0,
-      technique: 'bordir',
-      label: 'Bendera Merah Putih (Lengan)',
-      sizeCategory: 'Logo Kecil (≤10×10cm)',
-      calculatedPrice: 10000,
-    },
-  ])
+  const [graphics, setGraphics] = useState<CanvasGraphic[]>([])
 
   // Target spesifik bagian yang ingin diedit di dashboard masker (Kerah, Saku, dll)
   const [mockupEditTarget, setMockupEditTarget] = useState<{ partId?: string; side?: ViewSide } | null>(null)
