@@ -55,6 +55,7 @@ function mockupPersistencePlugin() {
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: './',
   server: {
     watch: {
       ignored: ['**/mockups-db.json', '**/mockups-db.json/**', '**/.user_uploaded/**'],
