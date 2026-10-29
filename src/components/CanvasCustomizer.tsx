@@ -1860,6 +1860,24 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   }
 
   // Toggle Auto Clipping Mask grafik (Potong siluet kain baju)
+    // Ubah skala / ukuran grafis secara presisi
+  const handleScaleGraphic = (gId: string, delta: number) => {
+    pushHistorySnapshot()
+    onGraphicsChange(
+      graphics.map((g) => {
+        if (g.id !== gId) return g
+        const newScale = Math.max(0.2, Math.min(2.5, Number(((g.scale || 1) + delta).toFixed(2))))
+        const calc = calculateGraphicPrice(newScale)
+        return {
+          ...g,
+          scale: newScale,
+          sizeCategory: calc.sizeCategory,
+          calculatedPrice: calc.price,
+        }
+      })
+    )
+  }
+
   const handleToggleGraphicAutoClipping = (gId: string) => {
     pushHistorySnapshot()
     onGraphicsChange(
@@ -4127,209 +4145,6 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
                       return (
                         <React.Fragment key={`graphic-frag-${g.id}`}>
-                          {/* Floating Action Quickbar on Top of Selected Object (Always Stays Horizontal & Unskewed) */}
-                          {isSelected && (
-                            <div
-                              onMouseDown={(e) => e.stopPropagation()}
-                              style={{
-                                left: `${g.x}%`,
-                                top: `${g.y}%`,
-                                transform: 'translate(-50%, -100%) translateY(-54px)',
-                                zIndex: 60,
-                              }}
-                              className="absolute flex items-center gap-1.5 bg-slate-900/95 backdrop-blur-md text-white px-2.5 py-1.5 rounded-xl text-[10px] shadow-2xl whitespace-nowrap border border-slate-700/80 pointer-events-auto select-none"
-                            >
-                              {/* Rotasi 2D Kiri 45° */}
-                              <button
-                                type="button"
-                                onClick={() => handleRotateGraphicBy(g.id, -45)}
-                                title="Putar Kiri 45°"
-                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" />
-                              </button>
-                              {/* Rotasi 2D Kanan 45° */}
-                              <button
-                                type="button"
-                                onClick={() => handleRotateGraphicBy(g.id, 45)}
-                                title="Putar Kanan 45°"
-                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                              >
-                                <RotateCw className="w-3.5 h-3.5" />
-                              </button>
-                              {/* Sudut Rotasi & Tombol Reset 0° */}
-                              {g.rotation !== 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleResetRotation(g.id)}
-                                  title="Klik untuk reset rotasi kembali tegak (0°)"
-                                  className="px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 font-mono text-[9px] font-bold cursor-pointer transition-colors"
-                                >
-                                  {g.rotation}° (Reset)
-                                </button>
-                              )}
-
-                              <div className="w-px h-3 bg-slate-700 mx-0.5" />
-
-                              {/* Rotasi 3D Multi-Axis (Y, X, Z) */}
-                              <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700 text-[8.5px] font-mono">
-                                {/* Y Control (Yaw - Menyamping) */}
-                                <div className="flex items-center gap-0.5">
-                                  <span className="text-amber-300 font-bold px-0.5" title="Rotasi Y (Menyamping 3D)">Y:</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleNudgeGraphicRotationY(g.id, -5)}
-                                    className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
-                                    title="Putar Y -5°"
-                                  >-</button>
-                                  <span className="font-bold text-white px-0.5 min-w-[20px] text-center">{g.rotationY || 0}°</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleNudgeGraphicRotationY(g.id, 5)}
-                                    className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
-                                    title="Putar Y +5°"
-                                  >+</button>
-                                </div>
-
-                                <div className="w-px h-3 bg-slate-700 mx-0.5" />
-
-                                {/* X Control (Pitch - Menunduk) */}
-                                <div className="flex items-center gap-0.5">
-                                  <span className="text-cyan-300 font-bold px-0.5" title="Rotasi X (Menunduk Vertikal 3D)">X:</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleNudgeGraphicRotationX(g.id, -5)}
-                                    className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
-                                    title="Putar X -5°"
-                                  >-</button>
-                                  <span className="font-bold text-white px-0.5 min-w-[20px] text-center">{g.rotationX || 0}°</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleNudgeGraphicRotationX(g.id, 5)}
-                                    className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
-                                    title="Putar X +5°"
-                                  >+</button>
-                                </div>
-
-                                <div className="w-px h-3 bg-slate-700 mx-0.5" />
-
-                                {/* Z Control (Roll - Sudut Pola) */}
-                                <div className="flex items-center gap-0.5">
-                                  <span className="text-pink-300 font-bold px-0.5" title="Rotasi Z (Sudut Putar Pola 2D)">Z:</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleNudgeGraphicRotationZ(g.id, -5)}
-                                    className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
-                                    title="Putar Z -5°"
-                                  >-</button>
-                                  <span className="font-bold text-white px-0.5 min-w-[20px] text-center">{g.rotationZ !== undefined ? g.rotationZ : (g.rotation || 0)}°</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleNudgeGraphicRotationZ(g.id, 5)}
-                                    className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
-                                    title="Putar Z +5°"
-                                  >+</button>
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleResetGraphic3D(g.id)}
-                                  className="ml-1 px-1 py-0.2 bg-slate-700 hover:bg-red-500 text-slate-300 hover:text-white rounded text-[8px] cursor-pointer"
-                                  title="Reset X, Y, Z ke 0°"
-                                >
-                                  0°
-                                </button>
-                              </div>
-
-                              {/* Auto Clipping Mask Toggle */}
-                              <button
-                                type="button"
-                                onClick={() => handleToggleGraphicAutoClipping(g.id)}
-                                className={`px-1.5 py-0.5 rounded font-bold text-[9px] cursor-pointer transition-colors ${
-                                  (g.enableAutoClipping ?? true)
-                                    ? 'bg-emerald-500/40 text-emerald-300 hover:bg-emerald-500/60'
-                                    : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
-                                }`}
-                                title="Toggle Auto Clipping Mask (Potong rapi mengikuti kontur kain baju)"
-                              >
-                                <span>{(g.enableAutoClipping ?? true) ? '✂ Clip: ON' : '✂ Clip: OFF'}</span>
-                              </button>
-
-                              <div className="w-px h-3 bg-slate-700 mx-0.5" />
-
-                              <button
-                                onClick={() => handleDuplicateGraphic(g.id)}
-                                title="Duplikat (Ctrl+D)"
-                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                              >
-                                <Copy className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => handleFlipHorizontal(g.id)}
-                                title="Balik Horizontal (Mirror)"
-                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                              >
-                                <FlipHorizontal className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => handleFlipVertical(g.id)}
-                                title="Balik Vertikal"
-                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                              >
-                                <FlipVertical className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleAlign(g.id, 'center_h')}
-                                title="Rata Tengah Horizontal"
-                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                              >
-                                <AlignCenter className="w-3.5 h-3.5" />
-                              </button>
-                              <div className="w-px h-3 bg-slate-700 mx-0.5" />
-                              {/* Quick Switch: Bordir vs Sablon */}
-                              <button
-                                onClick={() => {
-                                  const nextTech = g.technique === 'bordir' ? 'sablon' : 'bordir'
-                                  updateGraphicsWithHistory(
-                                    graphics.map((item) =>
-                                      item.id === g.id ? { ...item, technique: nextTech } : item
-                                    )
-                                  )
-                                }}
-                                title={`Teknik saat ini: ${g.technique === 'bordir' ? '🪡 Bordir Komputer' : '🎨 Sablon DTF'}. Klik untuk ubah mode.`}
-                                className={`px-1.5 py-0.5 rounded font-bold text-[9px] flex items-center gap-1 cursor-pointer transition-colors ${
-                                  g.technique === 'bordir'
-                                    ? 'bg-amber-500/40 text-amber-300 hover:bg-amber-500/60'
-                                    : 'bg-indigo-500/40 text-indigo-300 hover:bg-indigo-500/60'
-                                }`}
-                              >
-                                <span>{g.technique === 'bordir' ? '🪡 Bordir' : '🎨 Sablon'}</span>
-                              </button>
-                              <div className="w-px h-3 bg-slate-700 mx-0.5" />
-                              <button
-                                onClick={() => handleBringToFront(g.id)}
-                                title="Bawa ke Paling Depan"
-                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                              >
-                                <ChevronUp className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleSendToBack(g.id)}
-                                title="Kirim ke Paling Belakang"
-                                className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                              >
-                                <ChevronDown className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteGraphic(g.id)}
-                                title="Hapus (Delete)"
-                                className="p-1 bg-red-600/80 hover:bg-red-600 rounded text-white ml-0.5 cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )}
-
                           {/* Main Graphic Container */}
                           <div
                             id={`graphic-element-${g.id}`}
@@ -4520,201 +4335,6 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
                     return (
                       <React.Fragment key={`proj-wrap-${proj.graphic.id}`}>
-                        {/* A. FLOATING ACTION QUICKBAR - BEBAS TRANSFORMASI (100% DATAR & RAPI) */}
-                        {isSelected && (
-                          <div
-                            onMouseDown={(e) => e.stopPropagation()}
-                            style={{
-                              left: `${proj.x}%`,
-                              top: `${proj.y}%`,
-                              transform: 'translate(-50%, -100%) translateY(-54px)',
-                              zIndex: 60,
-                            }}
-                            className="absolute flex items-center gap-1.5 bg-slate-900/95 backdrop-blur-md text-white px-3 py-1.5 rounded-xl text-[10px] shadow-2xl whitespace-nowrap border border-slate-700/80 pointer-events-auto select-none"
-                          >
-                            <div className="flex items-center gap-1 text-[9px] font-bold text-amber-300 mr-0.5">
-                              <span>🔗 Lengan {proj.isWearerLeft ? 'Kiri' : 'Kanan'}</span>
-                              <span className="text-[8px] bg-amber-500/30 text-amber-300 px-1 py-0.2 rounded font-mono">
-                                3D
-                              </span>
-                            </div>
-
-                            {/* Technique Switch: Bordir vs Sablon */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const nextTech = proj.graphic.technique === 'bordir' ? 'sablon' : 'bordir'
-                                updateGraphicsWithHistory(
-                                  graphics.map((item) =>
-                                    item.id === proj.graphic.id ? { ...item, technique: nextTech } : item
-                                  )
-                                )
-                              }}
-                              title={`Teknik saat ini: ${proj.graphic.technique === 'bordir' ? '🪡 Bordir Komputer' : '🎨 Sablon DTF'}. Klik untuk ubah mode.`}
-                              className={`px-2 py-0.5 rounded font-bold text-[9px] flex items-center gap-1 cursor-pointer transition-colors ${
-                                proj.graphic.technique === 'bordir'
-                                  ? 'bg-amber-500/40 text-amber-200 hover:bg-amber-500/60'
-                                  : 'bg-indigo-500/40 text-indigo-200 hover:bg-indigo-500/60'
-                              }`}
-                            >
-                              <span>{proj.graphic.technique === 'bordir' ? '🪡 Bordir' : '🎨 Sablon'}</span>
-                            </button>
-
-                            <div className="w-px h-3.5 bg-slate-700 mx-0.5" />
-
-                            {/* Precise Nudge Arrow Controls */}
-                            <div className="flex items-center gap-0.5 bg-slate-800 p-0.5 rounded-lg border border-slate-700">
-                              <button
-                                type="button"
-                                onClick={() => handleNudgeGraphic(proj.graphic.id, 'left')}
-                                className="p-1 hover:bg-slate-700 text-slate-300 hover:text-white rounded cursor-pointer"
-                                title="Geser Kiri (2%)"
-                              >
-                                <ArrowLeft className="w-2.5 h-2.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleNudgeGraphic(proj.graphic.id, 'right')}
-                                className="p-1 hover:bg-slate-700 text-slate-300 hover:text-white rounded cursor-pointer"
-                                title="Geser Kanan (2%)"
-                              >
-                                <ArrowRight className="w-2.5 h-2.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleNudgeGraphic(proj.graphic.id, 'up')}
-                                className="p-1 hover:bg-slate-700 text-slate-300 hover:text-white rounded cursor-pointer"
-                                title="Geser Naik (2%)"
-                              >
-                                <ArrowUp className="w-2.5 h-2.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleNudgeGraphic(proj.graphic.id, 'down')}
-                                className="p-1 hover:bg-slate-700 text-slate-300 hover:text-white rounded cursor-pointer"
-                                title="Geser Turun (2%)"
-                              >
-                                <ArrowDown className="w-2.5 h-2.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleResetSleevePosition(proj.graphic.id)}
-                                className="px-1.5 py-0.5 hover:bg-slate-700 text-slate-400 hover:text-amber-300 rounded font-bold text-[8.5px] cursor-pointer"
-                                title="Kembalikan posisi ke titik tengah lengan (50, 35)"
-                              >
-                                Reset
-                              </button>
-                            </div>
-
-                            <div className="w-px h-3.5 bg-slate-700 mx-0.5" />
-
-                            {/* Rotasi 3D Multi-Axis (Y, X, Z) */}
-                            <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700 text-[8.5px] font-mono">
-                              {/* Y Control (Yaw - Menyamping) */}
-                              <div className="flex items-center gap-0.5">
-                                <span className="text-amber-300 font-bold px-0.5" title="Rotasi Y (Menyamping 3D)">Y:</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleNudgeGraphicRotationY(proj.graphic.id, -5, proj.rotationY)}
-                                  className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
-                                  title="Putar Y -5°"
-                                >-</button>
-                                <span className="font-bold text-white px-0.5 min-w-[20px] text-center">{proj.rotationY}°</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleNudgeGraphicRotationY(proj.graphic.id, 5, proj.rotationY)}
-                                  className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
-                                  title="Putar Y +5°"
-                                >+</button>
-                              </div>
-
-                              <div className="w-px h-3 bg-slate-700 mx-0.5" />
-
-                              {/* X Control (Pitch - Menunduk) */}
-                              <div className="flex items-center gap-0.5">
-                                <span className="text-cyan-300 font-bold px-0.5" title="Rotasi X (Menunduk Vertikal 3D)">X:</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleNudgeGraphicRotationX(proj.graphic.id, -5, proj.rotationX)}
-                                  className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
-                                  title="Putar X -5°"
-                                >-</button>
-                                <span className="font-bold text-white px-0.5 min-w-[20px] text-center">{proj.rotationX}°</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleNudgeGraphicRotationX(proj.graphic.id, 5, proj.rotationX)}
-                                  className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
-                                  title="Putar X +5°"
-                                >+</button>
-                              </div>
-
-                              <div className="w-px h-3 bg-slate-700 mx-0.5" />
-
-                              {/* Z Control (Roll - Sudut Pola) */}
-                              <div className="flex items-center gap-0.5">
-                                <span className="text-pink-300 font-bold px-0.5" title="Rotasi Z (Sudut Putar Pola 2D)">Z:</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleNudgeGraphicRotationZ(proj.graphic.id, -5, proj.rotationZ)}
-                                  className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
-                                  title="Putar Z -5°"
-                                >-</button>
-                                <span className="font-bold text-white px-0.5 min-w-[20px] text-center">{proj.rotationZ}°</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleNudgeGraphicRotationZ(proj.graphic.id, 5, proj.rotationZ)}
-                                  className="px-1 py-0.2 hover:bg-slate-700 text-slate-300 rounded cursor-pointer"
-                                  title="Putar Z +5°"
-                                >+</button>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() => handleResetGraphic3D(proj.graphic.id)}
-                                className="ml-1 px-1 py-0.2 bg-slate-700 hover:bg-red-500 text-slate-300 hover:text-white rounded text-[8px] cursor-pointer"
-                                title="Reset X, Y, Z ke 0°"
-                              >
-                                0°
-                              </button>
-                            </div>
-
-                            {/* Auto Clipping Mask Toggle */}
-                            <button
-                              type="button"
-                              onClick={() => handleToggleGraphicAutoClipping(proj.graphic.id)}
-                              className={`px-1.5 py-0.5 rounded font-bold text-[9px] cursor-pointer transition-colors ${
-                                proj.enableAutoClipping
-                                  ? 'bg-emerald-500/40 text-emerald-300 hover:bg-emerald-500/60'
-                                  : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
-                              }`}
-                              title="Toggle Auto Clipping Mask (Potong rapi mengikuti siluet kain)"
-                            >
-                              <span>{proj.enableAutoClipping ? '✂ Clip: ON' : '✂ Clip: OFF'}</span>
-                            </button>
-
-                            <div className="w-px h-3.5 bg-slate-700 mx-0.5" />
-
-                            {/* Jump to Sleeve View to edit directly */}
-                            <button
-                              type="button"
-                              onClick={() => setCurrentSide(proj.graphic.side)}
-                              title="Buka Tampak Samping untuk edit langsung secara datar"
-                              className="px-2 py-0.5 bg-[#ff5e00] hover:bg-[#e05300] text-white rounded font-bold text-[9px] flex items-center gap-1 cursor-pointer shadow-xs"
-                            >
-                              <span>Buka Samping →</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteGraphic(proj.graphic.id)}
-                              title="Hapus Logo"
-                              className="p-1 bg-red-600/80 hover:bg-red-600 rounded text-white ml-0.5 cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
-
                         {/* B. VISUAL ELEMENT - FORESHORTENED SLEEVE GRAPHIC */}
                         <div
                           key={`proj-${proj.graphic.id}`}
@@ -5278,6 +4898,345 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                     </button>
                   </div>
                 </div>
+
+                {/* 2.1. PENGATURAN ELEMEN TERPILIH (FOKUS TOOLS: ROTASI, POSISI & UKURAN) */}
+                {selectedGraphic && (
+                  <div className="p-3 bg-white border-2 border-[#ff5e00] rounded-2xl shadow-sm space-y-3 animate-in fade-in zoom-in-95 duration-100">
+                    {/* Header: Nama & Info */}
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-7 h-7 rounded-lg bg-orange-50 border border-orange-200 flex items-center justify-center shrink-0">
+                          {selectedGraphic.type === 'image' ? (
+                            <img src={selectedGraphic.content} alt="" className="w-5 h-5 object-contain" />
+                          ) : (
+                            <Type className="w-4 h-4 text-[#ff5e00]" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-black text-slate-800 truncate">
+                            {selectedGraphic.label || (selectedGraphic.type === 'text' ? selectedGraphic.content : 'Elemen Terpilih')}
+                          </div>
+                          <div className="text-[9px] text-slate-400 capitalize">
+                            Sisi: <span className="font-bold text-slate-600">{selectedGraphic.side}</span>
+                            {selectedGraphic.side === 'left' || selectedGraphic.side === 'right' ? ' (Lengan / Bahu)' : ''}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteGraphic(selectedGraphic.id)}
+                          className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          title="Hapus Elemen ini"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedGraphicId(null)}
+                          className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                          title="Tutup Pengaturan"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* GRUP 1: ROTASI (2D & 3D) */}
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] font-black uppercase text-slate-700 tracking-wider flex items-center justify-between">
+                        <span>Rotasi</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleResetRotation(selectedGraphic.id)
+                            handleResetGraphic3D(selectedGraphic.id)
+                          }}
+                          className="text-[9px] font-bold text-slate-400 hover:text-red-500 cursor-pointer"
+                          title="Reset semua rotasi ke 0°"
+                        >
+                          Reset 0°
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1.5 text-center">
+                        {/* Rotasi 2D (Z) */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-1.5 flex flex-col justify-between">
+                          <div className="text-[9px] font-bold text-pink-600 mb-1 flex items-center justify-between">
+                            <span>Rotasi 2D</span>
+                            <span className="font-mono font-bold text-[10px] text-slate-800">
+                              {selectedGraphic.rotationZ !== undefined ? selectedGraphic.rotationZ : (selectedGraphic.rotation || 0)}°
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => handleRotateGraphicBy(selectedGraphic.id, -45)}
+                              className="px-1 py-0.5 text-[8.5px] bg-white hover:bg-slate-200 border border-slate-200 text-slate-600 rounded font-mono"
+                              title="Putar -45°"
+                            >-45°</button>
+                            <button
+                              type="button"
+                              onClick={() => handleNudgeGraphicRotationZ(selectedGraphic.id, -5)}
+                              className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 font-bold cursor-pointer text-xs"
+                              title="Putar -5°"
+                            >-</button>
+                            <button
+                              type="button"
+                              onClick={() => handleNudgeGraphicRotationZ(selectedGraphic.id, 5)}
+                              className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 font-bold cursor-pointer text-xs"
+                              title="Putar +5°"
+                            >+</button>
+                            <button
+                              type="button"
+                              onClick={() => handleRotateGraphicBy(selectedGraphic.id, 45)}
+                              className="px-1 py-0.5 text-[8.5px] bg-white hover:bg-slate-200 border border-slate-200 text-slate-600 rounded font-mono"
+                              title="Putar +45°"
+                            >+45°</button>
+                          </div>
+                        </div>
+
+                        {/* Rotasi 3D Y (Yaw Menyamping) */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-1.5 flex flex-col justify-between">
+                          <div className="text-[9px] font-bold text-amber-600 mb-1 flex items-center justify-between">
+                            <span>3D Samping (Y)</span>
+                            <span className="font-mono font-bold text-[10px] text-slate-800">
+                              {selectedGraphic.rotationY || 0}°
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <button
+                              type="button"
+                              onClick={() => handleNudgeGraphicRotationY(selectedGraphic.id, -5)}
+                              className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 font-bold cursor-pointer text-xs"
+                              title="Putar Y -5°"
+                            >-</button>
+                            <button
+                              type="button"
+                              onClick={() => handleNudgeGraphicRotationY(selectedGraphic.id, 5)}
+                              className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 font-bold cursor-pointer text-xs"
+                              title="Putar Y +5°"
+                            >+</button>
+                          </div>
+                        </div>
+
+                        {/* Rotasi 3D X (Pitch Menunduk) */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-1.5 flex flex-col justify-between">
+                          <div className="text-[9px] font-bold text-cyan-600 mb-1 flex items-center justify-between">
+                            <span>3D Nunduk (X)</span>
+                            <span className="font-mono font-bold text-[10px] text-slate-800">
+                              {selectedGraphic.rotationX || 0}°
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <button
+                              type="button"
+                              onClick={() => handleNudgeGraphicRotationX(selectedGraphic.id, -5)}
+                              className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 font-bold cursor-pointer text-xs"
+                              title="Putar X -5°"
+                            >-</button>
+                            <button
+                              type="button"
+                              onClick={() => handleNudgeGraphicRotationX(selectedGraphic.id, 5)}
+                              className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 font-bold cursor-pointer text-xs"
+                              title="Putar X +5°"
+                            >+</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* GRUP 2: POSISI & UKURAN */}
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] font-black uppercase text-slate-700 tracking-wider flex items-center justify-between">
+                        <span>Posisi & Ukuran</span>
+                        <button
+                          type="button"
+                          onClick={() => handleAlign(selectedGraphic.id, 'center_h')}
+                          className="text-[9px] font-bold text-[#ff5e00] hover:underline cursor-pointer"
+                          title="Rata tengah horizontal"
+                        >
+                          Rata Tengah
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Nudge Panah Arah */}
+                        <div className="grid grid-cols-3 gap-1 bg-slate-50 border border-slate-200 rounded-xl p-1 w-24 shrink-0">
+                          <div />
+                          <button
+                            type="button"
+                            onClick={() => handleNudgeGraphic(selectedGraphic.id, 'up')}
+                            className="w-6 h-6 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
+                            title="Geser Naik (2%)"
+                          >
+                            <ArrowUp className="w-3 h-3" />
+                          </button>
+                          <div />
+                          <button
+                            type="button"
+                            onClick={() => handleNudgeGraphic(selectedGraphic.id, 'left')}
+                            className="w-6 h-6 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
+                            title="Geser Kiri (2%)"
+                          >
+                            <ArrowLeft className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleResetSleevePosition(selectedGraphic.id)}
+                            className="w-6 h-6 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-500 rounded text-[8px] font-bold cursor-pointer"
+                            title="Pusatkan posisi"
+                          >
+                            •
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleNudgeGraphic(selectedGraphic.id, 'right')}
+                            className="w-6 h-6 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
+                            title="Geser Kanan (2%)"
+                          >
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                          <div />
+                          <button
+                            type="button"
+                            onClick={() => handleNudgeGraphic(selectedGraphic.id, 'down')}
+                            className="w-6 h-6 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
+                            title="Geser Turun (2%)"
+                          >
+                            <ArrowDown className="w-3 h-3" />
+                          </button>
+                          <div />
+                        </div>
+
+                        {/* Skala / Ukuran */}
+                        <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2 flex flex-col justify-between h-full">
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="font-semibold text-slate-500">Ukuran / Skala:</span>
+                            <span className="font-mono font-bold text-[#ff5e00]">
+                              {Math.round((selectedGraphic.scale || 1) * 100)}%
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleScaleGraphic(selectedGraphic.id, -0.05)}
+                              className="flex-1 py-1 bg-white hover:bg-slate-200 border border-slate-200 rounded-lg text-slate-700 font-bold text-xs cursor-pointer"
+                              title="Perkecil (-5%)"
+                            >
+                              -
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleScaleGraphic(selectedGraphic.id, 0.05)}
+                              className="flex-1 py-1 bg-white hover:bg-slate-200 border border-slate-200 rounded-lg text-slate-700 font-bold text-xs cursor-pointer"
+                              title="Perbesar (+5%)"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* GRUP 3: TOOLS & FITUR */}
+                    <div className="space-y-1.5 pt-1 border-t border-slate-100">
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {/* Toggle Auto Clipping */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleGraphicAutoClipping(selectedGraphic.id)}
+                          className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                            (selectedGraphic.enableAutoClipping ?? true)
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
+                              : 'bg-slate-100 text-slate-600 border border-slate-200'
+                          }`}
+                          title="Potong otomatis mengikuti siluet kain seragam"
+                        >
+                          <Scissors className="w-3 h-3" />
+                          <span>{(selectedGraphic.enableAutoClipping ?? true) ? 'Clip: ON' : 'Clip: OFF'}</span>
+                        </button>
+
+                        {/* Toggle Teknik: Bordir vs Sablon */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextTech = selectedGraphic.technique === 'bordir' ? 'sablon' : 'bordir'
+                            updateGraphicsWithHistory(
+                              graphics.map((item) =>
+                                item.id === selectedGraphic.id ? { ...item, technique: nextTech } : item
+                              )
+                            )
+                          }}
+                          className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                            selectedGraphic.technique === 'bordir'
+                              ? 'bg-amber-50 text-amber-900 border border-amber-300'
+                              : 'bg-indigo-50 text-indigo-900 border border-indigo-300'
+                          }`}
+                          title="Ubah teknik produksi"
+                        >
+                          <span>{selectedGraphic.technique === 'bordir' ? '🪡 Bordir' : '🎨 Sablon'}</span>
+                        </button>
+
+                        {/* Balik Horizontal (Mirror) */}
+                        <button
+                          type="button"
+                          onClick={() => handleFlipHorizontal(selectedGraphic.id)}
+                          className="py-1.5 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 flex items-center justify-center gap-1 cursor-pointer"
+                          title="Balik Horizontal (Mirror)"
+                        >
+                          <FlipHorizontal className="w-3 h-3" />
+                          <span>Mirror</span>
+                        </button>
+
+                        {/* Duplikat */}
+                        <button
+                          type="button"
+                          onClick={() => handleDuplicateGraphic(selectedGraphic.id)}
+                          className="py-1.5 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 flex items-center justify-center gap-1 cursor-pointer"
+                          title="Duplikat Elemen"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span>Duplikat</span>
+                        </button>
+
+                        {/* Layer Stacking: Bawa ke Depan */}
+                        <button
+                          type="button"
+                          onClick={() => handleBringToFront(selectedGraphic.id)}
+                          className="py-1.5 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 flex items-center justify-center gap-1 cursor-pointer"
+                          title="Bawa ke Paling Depan"
+                        >
+                          <ChevronUp className="w-3 h-3" />
+                          <span>Ke Depan</span>
+                        </button>
+
+                        {/* Layer Stacking: Kirim ke Belakang */}
+                        <button
+                          type="button"
+                          onClick={() => handleSendToBack(selectedGraphic.id)}
+                          className="py-1.5 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-700 flex items-center justify-center gap-1 cursor-pointer"
+                          title="Kirim ke Paling Belakang"
+                        >
+                          <ChevronDown className="w-3 h-3" />
+                          <span>Ke Belakang</span>
+                        </button>
+                      </div>
+
+                      {/* Jika elemen berada di lengan dan saat ini melihat tampak depan/belakang: tombol Buka Samping */}
+                      {(selectedGraphic.side === 'left' || selectedGraphic.side === 'right') &&
+                        (currentSide === 'front' || currentSide === 'back') && (
+                          <button
+                            type="button"
+                            onClick={() => setCurrentSide(selectedGraphic.side)}
+                            className="w-full py-1.5 px-2 bg-slate-900 hover:bg-[#ff5e00] text-white rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                            title="Buka tampak samping untuk melihat & mengedit lengan secara langsung"
+                          >
+                            <span>Buka Tampak Samping ({selectedGraphic.side === 'left' ? 'Kiri' : 'Kanan'}) →</span>
+                          </button>
+                        )}
+                    </div>
+                  </div>
+                )}
 
                 {graphics.length === 0 ? (
                   <div className="flex items-center gap-1.5 pt-1">
