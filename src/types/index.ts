@@ -37,6 +37,7 @@ export interface CanvasGraphic {
   content: string // image dataUrl or text string
   x: number // percentage 0-100
   y: number // percentage 0-100
+  viewPositions?: Partial<Record<ViewSide, { x: number; y: number }>> // independen koordinat per tampak (depan, belakang, samping) agar pergeseran di satu sisi tidak menggeser sisi lain
   scale: number // 0.2 to 2.5
   scaleX?: number // for flip horizontal (-1 or 1)
   scaleY?: number // for flip vertical (-1 or 1)

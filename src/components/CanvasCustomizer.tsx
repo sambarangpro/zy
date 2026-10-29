@@ -419,10 +419,6 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           }
         })
 
-        // Ambil titik tengah zona lengan kiri asli yang dipasang Owner di Tampak Samping (z_left_sleeve)
-        const nativeSideZone = activeMockup?.printZones?.find((z) => z.side === 'left')
-        const nativeCenterX = nativeSideZone ? nativeSideZone.x : 53
-        const nativeCenterY = nativeSideZone ? nativeSideZone.y : 31
 
         // Base anchor titik tengah kain lengan pada tampak aktif (Depan / Belakang)
         const defaultBaseX = currentSide === 'front' ? 88 : 23
@@ -430,15 +426,20 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         const baseX = matchingSleeveZone ? matchingSleeveZone.x : defaultBaseX
         const baseY = matchingSleeveZone ? matchingSleeveZone.y : defaultBaseY
 
-        // Presisi offset horizontal & vertikal relatif terhadap titik tengah area yang dipasang Owner di Tampak Samping
-        const offsetX = ((g.x - nativeCenterX) / 50) * 4.5
-        const offsetY = ((g.y - nativeCenterY) / 50) * 16
-
         // Batasi batas aman agar desain selalu berada di atas kain lengan
-        const minX = isViewerRight ? 72 : 8
-        const maxX = isViewerRight ? 96 : 38
-        const anchorX = Math.max(minX, Math.min(maxX, baseX + (isViewerRight ? -offsetX : offsetX)))
-        const anchorY = Math.max(15, Math.min(75, baseY + offsetY))
+        const minX = isViewerRight ? 65 : 4
+        const maxX = isViewerRight ? 98 : 42
+        const minY = 10
+        const maxY = 80
+
+        // Koordinat independen: prioritaskan g.viewPositions[currentSide] jika pengguna pernah menggeser di tampak ini.
+        // Jika belum, gunakan baseX dan baseY default tanpa terpengaruh pergeseran g.x / g.y di Tampak Samping!
+        const anchorX = g.viewPositions?.[currentSide]?.x !== undefined
+          ? Math.max(minX, Math.min(maxX, g.viewPositions[currentSide]!.x))
+          : baseX
+        const anchorY = g.viewPositions?.[currentSide]?.y !== undefined
+          ? Math.max(minY, Math.min(maxY, g.viewPositions[currentSide]!.y))
+          : baseY
 
         const baseScale = g.scale || 0.8
         const flipX = g.scaleX || 1
@@ -482,10 +483,6 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           }
         })
 
-        // Ambil titik tengah zona lengan kanan asli yang dipasang Owner di Tampak Samping (z_right_sleeve)
-        const nativeSideZone = activeMockup?.printZones?.find((z) => z.side === 'right')
-        const nativeCenterX = nativeSideZone ? nativeSideZone.x : 48
-        const nativeCenterY = nativeSideZone ? nativeSideZone.y : 32
 
         // Base anchor titik tengah kain lengan pada tampak aktif (Depan / Belakang)
         const defaultBaseX = currentSide === 'front' ? 12 : 77
@@ -493,15 +490,20 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         const baseX = matchingSleeveZone ? matchingSleeveZone.x : defaultBaseX
         const baseY = matchingSleeveZone ? matchingSleeveZone.y : defaultBaseY
 
-        // Presisi offset horizontal & vertikal relatif terhadap titik tengah area yang dipasang Owner di Tampak Samping
-        const offsetX = ((g.x - nativeCenterX) / 50) * 4.5
-        const offsetY = ((g.y - nativeCenterY) / 50) * 16
-
         // Batasi batas aman agar desain selalu berada di atas kain lengan
-        const minX = isViewerRight ? 62 : 6
-        const maxX = isViewerRight ? 92 : 26
-        const anchorX = Math.max(minX, Math.min(maxX, baseX + (isViewerRight ? -offsetX : offsetX)))
-        const anchorY = Math.max(15, Math.min(75, baseY + offsetY))
+        const minX = isViewerRight ? 58 : 4
+        const maxX = isViewerRight ? 96 : 40
+        const minY = 10
+        const maxY = 80
+
+        // Koordinat independen: prioritaskan g.viewPositions[currentSide] jika pengguna pernah menggeser di tampak ini.
+        // Jika belum, gunakan baseX dan baseY default tanpa terpengaruh pergeseran g.x / g.y di Tampak Samping!
+        const anchorX = g.viewPositions?.[currentSide]?.x !== undefined
+          ? Math.max(minX, Math.min(maxX, g.viewPositions[currentSide]!.x))
+          : baseX
+        const anchorY = g.viewPositions?.[currentSide]?.y !== undefined
+          ? Math.max(minY, Math.min(maxY, g.viewPositions[currentSide]!.y))
+          : baseY
 
         const baseScale = g.scale || 0.8
         const flipX = g.scaleX || 1
@@ -1238,14 +1240,12 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       }
     } else {
       targetSide = 'right'
-      const sleeveZone = activeMockup?.printZones?.find(
-        (z) => z.side === 'right' || z.name.toLowerCase().includes('lengan kanan')
-      )
-      targetX = sleeveZone ? sleeveZone.x : 48
-      targetY = sleeveZone ? sleeveZone.y : 32
+      const sleeveZone = activeMockup?.printZones?.find((z) => z.side === 'right')
+      targetX = sleeveZone ? sleeveZone.x : 50
+      targetY = sleeveZone ? sleeveZone.y : 35
       rotX = 0
       rotY = 0
-      rotZ = sleeveZone?.rotationZ || 0
+      rotZ = 0
       targetScale = 0.72
       label = 'Bendera Indonesia (Bahu Kanan)'
     }
@@ -1678,33 +1678,89 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     id: string,
     align: 'center_h' | 'center_v' | 'left' | 'right' | 'top' | 'bottom'
   ) => {
-    updateGraphicsWithHistory(
-      graphics.map((g) => {
-        if (g.id !== id) return g
-        switch (align) {
-          case 'center_h': {
-            const isSleeve = g.side === 'left' || g.side === 'right'
-            if (isSleeve) {
-              const sideZone = activeMockup?.printZones?.find((z) => z.side === g.side)
-              return { ...g, x: sideZone ? sideZone.x : (g.side === 'left' ? 53 : 48) }
-            }
-            return { ...g, x: 50 }
+    const targetG = graphics.find((g) => g.id === id)
+    if (!targetG) return
+
+    const isProjectedView =
+      (currentSide === 'front' || currentSide === 'back') &&
+      (targetG.side === 'left' || targetG.side === 'right')
+
+    if (isProjectedView) {
+      const proj = sleeveProjectedGraphics.find((p) => p.graphic.id === id)
+      let curX = targetG.viewPositions?.[currentSide]?.x ?? proj?.x ?? 50
+      let curY = targetG.viewPositions?.[currentSide]?.y ?? proj?.y ?? 33
+
+      if (align === 'center_h') {
+        const isViewerRight = (currentSide === 'front' && targetG.side === 'left') || (currentSide === 'back' && targetG.side === 'right')
+        curX = isViewerRight ? 88 : 12
+      } else if (align === 'center_v') {
+        curY = 33
+      }
+
+      updateGraphicsWithHistory(
+        graphics.map((g) => {
+          if (g.id !== id) return g
+          return {
+            ...g,
+            viewPositions: {
+              ...(g.viewPositions || {}),
+              [currentSide]: {
+                x: Math.round(curX * 10) / 10,
+                y: Math.round(curY * 10) / 10,
+              },
+            },
           }
-          case 'center_v':
-            return { ...g, y: 50 }
-          case 'left':
-            return { ...g, x: 32 }
-          case 'right':
-            return { ...g, x: 68 }
-          case 'top':
-            return { ...g, y: 28 }
-          case 'bottom':
-            return { ...g, y: 72 }
-          default:
-            return g
-        }
-      })
-    )
+        })
+      )
+    } else {
+      updateGraphicsWithHistory(
+        graphics.map((g) => {
+          if (g.id !== id) return g
+          let newX = g.x
+          let newY = g.y
+          switch (align) {
+            case 'center_h': {
+              const isSleeve = g.side === 'left' || g.side === 'right'
+              if (isSleeve) {
+                const sideZone = activeMockup?.printZones?.find((z) => z.side === g.side)
+                newX = sideZone ? sideZone.x : 50
+              } else {
+                newX = 50
+              }
+              break
+            }
+            case 'center_v':
+              newY = 50
+              break
+            case 'left':
+              newX = 32
+              break
+            case 'right':
+              newX = 68
+              break
+            case 'top':
+              newY = 28
+              break
+            case 'bottom':
+              newY = 72
+              break
+          }
+          const updatedViewPositions = {
+            ...(g.viewPositions || {}),
+            [currentSide]: {
+              x: Math.round(newX * 10) / 10,
+              y: Math.round(newY * 10) / 10,
+            },
+          }
+          return {
+            ...g,
+            x: Math.round(newX * 10) / 10,
+            y: Math.round(newY * 10) / 10,
+            viewPositions: updatedViewPositions,
+          }
+        })
+      )
+    }
   }
 
   // Drag and drop reordering for Layers Panel
@@ -1756,12 +1812,33 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
     pushHistorySnapshot()
 
+    const isProjectedView =
+      (currentSide === 'front' || currentSide === 'back') &&
+      (g.side === 'left' || g.side === 'right')
+
+    let initX = g.x
+    let initY = g.y
+
+    if (isProjectedView) {
+      const proj = sleeveProjectedGraphics.find((p) => p.graphic.id === gId)
+      if (proj) {
+        initX = proj.x
+        initY = proj.y
+      } else if (g.viewPositions?.[currentSide]) {
+        initX = g.viewPositions[currentSide]!.x
+        initY = g.viewPositions[currentSide]!.y
+      }
+    } else if (g.viewPositions?.[currentSide]) {
+      initX = g.viewPositions[currentSide]!.x
+      initY = g.viewPositions[currentSide]!.y
+    }
+
     setDragState({
       mode: 'move',
       startX: e.clientX,
       startY: e.clientY,
-      initialGraphicX: g.x,
-      initialGraphicY: g.y,
+      initialGraphicX: initX,
+      initialGraphicY: initY,
       initialScale: g.scale,
       initialRotation: g.rotation,
     })
@@ -1947,40 +2024,118 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     )
   }
 
-  // Geser posisi grafis secara presisi (Nudge per 2%)
+  // Geser posisi grafis secara presisi (Nudge per 2%) independen per tampak
   const handleNudgeGraphic = (gId: string, direction: 'up' | 'down' | 'left' | 'right') => {
     pushHistorySnapshot()
-    onGraphicsChange(
-      graphics.map((g) => {
-        if (g.id !== gId) return g
-        const step = 2
-        let newX = g.x
-        let newY = g.y
-        if (direction === 'up') newY = Math.max(10, g.y - step)
-        if (direction === 'down') newY = Math.min(85, g.y + step)
-        if (direction === 'left') newX = Math.max(15, g.x - step)
-        if (direction === 'right') newX = Math.min(85, g.x + step)
-        return { ...g, x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 }
-      })
-    )
+    const targetG = graphics.find((g) => g.id === gId)
+    if (!targetG) return
+
+    const isProjectedView =
+      (currentSide === 'front' || currentSide === 'back') &&
+      (targetG.side === 'left' || targetG.side === 'right')
+
+    const step = 2
+
+    if (isProjectedView) {
+      const proj = sleeveProjectedGraphics.find((p) => p.graphic.id === gId)
+      const defaultX = currentSide === 'front' ? (targetG.side === 'left' ? 88 : 12) : (targetG.side === 'left' ? 23 : 77)
+      const defaultY = 33
+      let curX = targetG.viewPositions?.[currentSide]?.x ?? proj?.x ?? defaultX
+      let curY = targetG.viewPositions?.[currentSide]?.y ?? proj?.y ?? defaultY
+
+      if (direction === 'up') curY -= step
+      if (direction === 'down') curY += step
+      if (direction === 'left') curX -= step
+      if (direction === 'right') curX += step
+
+      onGraphicsChange(
+        graphics.map((g) => {
+          if (g.id !== gId) return g
+          return {
+            ...g,
+            viewPositions: {
+              ...(g.viewPositions || {}),
+              [currentSide]: {
+                x: Math.round(curX * 10) / 10,
+                y: Math.round(curY * 10) / 10,
+              },
+            },
+          }
+        })
+      )
+    } else {
+      let newX = targetG.x
+      let newY = targetG.y
+      if (direction === 'up') newY = Math.max(10, targetG.y - step)
+      if (direction === 'down') newY = Math.min(85, targetG.y + step)
+      if (direction === 'left') newX = Math.max(15, targetG.x - step)
+      if (direction === 'right') newX = Math.min(85, targetG.x + step)
+
+      onGraphicsChange(
+        graphics.map((g) => {
+          if (g.id !== gId) return g
+          const updatedViewPositions = {
+            ...(g.viewPositions || {}),
+            [currentSide]: {
+              x: Math.round(newX * 10) / 10,
+              y: Math.round(newY * 10) / 10,
+            },
+          }
+          return {
+            ...g,
+            x: Math.round(newX * 10) / 10,
+            y: Math.round(newY * 10) / 10,
+            viewPositions: updatedViewPositions,
+          }
+        })
+      )
+    }
   }
 
-  // Reset posisi lengan ke titik tengah area yang dipasang Owner
+  // Reset posisi ke titik default pada tampak aktif (independen)
   const handleResetSleevePosition = (gId: string) => {
     pushHistorySnapshot()
-    onGraphicsChange(
-      graphics.map((g) => {
-        if (g.id !== gId) return g
-        const isSleeve = g.side === 'left' || g.side === 'right'
-        if (isSleeve) {
-          const sideZone = activeMockup?.printZones?.find((z) => z.side === g.side)
-          const targetX = sideZone ? sideZone.x : (g.side === 'left' ? 53 : 48)
-          const targetY = sideZone ? sideZone.y : (g.side === 'left' ? 31 : 32)
-          return { ...g, x: targetX, y: targetY, rotation: 0, rotationZ: 0, rotationX: 0, rotationY: 0 }
-        }
-        return { ...g, x: 50, y: 50, rotation: 0, rotationZ: 0, rotationX: 0, rotationY: 0 }
-      })
-    )
+    const targetG = graphics.find((g) => g.id === gId)
+    if (!targetG) return
+
+    const isProjectedView =
+      (currentSide === 'front' || currentSide === 'back') &&
+      (targetG.side === 'left' || targetG.side === 'right')
+
+    if (isProjectedView) {
+      // Hapus override viewPositions untuk sisi aktif ini saja, tidak menyentuh tampak samping
+      onGraphicsChange(
+        graphics.map((g) => {
+          if (g.id !== gId) return g
+          const newVP = { ...(g.viewPositions || {}) }
+          delete newVP[currentSide]
+          return { ...g, viewPositions: newVP }
+        })
+      )
+    } else {
+      const isSleeve = targetG.side === 'left' || targetG.side === 'right'
+      const sideZone = isSleeve ? activeMockup?.printZones?.find((z) => z.side === targetG.side) : null
+      const targetX = sideZone ? sideZone.x : 50
+      const targetY = sideZone ? sideZone.y : 35
+
+      onGraphicsChange(
+        graphics.map((g) => {
+          if (g.id !== gId) return g
+          const newVP = { ...(g.viewPositions || {}) }
+          delete newVP[currentSide]
+          return {
+            ...g,
+            x: targetX,
+            y: targetY,
+            rotation: 0,
+            rotationZ: 0,
+            rotationX: 0,
+            rotationY: 0,
+            viewPositions: newVP,
+          }
+        })
+      )
+    }
   }
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -2000,20 +2155,36 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         (currentSide === 'front' || currentSide === 'back') &&
         (targetG?.side === 'left' || targetG?.side === 'right')
 
-      let newX: number
-      let newY: number
-
       if (isProjectedView && targetG) {
-        // Dragging projected sleeve graphic in front/back view maps naturally to sleeve axes
+        // Menggeser proyeksi lengan di tampak depan/belakang murni mengupdate koordinat viewPositions untuk sisi ini saja!
+        // Sisi samping (g.x dan g.y) sama sekali TIDAK ikut bergeser!
         const isViewerRight =
           (currentSide === 'front' && targetG.side === 'left') ||
           (currentSide === 'back' && targetG.side === 'right')
 
-        const effectiveDeltaX = isViewerRight ? -deltaPercentX / 0.45 : deltaPercentX / 0.45
-        const effectiveDeltaY = deltaPercentY / 0.85
+        const minX = isViewerRight ? 60 : 4
+        const maxX = isViewerRight ? 96 : 40
+        const minY = 10
+        const maxY = 80
 
-        newX = Math.max(15, Math.min(85, dragState.initialGraphicX + effectiveDeltaX))
-        newY = Math.max(10, Math.min(85, dragState.initialGraphicY + effectiveDeltaY))
+        const newX = Math.max(minX, Math.min(maxX, dragState.initialGraphicX + deltaPercentX))
+        const newY = Math.max(minY, Math.min(maxY, dragState.initialGraphicY + deltaPercentY))
+
+        onGraphicsChange(
+          graphics.map((g) => {
+            if (g.id === selectedGraphicId) {
+              const updatedViewPositions = {
+                ...(g.viewPositions || {}),
+                [currentSide]: {
+                  x: Math.round(newX * 10) / 10,
+                  y: Math.round(newY * 10) / 10,
+                },
+              }
+              return { ...g, viewPositions: updatedViewPositions }
+            }
+            return g
+          })
+        )
       } else {
         // When clipping mask is on, strictly constrain graphics within mockup bounds
         const minX = isClippingMaskActive ? 15 : 5
@@ -2021,18 +2192,31 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         const minY = isClippingMaskActive ? 12 : 8
         const maxY = isClippingMaskActive ? 88 : 92
 
-        newX = Math.max(minX, Math.min(maxX, dragState.initialGraphicX + deltaPercentX))
-        newY = Math.max(minY, Math.min(maxY, dragState.initialGraphicY + deltaPercentY))
-      }
+        const newX = Math.max(minX, Math.min(maxX, dragState.initialGraphicX + deltaPercentX))
+        const newY = Math.max(minY, Math.min(maxY, dragState.initialGraphicY + deltaPercentY))
 
-      onGraphicsChange(
-        graphics.map((g) => {
-          if (g.id === selectedGraphicId) {
-            return { ...g, x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 }
-          }
-          return g
-        })
-      )
+        onGraphicsChange(
+          graphics.map((g) => {
+            if (g.id === selectedGraphicId) {
+              const updatedViewPositions = {
+                ...(g.viewPositions || {}),
+                [currentSide]: {
+                  x: Math.round(newX * 10) / 10,
+                  y: Math.round(newY * 10) / 10,
+                },
+              }
+              // Menggeser di tampak asli mengupdate g.x dan g.y, tanpa menyentuh koordinat tampak lainnya!
+              return {
+                ...g,
+                x: Math.round(newX * 10) / 10,
+                y: Math.round(newY * 10) / 10,
+                viewPositions: updatedViewPositions,
+              }
+            }
+            return g
+          })
+        )
+      }
     } else if (dragState.mode === 'resize') {
       const handle = dragState.handle || 'se'
       let factor = deltaPixelX + deltaPixelY
@@ -3932,14 +4116,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                       .filter((g) => !hiddenGraphicIds.includes(g.id) && (g.enableAutoClipping ?? true))
                       .map((g) => {
                         const isSleeve = g.side === 'left' || g.side === 'right'
-                        const sideZone = isSleeve ? activeMockup?.printZones?.find((z) => z.side === g.side) : null
                         const effRotX = isSleeve ? 0 : (g.rotationX || 0)
                         const effRotY = isSleeve ? 0 : (g.rotationY || 0)
                         const rawRot = g.rotation !== undefined && g.rotation !== 0 ? g.rotation : (g.rotationZ || 0)
                         const userRot = Math.abs(rawRot) === 38 || Math.abs(rawRot) === 36 ? 0 : rawRot
-                        const effRotZ = isSleeve
-                          ? (sideZone?.rotationZ || 0) + userRot
-                          : (g.rotationZ !== undefined ? g.rotationZ : (g.rotation || 0))
+                        const effRotZ = isSleeve ? userRot : (g.rotationZ !== undefined ? g.rotationZ : (g.rotation || 0))
                         const scaleX = (g.scaleX || 1) * g.scale
                         const scaleY = (g.scaleY || 1) * g.scale
                         return (
@@ -4232,14 +4413,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
                       const isClipped = isClippingMaskActive && (g.enableAutoClipping ?? true)
                       const isSleeve = g.side === 'left' || g.side === 'right'
-                      const sideZone = isSleeve ? activeMockup?.printZones?.find((z) => z.side === g.side) : null
                       const effRotX = isSleeve ? 0 : (g.rotationX || 0)
                       const effRotY = isSleeve ? 0 : (g.rotationY || 0)
                       const rawRot = g.rotation !== undefined && g.rotation !== 0 ? g.rotation : (g.rotationZ || 0)
                       const userRot = Math.abs(rawRot) === 38 || Math.abs(rawRot) === 36 ? 0 : rawRot
-                      const effRotZ = isSleeve
-                        ? (sideZone?.rotationZ || 0) + userRot
-                        : (g.rotationZ !== undefined ? g.rotationZ : (g.rotation || 0))
+                      const effRotZ = isSleeve ? userRot : (g.rotationZ !== undefined ? g.rotationZ : (g.rotation || 0))
 
                       return (
                         <React.Fragment key={`graphic-frag-${g.id}`}>
@@ -5116,57 +5294,71 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-1.5">
-                        <div className="text-[10px] font-semibold text-slate-500">
-                          Posisi: <span className="font-mono font-bold text-slate-800">X:{Math.round(selectedGraphic.x)}% Y:{Math.round(selectedGraphic.y)}%</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-0.5 w-[76px]">
-                          <div />
-                          <button
-                            type="button"
-                            onClick={() => handleNudgeGraphic(selectedGraphic.id, 'up')}
-                            className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
-                            title="Geser Naik (2%)"
-                          >
-                            <ArrowUp className="w-2.5 h-2.5" />
-                          </button>
-                          <div />
-                          <button
-                            type="button"
-                            onClick={() => handleNudgeGraphic(selectedGraphic.id, 'left')}
-                            className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
-                            title="Geser Kiri (2%)"
-                          >
-                            <ArrowLeft className="w-2.5 h-2.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleResetSleevePosition(selectedGraphic.id)}
-                            className="w-5 h-5 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-500 rounded text-[8px] font-bold cursor-pointer"
-                            title="Pusatkan posisi"
-                          >
-                            •
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleNudgeGraphic(selectedGraphic.id, 'right')}
-                            className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
-                            title="Geser Kanan (2%)"
-                          >
-                            <ArrowRight className="w-2.5 h-2.5" />
-                          </button>
-                          <div />
-                          <button
-                            type="button"
-                            onClick={() => handleNudgeGraphic(selectedGraphic.id, 'down')}
-                            className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
-                            title="Geser Turun (2%)"
-                          >
-                            <ArrowDown className="w-2.5 h-2.5" />
-                          </button>
-                          <div />
-                        </div>
-                      </div>
+                      {(() => {
+                        const isProj =
+                          (currentSide === 'front' || currentSide === 'back') &&
+                          (selectedGraphic.side === 'left' || selectedGraphic.side === 'right')
+                        const proj = isProj ? sleeveProjectedGraphics.find((p) => p.graphic.id === selectedGraphic.id) : null
+                        const displayX = isProj
+                          ? (selectedGraphic.viewPositions?.[currentSide]?.x ?? proj?.x ?? Math.round(selectedGraphic.x))
+                          : Math.round(selectedGraphic.x)
+                        const displayY = isProj
+                          ? (selectedGraphic.viewPositions?.[currentSide]?.y ?? proj?.y ?? Math.round(selectedGraphic.y))
+                          : Math.round(selectedGraphic.y)
+                        return (
+                          <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-1.5">
+                            <div className="text-[10px] font-semibold text-slate-500">
+                              Posisi: <span className="font-mono font-bold text-slate-800">X:{Math.round(displayX)}% Y:{Math.round(displayY)}%</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-0.5 w-[76px]">
+                              <div />
+                              <button
+                                type="button"
+                                onClick={() => handleNudgeGraphic(selectedGraphic.id, 'up')}
+                                className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
+                                title="Geser Naik (2%)"
+                              >
+                                <ArrowUp className="w-2.5 h-2.5" />
+                              </button>
+                              <div />
+                              <button
+                                type="button"
+                                onClick={() => handleNudgeGraphic(selectedGraphic.id, 'left')}
+                                className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
+                                title="Geser Kiri (2%)"
+                              >
+                                <ArrowLeft className="w-2.5 h-2.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleResetSleevePosition(selectedGraphic.id)}
+                                className="w-5 h-5 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-500 rounded text-[8px] font-bold cursor-pointer"
+                                title="Pusatkan posisi"
+                              >
+                                •
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleNudgeGraphic(selectedGraphic.id, 'right')}
+                                className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
+                                title="Geser Kanan (2%)"
+                              >
+                                <ArrowRight className="w-2.5 h-2.5" />
+                              </button>
+                              <div />
+                              <button
+                                type="button"
+                                onClick={() => handleNudgeGraphic(selectedGraphic.id, 'down')}
+                                className="w-5 h-5 flex items-center justify-center bg-white hover:bg-slate-200 border border-slate-200 rounded text-slate-700 cursor-pointer shadow-2xs"
+                                title="Geser Turun (2%)"
+                              >
+                                <ArrowDown className="w-2.5 h-2.5" />
+                              </button>
+                              <div />
+                            </div>
+                          </div>
+                        )
+                      })()}
                     </div>
 
                     {/* GRUP 2.5: UKURAN / SKALA (MINIMAL HINGGA MAKSIMAL 8% - 500%) */}
