@@ -54,6 +54,7 @@ import {
   Check,
   Search,
   Edit3,
+  Loader2,
   Sparkles,
 } from 'lucide-react'
 import {
@@ -93,6 +94,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   const [showGuidelines, setShowGuidelines] = useState<boolean>(true)
   const [zoomLevel, setZoomLevel] = useState<number>(1)
   const [showLayersPanel, setShowLayersPanel] = useState<boolean>(true)
+  const [isExporting, setIsExporting] = useState<boolean>(false)
   const [activeFlyout, setActiveFlyout] = useState<
     'text' | 'lighting' | 'presets' | 'brush' | 'colorParts' | null
   >(null)
@@ -2223,58 +2225,173 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   }
 
   // Export Lossless HD Mockup (includes Mockup Image, Paint Layer & Graphics)
-  const handleDownloadMockup = () => {
-    if (!viewportRef.current) return
+  const handleDownloadMockup = async () => {
+    if (!viewportRef.current || isExporting) return
+    setIsExporting(true)
 
-    // 1. Dapatkan rasio aspek alami asli dari foto mockup agar 1:1 identik dengan canvas studio
-    const natW = mockupNaturalSize.width || 1200
-    const natH = mockupNaturalSize.height || 1400
-    const stageW = stageDisplayWidth || 540
+    try {
+      // 1. Dapatkan rasio aspek alami asli dari foto mockup agar 1:1 identik dengan canvas studio
+      const natW = mockupNaturalSize.width || 1200
+      const natH = mockupNaturalSize.height || 1400
+      const stageW = stageDisplayWidth || 540
 
-    // Export dalam resolusi Ultra HD (crisp, tajam tanpa distorsi rasio aspek)
-    const exportH = Math.max(2200, natH)
-    const exportW = Math.round(exportH * (natW / natH))
+      // Export dalam resolusi Ultra HD (crisp, tajam tanpa distorsi rasio aspek)
+      const exportH = Math.max(2200, natH)
+      const exportW = Math.round(exportH * (natW / natH))
 
-    const canvas = document.createElement('canvas')
-    canvas.width = exportW
-    canvas.height = exportH
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+      const canvas = document.createElement('canvas')
+      canvas.width = exportW
+      canvas.height = exportH
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
 
-    // Latar belakang bersih putih
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
+      // Latar belakang bersih putih
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    // Helper 3D affine matrix calculation matching CSS transform (perspective, rotateX, rotateY, rotateZ, scale)
-    const getAffine3D = (rotXDeg: number, rotYDeg: number, rotZDeg: number, scaleX: number, scaleY: number) => {
-      const rx = ((rotXDeg || 0) * Math.PI) / 180
-      const ry = ((rotYDeg || 0) * Math.PI) / 180
-      const rz = ((rotZDeg || 0) * Math.PI) / 180
-
-      const cz = Math.cos(rz), sz = Math.sin(rz)
-      const cy = Math.cos(ry), sy = Math.sin(ry)
-      const cx = Math.cos(rx), sx = Math.sin(rx)
-
-      const vx_x = cy * cz
-      const vx_y = cx * sz - sx * sy * cz
-      const vy_x = -cy * sz
-      const vy_y = cx * cz + sx * sy * sz
-
-      return {
-        a: vx_x * scaleX,
-        b: vx_y * scaleX,
-        c: vy_x * scaleY,
-        d: vy_y * scaleY,
+      // Helper load image aman (dengan fallback anonymous/direct)
+      const loadImageSafe = (src: string): Promise<HTMLImageElement | null> => {
+        if (!src) return Promise.resolve(null)
+        return new Promise((resolve) => {
+          const img = new Image()
+          img.crossOrigin = 'anonymous'
+          img.onload = () => resolve(img)
+          img.onerror = () => {
+            const fallbackImg = new Image()
+            fallbackImg.onload = () => resolve(fallbackImg)
+            fallbackImg.onerror = () => {
+              console.warn('Failed to load asset for export:', src.slice(0, 60))
+              resolve(null)
+            }
+            fallbackImg.src = src
+          }
+          img.src = src
+        })
       }
-    }
 
-    const drawGraphicsOnCanvas = (garmentImg: HTMLImageElement | null) => {
-      let loadedCount = 0
+      // Helper 3D affine matrix calculation matching CSS transform (perspective, rotateX, rotateY, rotateZ, scale)
+      // Rotasi CSS dihitung dari sumbu Z -> Y -> X secara matematis presisi tanpa distorsi pembalikan
+      const getAffine3D = (rotXDeg: number, rotYDeg: number, rotZDeg: number, scaleX: number, scaleY: number) => {
+        const rx = ((rotXDeg || 0) * Math.PI) / 180
+        const ry = ((rotYDeg || 0) * Math.PI) / 180
+        const rz = ((rotZDeg || 0) * Math.PI) / 180
+
+        const cz = Math.cos(rz), sz = Math.sin(rz)
+        const cy = Math.cos(ry), sy = Math.sin(ry)
+        const cx = Math.cos(rx), sx = Math.sin(rx)
+
+        const vx_x = cy * cz
+        const vx_y = cx * sz + sx * sy * cz
+        const vy_x = -cy * sz
+        const vy_y = cx * cz - sx * sy * sz
+
+        return {
+          a: vx_x * scaleX,
+          b: vx_y * scaleX,
+          c: vy_x * scaleY,
+          d: vy_y * scaleY,
+        }
+      }
+
+      const allParts = activeMockup?.colorParts || []
+      const partsToDraw = [...currentSideColorParts].reverse().filter((p) => {
+        if (!p.maskImg) return false
+        const groupKey = getPartMatchKey(p, allParts)
+        return !hiddenColorPartKeys.includes(groupKey) && !hiddenColorPartKeys.includes(p.id)
+      })
+
       const visibleCurrentGraphics = currentSideGraphics.filter((g) => !hiddenGraphicIds.includes(g.id))
       const visibleProjected = sleeveProjectedGraphics
-      const totalItems = visibleCurrentGraphics.length + visibleProjected.length
 
-      // Two offscreen canvases: one for clipped graphics (trimmed to garment silhouette) and one for unclipped
+      // 2. Preload seluruh aset gambar secara paralel sebelum mulai menggambar di canvas
+      // Menghilangkan bug race condition & akumulasi matriks transform terdistorsi!
+      const [
+        garmentImg,
+        partMaskImgs,
+        paintImg,
+        currentGraphicImgs,
+        projectedGraphicImgs,
+      ] = await Promise.all([
+        loadImageSafe(currentMockupImage || ''),
+        Promise.all(partsToDraw.map((p) => loadImageSafe(p.maskImg!))),
+        loadImageSafe(paintLayers[currentSide] || ''),
+        Promise.all(visibleCurrentGraphics.map((g) => (g.type === 'image' ? loadImageSafe(g.content) : Promise.resolve(null)))),
+        Promise.all(visibleProjected.map((proj) => (proj.graphic.type === 'image' ? loadImageSafe(proj.graphic.content) : Promise.resolve(null)))),
+      ])
+
+      // 3. Gambar Foto Mockup Polos Asli (Layer Paling Dasar)
+      if (garmentImg) {
+        ctx.save()
+        if (lighting.brightness !== 0 || lighting.contrast !== 0 || lighting.saturation !== 0) {
+          ctx.filter = `brightness(${1 + lighting.brightness / 100}) contrast(${1 + lighting.contrast / 100}) saturate(${1 + lighting.saturation / 100})`
+        }
+        ctx.drawImage(garmentImg, 0, 0, canvas.width, canvas.height)
+        ctx.restore()
+      }
+
+      // 4. Gambar Warna Dasar Keseluruhan Seragam (dengan punch-out bagian kain aktif)
+      if (baseGarmentColor && !isBaseColorHidden && garmentImg) {
+        const offBaseCanvas = document.createElement('canvas')
+        offBaseCanvas.width = canvas.width
+        offBaseCanvas.height = canvas.height
+        const offBaseCtx = offBaseCanvas.getContext('2d')
+        if (offBaseCtx) {
+          offBaseCtx.drawImage(garmentImg, 0, 0, canvas.width, canvas.height)
+          offBaseCtx.globalCompositeOperation = 'source-in'
+          offBaseCtx.fillStyle = baseGarmentColor
+          offBaseCtx.fillRect(0, 0, canvas.width, canvas.height)
+
+          if (partsToDraw.length > 0) {
+            partMaskImgs.forEach((maskImg) => {
+              if (maskImg) {
+                offBaseCtx.save()
+                offBaseCtx.globalCompositeOperation = 'destination-out'
+                offBaseCtx.drawImage(maskImg, 0, 0, canvas.width, canvas.height)
+                offBaseCtx.restore()
+              }
+            })
+          }
+
+          ctx.save()
+          ctx.globalCompositeOperation = 'multiply'
+          ctx.drawImage(offBaseCanvas, 0, 0)
+          ctx.restore()
+        }
+      }
+
+      // 5. Gambar Tiap Komponen Kain (Kerah, Saku, dll.) Sesuai Urutan Layer DOM
+      partsToDraw.forEach((part, idx) => {
+        const maskImg = partMaskImgs[idx]
+        if (!maskImg) return
+        const offCanvas = document.createElement('canvas')
+        offCanvas.width = canvas.width
+        offCanvas.height = canvas.height
+        const offCtx = offCanvas.getContext('2d')
+        if (offCtx) {
+          const color = getPartColor(part)
+          offCtx.fillStyle = color
+          offCtx.fillRect(0, 0, offCanvas.width, offCanvas.height)
+          offCtx.globalCompositeOperation = 'destination-in'
+          offCtx.drawImage(maskImg, 0, 0, offCanvas.width, offCanvas.height)
+
+          ctx.save()
+          ctx.globalCompositeOperation = 'multiply'
+          ctx.drawImage(offCanvas, 0, 0)
+          ctx.restore()
+        }
+      })
+
+      // 6. Gambar Paint / Kuas Layer (Jika Pengguna Menggambar Bebas)
+      if (paintImg) {
+        ctx.save()
+        if (brushBlendMode === 'multiply') {
+          ctx.globalCompositeOperation = 'multiply'
+        }
+        ctx.drawImage(paintImg, 0, 0, canvas.width, canvas.height)
+        ctx.restore()
+      }
+
+      // 7. Gambar Seluruh Grafis Sablon & Bordir (Dengan Isolasi Save/Restore Mandiri Per-Item)
       const clippedCanvas = document.createElement('canvas')
       clippedCanvas.width = canvas.width
       clippedCanvas.height = canvas.height
@@ -2285,48 +2402,17 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       unclippedCanvas.height = canvas.height
       const unclippedCtx = unclippedCanvas.getContext('2d')
 
-      const finishExport = () => {
-        // Potong grafis clipped dengan siluet baju menggunakan destination-in (identik 1:1 dengan clipping mask CSS)
-        if (clippedCtx && isClippingMaskActive && garmentImg) {
-          clippedCtx.save()
-          clippedCtx.globalCompositeOperation = 'destination-in'
-          clippedCtx.drawImage(garmentImg, 0, 0, canvas.width, canvas.height)
-          clippedCtx.restore()
-          ctx.drawImage(clippedCanvas, 0, 0)
-        } else if (clippedCtx) {
-          ctx.drawImage(clippedCanvas, 0, 0)
-        }
-
-        if (unclippedCtx) {
-          ctx.drawImage(unclippedCanvas, 0, 0)
-        }
-
-        const link = document.createElement('a')
-        link.download = `ZY_Studio_${activeMockup?.name || 'Mockup'}_${currentSide}_${Date.now()}.png`
-        link.href = canvas.toDataURL('image/png')
-        link.click()
-      }
-
-      if (totalItems === 0) {
-        finishExport()
-        return
-      }
-
-      const checkFinished = () => {
-        loadedCount++
-        if (loadedCount >= totalItems) {
-          finishExport()
-        }
-      }
-
-      // Base graphic sizing: on screen, base bounding box is 140px on stageW.
-      // Scaled proportionally to HD export width so relative size on shirt matches 100%!
+      // Skala bounding box grafis dasar: 140px di layar panggung studio (stageW)
       const baseGraphicBox = (140 / stageW) * canvas.width
 
-      // 1. Gambar Desain Tampak Sisi Aktif (Direct Flat View / Depan / Belakang / Samping)
-      visibleCurrentGraphics.forEach((g) => {
-        const posX = (g.x / 100) * canvas.width
-        const posY = (g.y / 100) * canvas.height
+      // A. Gambar Desain Tampak Sisi Aktif (Direct View / Depan / Belakang / Samping)
+      visibleCurrentGraphics.forEach((g, idx) => {
+        // Gunakan viewPositions jika pengguna pernah menggeser khusus di tampak ini, atau koordinat default g.x/g.y
+        const effX = g.viewPositions?.[currentSide]?.x !== undefined ? g.viewPositions[currentSide]!.x : g.x
+        const effY = g.viewPositions?.[currentSide]?.y !== undefined ? g.viewPositions[currentSide]!.y : g.y
+        const posX = (effX / 100) * canvas.width
+        const posY = (effY / 100) * canvas.height
+
         const isSleeve = g.side === 'left' || g.side === 'right'
         const effRotX = isSleeve ? 0 : (g.rotationX || 0)
         const effRotY = isSleeve ? 0 : (g.rotationY || 0)
@@ -2351,7 +2437,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         if (g.type === 'text') {
           const fontScale = canvas.width / stageW
           const actualFontSize = (g.fontSize || 22) * fontScale
-          targetCtx.font = `bold ${actualFontSize}px ${g.fontFamily || 'Montserrat'}`
+          targetCtx.font = `bold ${actualFontSize}px ${g.fontFamily || 'Montserrat'}, sans-serif`
           targetCtx.textAlign = 'center'
           targetCtx.textBaseline = 'middle'
           targetCtx.fillStyle = g.textColor || '#ffffff'
@@ -2359,12 +2445,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           targetCtx.lineWidth = Math.max(1, actualFontSize * 0.08)
           targetCtx.strokeText(g.content, 0, 0)
           targetCtx.fillText(g.content, 0, 0)
-          targetCtx.restore()
-          checkFinished()
         } else {
-          const img = new Image()
-          img.crossOrigin = 'anonymous'
-          img.onload = () => {
+          const img = currentGraphicImgs[idx]
+          if (img) {
             const aspect = img.width / Math.max(1, img.height)
             let w = baseGraphicBox
             let h = baseGraphicBox
@@ -2376,21 +2459,17 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
             if (g.technique === 'bordir') {
               targetCtx.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.6)) contrast(1.1) saturate(1.15)'
+            } else {
+              targetCtx.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
             }
             targetCtx.drawImage(img, -w / 2, -h / 2, w, h)
-            targetCtx.restore()
-            checkFinished()
           }
-          img.onerror = () => {
-            targetCtx.restore()
-            checkFinished()
-          }
-          img.src = g.content
         }
+        targetCtx.restore()
       })
 
-      // 2. Gambar Desain Proyeksi Lengan (Menyamping Realistis di Tampak Depan / Belakang)
-      visibleProjected.forEach((proj) => {
+      // B. Gambar Desain Proyeksi Lengan 3D Realistis (Menyamping di Tampak Depan / Belakang)
+      visibleProjected.forEach((proj, idx) => {
         const posX = (proj.x / 100) * canvas.width
         const posY = (proj.y / 100) * canvas.height
 
@@ -2409,7 +2488,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         if (proj.graphic.type === 'text') {
           const fontScale = canvas.width / stageW
           const actualFontSize = (proj.graphic.fontSize || 22) * fontScale
-          targetCtx.font = `bold ${actualFontSize}px ${proj.graphic.fontFamily || 'Montserrat'}`
+          targetCtx.font = `bold ${actualFontSize}px ${proj.graphic.fontFamily || 'Montserrat'}, sans-serif`
           targetCtx.textAlign = 'center'
           targetCtx.textBaseline = 'middle'
           targetCtx.fillStyle = proj.graphic.textColor || '#ffffff'
@@ -2417,12 +2496,9 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           targetCtx.lineWidth = Math.max(1, actualFontSize * 0.08)
           targetCtx.strokeText(proj.graphic.content, 0, 0)
           targetCtx.fillText(proj.graphic.content, 0, 0)
-          targetCtx.restore()
-          checkFinished()
         } else {
-          const img = new Image()
-          img.crossOrigin = 'anonymous'
-          img.onload = () => {
+          const img = projectedGraphicImgs[idx]
+          if (img) {
             const aspect = img.width / Math.max(1, img.height)
             let w = baseGraphicBox
             let h = baseGraphicBox
@@ -2434,183 +2510,39 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
             if (proj.graphic.technique === 'bordir') {
               targetCtx.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.6)) contrast(1.1) saturate(1.15)'
+            } else {
+              targetCtx.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
             }
             targetCtx.drawImage(img, -w / 2, -h / 2, w, h)
-            targetCtx.restore()
-            checkFinished()
           }
-          img.onerror = () => {
-            targetCtx.restore()
-            checkFinished()
-          }
-          img.src = proj.graphic.content
         }
-      })
-    }
-
-    const drawPaintLayerAndContinue = (garmentImg: HTMLImageElement | null) => {
-      const paintData = paintLayers[currentSide]
-      if (paintData) {
-        const paintImg = new Image()
-        paintImg.onload = () => {
-          ctx.save()
-          if (brushBlendMode === 'multiply') {
-            ctx.globalCompositeOperation = 'multiply'
-          }
-          ctx.drawImage(paintImg, 0, 0, canvas.width, canvas.height)
-          ctx.restore()
-          drawGraphicsOnCanvas(garmentImg)
-        }
-        paintImg.onerror = () => {
-          drawGraphicsOnCanvas(garmentImg)
-        }
-        paintImg.src = paintData
-      } else {
-        drawGraphicsOnCanvas(garmentImg)
-      }
-    }
-
-    const drawColorPartsAndContinue = (garmentImg: HTMLImageElement | null) => {
-      // Invert so bottom-most is drawn first, and top-most (index 0) is drawn last on top
-      const allParts = activeMockup?.colorParts || []
-      const partsToDraw = [...currentSideColorParts].reverse().filter((p) => {
-        if (!p.maskImg) return false
-        const groupKey = getPartMatchKey(p, allParts)
-        return !hiddenColorPartKeys.includes(groupKey) && !hiddenColorPartKeys.includes(p.id)
+        targetCtx.restore()
       })
 
-      const renderActiveParts = () => {
-        if (partsToDraw.length === 0) {
-          drawPaintLayerAndContinue(garmentImg)
-          return
-        }
-
-        const renderedLayers: (HTMLCanvasElement | null)[] = new Array(partsToDraw.length).fill(null)
-        let loadedParts = 0
-
-        partsToDraw.forEach((part, idx) => {
-          const maskImg = new Image()
-          maskImg.crossOrigin = 'anonymous'
-          maskImg.onload = () => {
-            const offCanvas = document.createElement('canvas')
-            offCanvas.width = canvas.width
-            offCanvas.height = canvas.height
-            const offCtx = offCanvas.getContext('2d')
-            if (offCtx) {
-              const color = getPartColor(part)
-              offCtx.fillStyle = color
-              offCtx.fillRect(0, 0, offCanvas.width, offCanvas.height)
-              offCtx.globalCompositeOperation = 'destination-in'
-              offCtx.drawImage(maskImg, 0, 0, offCanvas.width, offCanvas.height)
-              renderedLayers[idx] = offCanvas
-            }
-            loadedParts++
-            if (loadedParts === partsToDraw.length) {
-              // Draw in exact bottom-to-top sequence
-              renderedLayers.forEach((layer) => {
-                if (layer) {
-                  ctx.save()
-                  ctx.globalCompositeOperation = 'multiply'
-                  ctx.drawImage(layer, 0, 0)
-                  ctx.restore()
-                }
-              })
-              drawPaintLayerAndContinue(garmentImg)
-            }
-          }
-          maskImg.onerror = () => {
-            loadedParts++
-            if (loadedParts === partsToDraw.length) {
-              renderedLayers.forEach((layer) => {
-                if (layer) {
-                  ctx.save()
-                  ctx.globalCompositeOperation = 'multiply'
-                  ctx.drawImage(layer, 0, 0)
-                  ctx.restore()
-                }
-              })
-              drawPaintLayerAndContinue(garmentImg)
-            }
-          }
-          maskImg.src = part.maskImg!
-        })
+      // 8. Masking Grafis Mengikuti Siluet Kain (Destination-In)
+      if (clippedCtx && isClippingMaskActive && garmentImg) {
+        clippedCtx.save()
+        clippedCtx.globalCompositeOperation = 'destination-in'
+        clippedCtx.drawImage(garmentImg, 0, 0, canvas.width, canvas.height)
+        clippedCtx.restore()
+        ctx.drawImage(clippedCanvas, 0, 0)
+      } else if (clippedCtx) {
+        ctx.drawImage(clippedCanvas, 0, 0)
       }
 
-      // Gambar warna dasar keseluruhan seragam terlebih dahulu (posisi di bawah semua layer)
-      if (baseGarmentColor && !isBaseColorHidden && currentMockupImage && garmentImg) {
-        const offBaseCanvas = document.createElement('canvas')
-        offBaseCanvas.width = canvas.width
-        offBaseCanvas.height = canvas.height
-        const offBaseCtx = offBaseCanvas.getContext('2d')
-        if (offBaseCtx) {
-          offBaseCtx.drawImage(garmentImg, 0, 0, canvas.width, canvas.height)
-          offBaseCtx.globalCompositeOperation = 'source-in'
-          offBaseCtx.fillStyle = baseGarmentColor
-          offBaseCtx.fillRect(0, 0, canvas.width, canvas.height)
+      if (unclippedCtx) {
+        ctx.drawImage(unclippedCanvas, 0, 0)
+      }
 
-          if (partsToDraw.length > 0) {
-            let loadedMasks = 0
-            partsToDraw.forEach((part) => {
-              const maskImg = new Image()
-              maskImg.crossOrigin = 'anonymous'
-              maskImg.onload = () => {
-                offBaseCtx.save()
-                offBaseCtx.globalCompositeOperation = 'destination-out'
-                offBaseCtx.drawImage(maskImg, 0, 0, canvas.width, canvas.height)
-                offBaseCtx.restore()
-                loadedMasks++
-                if (loadedMasks === partsToDraw.length) {
-                  ctx.save()
-                  ctx.globalCompositeOperation = 'multiply'
-                  ctx.drawImage(offBaseCanvas, 0, 0)
-                  ctx.restore()
-                  renderActiveParts()
-                }
-              }
-              maskImg.onerror = () => {
-                loadedMasks++
-                if (loadedMasks === partsToDraw.length) {
-                  ctx.save()
-                  ctx.globalCompositeOperation = 'multiply'
-                  ctx.drawImage(offBaseCanvas, 0, 0)
-                  ctx.restore()
-                  renderActiveParts()
-                }
-              }
-              maskImg.src = part.maskImg!
-            })
-            return
-          } else {
-            ctx.save()
-            ctx.globalCompositeOperation = 'multiply'
-            ctx.drawImage(offBaseCanvas, 0, 0)
-            ctx.restore()
-          }
-        }
-        renderActiveParts()
-      } else {
-        renderActiveParts()
-      }
-    }
-
-    if (currentMockupImage) {
-      const customImg = new Image()
-      customImg.crossOrigin = 'anonymous'
-      customImg.onload = () => {
-        ctx.save()
-        if (lighting.brightness !== 0 || lighting.contrast !== 0 || lighting.saturation !== 0) {
-          ctx.filter = `brightness(${1 + lighting.brightness / 100}) contrast(${1 + lighting.contrast / 100}) saturate(${1 + lighting.saturation / 100})`
-        }
-        ctx.drawImage(customImg, 0, 0, canvas.width, canvas.height)
-        ctx.restore()
-        drawColorPartsAndContinue(customImg)
-      }
-      customImg.onerror = () => {
-        drawColorPartsAndContinue(null)
-      }
-      customImg.src = currentMockupImage
-    } else {
-      drawColorPartsAndContinue(null)
+      // 9. Simpan Hasil Ekspor PNG Ultra HD Otomatis
+      const link = document.createElement('a')
+      link.download = `ZY_Studio_${activeMockup?.name || 'Mockup'}_${currentSide}_${Date.now()}.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+    } catch (err) {
+      console.error('Failed to export mockup HD:', err)
+    } finally {
+      setIsExporting(false)
     }
   }
 
@@ -3257,11 +3189,18 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           {/* Export HD Button */}
           <button
             onClick={handleDownloadMockup}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+            disabled={isExporting}
+            className={`flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs ${
+              isExporting ? 'opacity-60 cursor-not-allowed' : ''
+            }`}
             title="Download Desain Gambar HD (PNG)"
           >
-            <Download className="w-3.5 h-3.5 text-[#ff5e00]" />
-            <span className="hidden sm:inline">Export HD</span>
+            {isExporting ? (
+              <Loader2 className="w-3.5 h-3.5 text-[#ff5e00] animate-spin" />
+            ) : (
+              <Download className="w-3.5 h-3.5 text-[#ff5e00]" />
+            )}
+            <span className="hidden sm:inline">{isExporting ? 'Mengekspor HD...' : 'Export HD'}</span>
           </button>
 
           {/* Order CTA Button */}
