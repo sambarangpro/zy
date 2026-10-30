@@ -1365,74 +1365,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   }
   void _handleInitiateUploadForZone;
 
-  // Render Contoh Area Gambar Logo / Patch Realistis (Identik 1:1 dengan MockupDashboard)
-  const renderSampleEmblem = (zone: PrintZone) => {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center p-0.5 select-none pointer-events-none drop-shadow-md">
-        <svg
-          viewBox="0 0 100 100"
-          className="w-full h-full max-w-full max-h-full overflow-visible drop-shadow-sm"
-        >
-          <defs>
-            <linearGradient id={`cz-grad-shield-${zone.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#1e3a8a" />
-              <stop offset="50%" stopColor="#2563eb" />
-              <stop offset="100%" stopColor="#1d4ed8" />
-            </linearGradient>
-            <linearGradient id={`cz-grad-gold-${zone.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#fef08a" />
-              <stop offset="50%" stopColor="#eab308" />
-              <stop offset="100%" stopColor="#ca8a04" />
-            </linearGradient>
-          </defs>
-          <path
-            d="M50 6 L84 20 L84 54 Q84 84 50 94 Q16 84 16 54 L16 20 Z"
-            fill={`url(#cz-grad-shield-${zone.id})`}
-            stroke={`url(#cz-grad-gold-${zone.id})`}
-            strokeWidth="3.5"
-          />
-          <path
-            d="M50 13 L77 24 L77 52 Q77 77 50 86 Q23 77 23 52 L23 24 Z"
-            fill="none"
-            stroke="#fbbf24"
-            strokeWidth="1.2"
-            strokeDasharray="2.5 1.5"
-          />
-          <polygon
-            points="50,22 53.5,33 65,33 55.7,40 59.2,51 50,44.5 40.8,51 44.3,40 35,33 46.5,33"
-            fill={`url(#cz-grad-gold-${zone.id})`}
-            stroke="#92400e"
-            strokeWidth="0.8"
-          />
-          <rect x="25" y="56" width="50" height="13" rx="2.5" fill="#dc2626" stroke="#fbbf24" strokeWidth="1" />
-          <text
-            x="50"
-            y="65.5"
-            textAnchor="middle"
-            fill="#ffffff"
-            fontSize="6"
-            fontWeight="900"
-            fontFamily="sans-serif"
-            letterSpacing="0.4"
-          >
-            SABLON / BORDIR
-          </text>
-          <text
-            x="50"
-            y="77.5"
-            textAnchor="middle"
-            fill="#fde047"
-            fontSize="4.8"
-            fontWeight="700"
-            fontFamily="sans-serif"
-            letterSpacing="0.3"
-          >
-            ★ PREMIUM ★
-          </text>
-        </svg>
-      </div>
-    )
-  }
+
 
   // Handle image upload from user device - opens modal choosing between Bordir and Sablon + target zone
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -4323,79 +4256,11 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                         )
                       })}
 
-                    {/* C. Sample Emblems with Auto-Clipping Mask (Matching Canvas Owner) */}
-                    {showGuidelines && (
-                      <>
-                        {currentPrintZones
-                          .filter((z) => {
-                            const hasG = currentSideGraphics.some(
-                              (g) =>
-                                Math.abs(g.x - z.x) <= Math.max(z.width / 2, 4) &&
-                                Math.abs(g.y - z.y) <= Math.max(z.height / 2, 4)
-                            )
-                            const hasP = sleeveProjectedGraphics.some(
-                              (p) =>
-                                Math.abs(p.x - z.x) <= Math.max(z.width / 2, 4) &&
-                                Math.abs(p.y - z.y) <= Math.max(z.height / 2, 4)
-                            )
-                            return !hasG && !hasP && (z.enableAutoClipping ?? true)
-                          })
-                          .map((zone) => (
-                            <div
-                              key={`cz-sample-masked-${zone.id}`}
-                              style={{
-                                left: `${zone.x}%`,
-                                top: `${zone.y}%`,
-                                width: `${zone.width}%`,
-                                height: `${zone.height}%`,
-                                transform: `translate(-50%, -50%) perspective(500px) rotateX(${zone.rotationX || 0}deg) rotateY(${zone.rotationY || 0}deg) rotateZ(${zone.rotationZ || 0}deg)`,
-                                transformOrigin: 'center center',
-                              }}
-                              className="absolute pointer-events-none z-10"
-                            >
-                              {renderSampleEmblem(zone)}
-                            </div>
-                          ))}
-                      </>
-                    )}
+
                   </div>
                 )}
 
-                {/* 3.9 UNMASKED SAMPLE EMBLEMS (For zones without auto-clipping or when clipping is off) */}
-                {showGuidelines && (
-                  <div className="absolute inset-0 w-full h-full pointer-events-none z-17 overflow-hidden">
-                    {currentPrintZones
-                      .filter((z) => {
-                        const hasG = currentSideGraphics.some(
-                          (g) =>
-                            Math.abs(g.x - z.x) <= Math.max(z.width / 2, 4) &&
-                            Math.abs(g.y - z.y) <= Math.max(z.height / 2, 4)
-                        )
-                        const hasP = sleeveProjectedGraphics.some(
-                          (p) =>
-                            Math.abs(p.x - z.x) <= Math.max(z.width / 2, 4) &&
-                            Math.abs(p.y - z.y) <= Math.max(z.height / 2, 4)
-                        )
-                        return !hasG && !hasP && (!isClippingMaskActive || !(z.enableAutoClipping ?? true))
-                      })
-                      .map((zone) => (
-                        <div
-                          key={`cz-sample-unmasked-${zone.id}`}
-                          style={{
-                            left: `${zone.x}%`,
-                            top: `${zone.y}%`,
-                            width: `${zone.width}%`,
-                            height: `${zone.height}%`,
-                            transform: `translate(-50%, -50%) perspective(500px) rotateX(${zone.rotationX || 0}deg) rotateY(${zone.rotationY || 0}deg) rotateZ(${zone.rotationZ || 0}deg)`,
-                            transformOrigin: 'center center',
-                          }}
-                          className="absolute pointer-events-none z-10"
-                        >
-                          {renderSampleEmblem(zone)}
-                        </div>
-                      ))}
-                  </div>
-                )}
+
 
                 {/* 4. GRAPHIC & TEXT ELEMENTS LAYER (UNMASKED - FRAME & CONTROLS NEVER CLIPPED BY SHIRT MASK!) */}
                 <div
