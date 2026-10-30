@@ -136,11 +136,15 @@ export async function syncMockupsWithDisk(): Promise<MockupTemplate[]> {
     return {
       ...a,
       ...b,
+      defaultBaseColor: b.defaultBaseColor && b.defaultBaseColor !== '#1e3a8a' ? b.defaultBaseColor : (a.defaultBaseColor && a.defaultBaseColor !== '#1e3a8a' ? a.defaultBaseColor : '#ffffff'),
       frontImg: b.frontImg || a.frontImg,
       backImg: b.backImg || a.backImg,
       leftImg: b.leftImg || a.leftImg,
       rightImg: b.rightImg || a.rightImg,
-      colorParts: bestParts,
+      colorParts: bestParts.map((p) => ({
+        ...p,
+        defaultColor: p.defaultColor && p.defaultColor !== '#1e3a8a' ? p.defaultColor : '#ffffff',
+      })),
       printZones: bestZones,
     }
   }
@@ -148,7 +152,17 @@ export async function syncMockupsWithDisk(): Promise<MockupTemplate[]> {
   const map = new Map<string, MockupTemplate>()
   // 1. Ingest diskList
   diskList.forEach((m) => {
-    if (m && m.id) map.set(m.id, m)
+    if (m && m.id) {
+      const sanitized = {
+        ...m,
+        defaultBaseColor: m.defaultBaseColor && m.defaultBaseColor !== '#1e3a8a' ? m.defaultBaseColor : '#ffffff',
+        colorParts: (m.colorParts || []).map((p) => ({
+          ...p,
+          defaultColor: p.defaultColor && p.defaultColor !== '#1e3a8a' ? p.defaultColor : '#ffffff',
+        })),
+      }
+      map.set(m.id, sanitized)
+    }
   })
   // 2. Ingest idbList
   idbList.forEach((m) => {
@@ -165,7 +179,14 @@ export async function syncMockupsWithDisk(): Promise<MockupTemplate[]> {
     }
   })
 
-  const merged = Array.from(map.values())
+  const merged = Array.from(map.values()).map((m) => ({
+    ...m,
+    defaultBaseColor: m.defaultBaseColor && m.defaultBaseColor !== '#1e3a8a' ? m.defaultBaseColor : '#ffffff',
+    colorParts: (m.colorParts || []).map((p) => ({
+      ...p,
+      defaultColor: p.defaultColor && p.defaultColor !== '#1e3a8a' ? p.defaultColor : '#ffffff',
+    })),
+  }))
   if (merged.length > 0) {
     memoryMockupCache = merged
     idbSaveAllMockups(merged)
@@ -361,7 +382,7 @@ export function createDemoSampleMockup(): MockupTemplate {
     backImg: `data:image/svg+xml;utf8,${encodeURIComponent(backSvg)}`,
     leftImg: `data:image/svg+xml;utf8,${encodeURIComponent(leftSvg)}`,
     rightImg: `data:image/svg+xml;utf8,${encodeURIComponent(rightSvg)}`,
-    defaultBaseColor: '#1e3a8a',
+    defaultBaseColor: '#ffffff',
     colorParts: [
       {
         id: 'part_collar',

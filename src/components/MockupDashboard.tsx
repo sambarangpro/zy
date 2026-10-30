@@ -374,7 +374,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const [drawingTool, setDrawingTool] = useState<'brush' | 'pen' | 'rect' | 'eraser' | 'hand'>('brush')
   const [markerBrushSize, setMarkerBrushSize] = useState<number>(20)
   const [newPartName, setNewPartName] = useState<string>('Saku Dada')
-  const [newPartColor, setNewPartColor] = useState<string>('#1e3a8a')
+  const [newPartColor, setNewPartColor] = useState<string>('#ffffff')
   const [isDrawingMask, setIsDrawingMask] = useState<boolean>(false)
   const [lastPoint, setLastPoint] = useState<{ x: number; y: number } | null>(null)
   const [rectStartPoint, setRectStartPoint] = useState<{ x: number; y: number } | null>(null)
@@ -820,7 +820,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     onSelectAndOpenCanvas(demo.id)
   }
 
-  const handleAddColorPart = (initialName?: string, side: ViewSide = 'front', defaultColor = '#1e3a8a') => {
+  const handleAddColorPart = (initialName?: string, side: ViewSide = 'front', defaultColor = '#ffffff') => {
     pushDashboardSnapshot()
     const currentAll = colorPartsRef.current || editFormData.colorParts || []
     const thisSideParts = currentAll.filter((p) => p.side === side)
@@ -2917,7 +2917,7 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                             (editFormData.colorParts || []).filter((p) => p.side === selectedSide)[0]?.id === part.id)
                         const displayColor = isPartActive
                           ? simulatedPreviewColor
-                          : part.defaultColor || '#1e3a8a'
+                          : (part.defaultColor && part.defaultColor !== '#1e3a8a') ? part.defaultColor : '#ffffff'
                         return (
                           <div
                             key={part.id}

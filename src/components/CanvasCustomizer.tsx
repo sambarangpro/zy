@@ -105,13 +105,13 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
   // Warna Dasar Keseluruhan Seragam (Layer Paling Bawah - Menggantikan warna keseluruhan kecuali layer aktif)
   const [baseGarmentColor, setBaseGarmentColor] = useState<string>(
-    () => activeMockup?.defaultBaseColor || '#1e3a8a'
+    () => (activeMockup?.defaultBaseColor && activeMockup.defaultBaseColor !== '#1e3a8a' ? activeMockup.defaultBaseColor : '#ffffff')
   )
   const [isBaseColorHidden, setIsBaseColorHidden] = useState<boolean>(false)
   const baseCanvasRef = useRef<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
-    if (activeMockup?.defaultBaseColor) {
+    if (activeMockup?.defaultBaseColor && activeMockup.defaultBaseColor !== '#1e3a8a') {
       setBaseGarmentColor(activeMockup.defaultBaseColor)
     }
   }, [activeMockup?.id])
@@ -603,9 +603,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
     if (activeMockup?.colorParts && activeMockup.colorParts.length > 0) {
       const initial: Record<string, string> = {}
       activeMockup.colorParts.forEach((p) => {
-        initial[p.id] = p.defaultColor
+        initial[p.id] = (p.defaultColor && p.defaultColor !== '#1e3a8a') ? p.defaultColor : '#ffffff'
       })
-      setPartColors((prev) => ({ ...initial, ...prev }))
+      setPartColors((prev) => {
+        const cleaned: Record<string, string> = {}
+        Object.keys(prev).forEach((k) => {
+          if (prev[k] && prev[k] !== '#1e3a8a') cleaned[k] = prev[k]
+        })
+        return { ...initial, ...cleaned }
+      })
     } else {
       setPartColors({})
     }
@@ -655,15 +661,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   // Getter warna bagian yang selalu konsisten dan tersinkronisasi lintas sisi
   const getPartColor = useCallback(
     (part: ColorablePart): string => {
-      if (partColors[part.id]) return partColors[part.id]
+      const pc = partColors[part.id]; if (pc && pc !== '#1e3a8a') return pc
 
       const allParts = activeMockup?.colorParts || []
       const siblings = findMatchingSiblingParts(part, allParts)
       for (const sib of siblings) {
-        if (partColors[sib.id]) return partColors[sib.id]
+        const sc = partColors[sib.id]; if (sc && sc !== '#1e3a8a') return sc
       }
 
-      return part.defaultColor || '#1e3a8a'
+      return (part.defaultColor && part.defaultColor !== '#1e3a8a') ? part.defaultColor : '#ffffff'
     },
     [partColors, activeMockup?.colorParts, findMatchingSiblingParts]
   )
@@ -699,7 +705,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       pushHistorySnapshot()
       const resetObj: Record<string, string> = {}
       activeMockup.colorParts.forEach((p) => {
-        resetObj[p.id] = p.defaultColor
+        resetObj[p.id] = (p.defaultColor && p.defaultColor !== '#1e3a8a') ? p.defaultColor : '#ffffff'
       })
       setPartColors(resetObj)
     }
@@ -757,7 +763,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         groupsMap.set(key, {
           key,
           name: cleanPartName || `Bagian ${groupsMap.size + 1}`,
-          defaultColor: part.defaultColor || '#1e3a8a',
+          defaultColor: (part.defaultColor && part.defaultColor !== '#1e3a8a') ? part.defaultColor : '#ffffff',
           currentColor,
           primaryPartId: part.id,
           parts: [part],
