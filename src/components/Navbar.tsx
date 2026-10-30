@@ -9,9 +9,10 @@ import {
   X,
   Download,
   Layers,
+  Sparkles,
 } from 'lucide-react'
 
-export type ActiveTab = 'canvas' | 'mockups' | 'order' | 'portfolio'
+export type ActiveTab = 'wardrobe' | 'canvas' | 'mockups' | 'order' | 'portfolio'
 
 interface NavbarProps {
   activeTab: ActiveTab
@@ -50,6 +51,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   }
 
   const navItems = [
+    {
+      id: 'wardrobe' as ActiveTab,
+      label: 'Koleksi Rak 3D',
+      icon: Sparkles,
+      badge: 'Baru',
+    },
     {
       id: 'canvas' as ActiveTab,
       label: 'Studio Kanvas',

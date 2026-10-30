@@ -10,6 +10,7 @@ import { GARMENTS } from './data/garments'
 import { Navbar } from './components/Navbar'
 import type { ActiveTab } from './components/Navbar'
 import { CanvasCustomizer } from './components/CanvasCustomizer'
+import { WardrobeShowcase } from './components/WardrobeShowcase'
 import { MockupDashboard } from './components/MockupDashboard'
 import { OrderForm } from './components/OrderForm'
 import { Portfolio } from './components/Portfolio'
@@ -32,7 +33,7 @@ import {
 } from 'lucide-react'
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('canvas')
+  const [activeTab, setActiveTab] = useState<ActiveTab>('wardrobe')
   const [mockups, setMockups] = useState<MockupTemplate[]>(() => getMockupList())
   const [activeMockupId, setActiveMockupIdState] = useState<string | null>(() => getActiveMockupId())
 
@@ -127,10 +128,32 @@ export function App() {
       {/* Main Container */}
       <main
         className={`flex-1 w-full mx-auto px-3 sm:px-6 transition-all ${
-          activeTab === 'canvas' ? 'max-w-[1650px] py-4' : 'max-w-7xl py-8'
+          activeTab === 'canvas' || activeTab === 'wardrobe' ? 'max-w-[1650px] py-4' : 'max-w-7xl py-8'
         }`}
       >
         {/* Dynamic View rendering based on activeTab */}
+        {/* 0. 3D Wardrobe Rail Showcase (Pilihan 2: Halaman Utama Koleksi Gantungan Baju 3D) */}
+        {activeTab === 'wardrobe' && (
+          <div className="animate-in fade-in duration-300">
+            <WardrobeShowcase
+              mockups={mockups}
+              activeMockupId={activeMockupId}
+              onSelectMockup={(id) => {
+                handleSelectAndOpenCanvas(id)
+              }}
+              onSelectGarment={(garmentId) => {
+                handleSelectGarment(garmentId)
+                setActiveTab('canvas')
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+              onOpenCanvas={() => {
+                setActiveTab('canvas')
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+            />
+          </div>
+        )}
+
         {activeTab === 'canvas' && (
           <div className="animate-in fade-in duration-300">
             {/* Interactive Canvas Customizer */}
@@ -145,6 +168,10 @@ export function App() {
                   setMockupEditTarget(null)
                 }
                 setActiveTab('mockups')
+              }}
+              onOpenWardrobe={() => {
+                setActiveTab('wardrobe')
+                window.scrollTo({ top: 0, behavior: 'smooth' })
               }}
               onApplyToOrder={handleApplyToOrder}
               onMockupUpdate={(updated) => {
