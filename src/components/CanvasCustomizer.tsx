@@ -2216,22 +2216,82 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
   // Export Lossless HD Mockup (includes Mockup Image, Paint Layer & Graphics)
   const handleDownloadMockup = () => {
     if (!viewportRef.current) return
+
+    // 1. Dapatkan rasio aspek alami asli dari foto mockup agar 1:1 identik dengan canvas studio
+    const natW = mockupNaturalSize.width || 1200
+    const natH = mockupNaturalSize.height || 1400
+    const stageW = stageDisplayWidth || 540
+
+    // Export dalam resolusi Ultra HD (crisp, tajam tanpa distorsi rasio aspek)
+    const exportH = Math.max(2200, natH)
+    const exportW = Math.round(exportH * (natW / natH))
+
     const canvas = document.createElement('canvas')
-    canvas.width = 1600
-    canvas.height = 1900
+    canvas.width = exportW
+    canvas.height = exportH
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    // Latar belakang bersih putih
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    const drawGraphicsOnCanvas = () => {
+    // Helper 3D affine matrix calculation matching CSS transform (perspective, rotateX, rotateY, rotateZ, scale)
+    const getAffine3D = (rotXDeg: number, rotYDeg: number, rotZDeg: number, scaleX: number, scaleY: number) => {
+      const rx = ((rotXDeg || 0) * Math.PI) / 180
+      const ry = ((rotYDeg || 0) * Math.PI) / 180
+      const rz = ((rotZDeg || 0) * Math.PI) / 180
+
+      const cz = Math.cos(rz), sz = Math.sin(rz)
+      const cy = Math.cos(ry), sy = Math.sin(ry)
+      const cx = Math.cos(rx), sx = Math.sin(rx)
+
+      const vx_x = cy * cz
+      const vx_y = cx * sz - sx * sy * cz
+      const vy_x = -cy * sz
+      const vy_y = cx * cz + sx * sy * sz
+
+      return {
+        a: vx_x * scaleX,
+        b: vx_y * scaleX,
+        c: vy_x * scaleY,
+        d: vy_y * scaleY,
+      }
+    }
+
+    const drawGraphicsOnCanvas = (garmentImg: HTMLImageElement | null) => {
       let loadedCount = 0
-      const visibleCurrentGraphics = currentSideGraphics
+      const visibleCurrentGraphics = currentSideGraphics.filter((g) => !hiddenGraphicIds.includes(g.id))
       const visibleProjected = sleeveProjectedGraphics
       const totalItems = visibleCurrentGraphics.length + visibleProjected.length
 
+      // Two offscreen canvases: one for clipped graphics (trimmed to garment silhouette) and one for unclipped
+      const clippedCanvas = document.createElement('canvas')
+      clippedCanvas.width = canvas.width
+      clippedCanvas.height = canvas.height
+      const clippedCtx = clippedCanvas.getContext('2d')
+
+      const unclippedCanvas = document.createElement('canvas')
+      unclippedCanvas.width = canvas.width
+      unclippedCanvas.height = canvas.height
+      const unclippedCtx = unclippedCanvas.getContext('2d')
+
       const finishExport = () => {
+        // Potong grafis clipped dengan siluet baju menggunakan destination-in (identik 1:1 dengan clipping mask CSS)
+        if (clippedCtx && isClippingMaskActive && garmentImg) {
+          clippedCtx.save()
+          clippedCtx.globalCompositeOperation = 'destination-in'
+          clippedCtx.drawImage(garmentImg, 0, 0, canvas.width, canvas.height)
+          clippedCtx.restore()
+          ctx.drawImage(clippedCanvas, 0, 0)
+        } else if (clippedCtx) {
+          ctx.drawImage(clippedCanvas, 0, 0)
+        }
+
+        if (unclippedCtx) {
+          ctx.drawImage(unclippedCanvas, 0, 0)
+        }
+
         const link = document.createElement('a')
         link.download = `ZY_Studio_${activeMockup?.name || 'Mockup'}_${currentSide}_${Date.now()}.png`
         link.href = canvas.toDataURL('image/png')
@@ -2250,53 +2310,70 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         }
       }
 
-      // 1. Gambar Desain Tampak Sisi Aktif (Flat Direct View)
+      // Base graphic sizing: on screen, base bounding box is 140px on stageW.
+      // Scaled proportionally to HD export width so relative size on shirt matches 100%!
+      const baseGraphicBox = (140 / stageW) * canvas.width
+
+      // 1. Gambar Desain Tampak Sisi Aktif (Direct Flat View / Depan / Belakang / Samping)
       visibleCurrentGraphics.forEach((g) => {
         const posX = (g.x / 100) * canvas.width
         const posY = (g.y / 100) * canvas.height
         const isSleeve = g.side === 'left' || g.side === 'right'
-        const rotYRad = isSleeve ? 0 : (((g.rotationY || 0) * Math.PI) / 180)
-        const rotXRad = isSleeve ? 0 : (((g.rotationX || 0) * Math.PI) / 180)
-        const effRotZ = isSleeve
-          ? (g.rotation !== undefined && g.rotation !== 0
-              ? g.rotation
-              : (g.rotationZ !== undefined && Math.abs(g.rotationZ) !== 38 && Math.abs(g.rotationZ) !== 36 && g.rotationZ !== 0
-                  ? g.rotationZ
-                  : 0))
-          : (g.rotationZ !== undefined ? g.rotationZ : (g.rotation || 0))
-        const cosY = Math.cos(rotYRad)
-        const cosX = Math.cos(rotXRad)
-        const scaleX = (g.scaleX || 1) * g.scale * Math.max(0.15, Math.abs(cosY))
-        const scaleY = (g.scaleY || 1) * g.scale * Math.max(0.15, Math.abs(cosX))
+        const effRotX = isSleeve ? 0 : (g.rotationX || 0)
+        const effRotY = isSleeve ? 0 : (g.rotationY || 0)
+        const rawRot = g.rotation !== undefined && g.rotation !== 0 ? g.rotation : (g.rotationZ || 0)
+        const userRot = Math.abs(rawRot) === 38 || Math.abs(rawRot) === 36 ? 0 : rawRot
+        const effRotZ = isSleeve ? userRot : (g.rotationZ !== undefined ? g.rotationZ : (g.rotation || 0))
+        const scaleX = (g.scaleX || 1) * g.scale
+        const scaleY = (g.scaleY || 1) * g.scale
 
-        ctx.save()
-        ctx.translate(posX, posY)
-        ctx.rotate((effRotZ * Math.PI) / 180)
-        ctx.scale(scaleX, scaleY)
+        const m = getAffine3D(effRotX, effRotY, effRotZ, scaleX, scaleY)
+        const isClipped = isClippingMaskActive && (g.enableAutoClipping ?? true)
+        const targetCtx = isClipped && clippedCtx ? clippedCtx : (unclippedCtx || ctx)
+
+        targetCtx.save()
+        targetCtx.translate(posX, posY)
+        targetCtx.transform(m.a, m.b, m.c, m.d, 0, 0)
+        targetCtx.globalAlpha = (g.opacity !== undefined ? g.opacity : 100) / 100
+        if (g.blendMode && g.blendMode !== 'normal') {
+          targetCtx.globalCompositeOperation = g.blendMode as GlobalCompositeOperation
+        }
 
         if (g.type === 'text') {
-          ctx.font = `bold ${(g.fontSize || 22) * 2.6}px ${g.fontFamily || 'Montserrat'}`
-          ctx.textAlign = 'center'
-          ctx.textBaseline = 'middle'
-          ctx.fillStyle = g.textColor || '#ffffff'
-          ctx.strokeStyle = '#000000'
-          ctx.lineWidth = 3
-          ctx.strokeText(g.content, 0, 0)
-          ctx.fillText(g.content, 0, 0)
-          ctx.restore()
+          const fontScale = canvas.width / stageW
+          const actualFontSize = (g.fontSize || 22) * fontScale
+          targetCtx.font = `bold ${actualFontSize}px ${g.fontFamily || 'Montserrat'}`
+          targetCtx.textAlign = 'center'
+          targetCtx.textBaseline = 'middle'
+          targetCtx.fillStyle = g.textColor || '#ffffff'
+          targetCtx.strokeStyle = '#000000'
+          targetCtx.lineWidth = Math.max(1, actualFontSize * 0.08)
+          targetCtx.strokeText(g.content, 0, 0)
+          targetCtx.fillText(g.content, 0, 0)
+          targetCtx.restore()
           checkFinished()
         } else {
           const img = new Image()
           img.crossOrigin = 'anonymous'
           img.onload = () => {
-            const w = 240
-            const h = (img.height / img.width) * w
-            ctx.drawImage(img, -w / 2, -h / 2, w, h)
-            ctx.restore()
+            const aspect = img.width / Math.max(1, img.height)
+            let w = baseGraphicBox
+            let h = baseGraphicBox
+            if (aspect >= 1) {
+              h = baseGraphicBox / aspect
+            } else {
+              w = baseGraphicBox * aspect
+            }
+
+            if (g.technique === 'bordir') {
+              targetCtx.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.6)) contrast(1.1) saturate(1.15)'
+            }
+            targetCtx.drawImage(img, -w / 2, -h / 2, w, h)
+            targetCtx.restore()
             checkFinished()
           }
           img.onerror = () => {
-            ctx.restore()
+            targetCtx.restore()
             checkFinished()
           }
           img.src = g.content
@@ -2307,42 +2384,54 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       visibleProjected.forEach((proj) => {
         const posX = (proj.x / 100) * canvas.width
         const posY = (proj.y / 100) * canvas.height
-        const rotRad = ((proj.rotationZ || proj.graphic.rotation || 0) * Math.PI) / 180
-        const rotYRad = ((proj.rotationY || 0) * Math.PI) / 180
-        const rotXRad = ((proj.rotationX || 0) * Math.PI) / 180
-        const cosY = Math.cos(rotYRad)
-        const cosX = Math.cos(rotXRad)
-        const scaleX = proj.scaleX * Math.max(0.2, Math.abs(cosY))
-        const scaleY = proj.scaleY * Math.max(0.2, Math.abs(cosX))
 
-        ctx.save()
-        ctx.translate(posX, posY)
-        ctx.rotate(rotRad)
-        ctx.scale(scaleX, scaleY)
+        const m = getAffine3D(proj.rotationX || 0, proj.rotationY || 0, proj.rotationZ || 0, proj.scaleX, proj.scaleY)
+        const isClipped = isClippingMaskActive && proj.enableAutoClipping
+        const targetCtx = isClipped && clippedCtx ? clippedCtx : (unclippedCtx || ctx)
+
+        targetCtx.save()
+        targetCtx.translate(posX, posY)
+        targetCtx.transform(m.a, m.b, m.c, m.d, 0, 0)
+        targetCtx.globalAlpha = (proj.graphic.opacity !== undefined ? proj.graphic.opacity : 100) / 100
+        if (proj.graphic.blendMode && proj.graphic.blendMode !== 'normal') {
+          targetCtx.globalCompositeOperation = proj.graphic.blendMode as GlobalCompositeOperation
+        }
 
         if (proj.graphic.type === 'text') {
-          ctx.font = `bold ${(proj.graphic.fontSize || 22) * 2.6}px ${proj.graphic.fontFamily || 'Montserrat'}`
-          ctx.textAlign = 'center'
-          ctx.textBaseline = 'middle'
-          ctx.fillStyle = proj.graphic.textColor || '#ffffff'
-          ctx.strokeStyle = '#000000'
-          ctx.lineWidth = 3
-          ctx.strokeText(proj.graphic.content, 0, 0)
-          ctx.fillText(proj.graphic.content, 0, 0)
-          ctx.restore()
+          const fontScale = canvas.width / stageW
+          const actualFontSize = (proj.graphic.fontSize || 22) * fontScale
+          targetCtx.font = `bold ${actualFontSize}px ${proj.graphic.fontFamily || 'Montserrat'}`
+          targetCtx.textAlign = 'center'
+          targetCtx.textBaseline = 'middle'
+          targetCtx.fillStyle = proj.graphic.textColor || '#ffffff'
+          targetCtx.strokeStyle = '#000000'
+          targetCtx.lineWidth = Math.max(1, actualFontSize * 0.08)
+          targetCtx.strokeText(proj.graphic.content, 0, 0)
+          targetCtx.fillText(proj.graphic.content, 0, 0)
+          targetCtx.restore()
           checkFinished()
         } else {
           const img = new Image()
           img.crossOrigin = 'anonymous'
           img.onload = () => {
-            const w = 240
-            const h = (img.height / img.width) * w
-            ctx.drawImage(img, -w / 2, -h / 2, w, h)
-            ctx.restore()
+            const aspect = img.width / Math.max(1, img.height)
+            let w = baseGraphicBox
+            let h = baseGraphicBox
+            if (aspect >= 1) {
+              h = baseGraphicBox / aspect
+            } else {
+              w = baseGraphicBox * aspect
+            }
+
+            if (proj.graphic.technique === 'bordir') {
+              targetCtx.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.6)) contrast(1.1) saturate(1.15)'
+            }
+            targetCtx.drawImage(img, -w / 2, -h / 2, w, h)
+            targetCtx.restore()
             checkFinished()
           }
           img.onerror = () => {
-            ctx.restore()
+            targetCtx.restore()
             checkFinished()
           }
           img.src = proj.graphic.content
@@ -2350,7 +2439,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       })
     }
 
-    const drawPaintLayerAndContinue = () => {
+    const drawPaintLayerAndContinue = (garmentImg: HTMLImageElement | null) => {
       const paintData = paintLayers[currentSide]
       if (paintData) {
         const paintImg = new Image()
@@ -2361,15 +2450,18 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
           }
           ctx.drawImage(paintImg, 0, 0, canvas.width, canvas.height)
           ctx.restore()
-          drawGraphicsOnCanvas()
+          drawGraphicsOnCanvas(garmentImg)
+        }
+        paintImg.onerror = () => {
+          drawGraphicsOnCanvas(garmentImg)
         }
         paintImg.src = paintData
       } else {
-        drawGraphicsOnCanvas()
+        drawGraphicsOnCanvas(garmentImg)
       }
     }
 
-    const drawColorPartsAndContinue = () => {
+    const drawColorPartsAndContinue = (garmentImg: HTMLImageElement | null) => {
       // Invert so bottom-most is drawn first, and top-most (index 0) is drawn last on top
       const allParts = activeMockup?.colorParts || []
       const partsToDraw = [...currentSideColorParts].reverse().filter((p) => {
@@ -2380,7 +2472,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
       const renderActiveParts = () => {
         if (partsToDraw.length === 0) {
-          drawPaintLayerAndContinue()
+          drawPaintLayerAndContinue(garmentImg)
           return
         }
 
@@ -2414,7 +2506,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   ctx.restore()
                 }
               })
-              drawPaintLayerAndContinue()
+              drawPaintLayerAndContinue(garmentImg)
             }
           }
           maskImg.onerror = () => {
@@ -2428,7 +2520,7 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
                   ctx.restore()
                 }
               })
-              drawPaintLayerAndContinue()
+              drawPaintLayerAndContinue(garmentImg)
             }
           }
           maskImg.src = part.maskImg!
@@ -2436,65 +2528,57 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       }
 
       // Gambar warna dasar keseluruhan seragam terlebih dahulu (posisi di bawah semua layer)
-      if (baseGarmentColor && !isBaseColorHidden && currentMockupImage) {
-        const mockupImg = new Image()
-        mockupImg.crossOrigin = 'anonymous'
-        mockupImg.onload = () => {
-          const offBaseCanvas = document.createElement('canvas')
-          offBaseCanvas.width = canvas.width
-          offBaseCanvas.height = canvas.height
-          const offBaseCtx = offBaseCanvas.getContext('2d')
-          if (offBaseCtx) {
-            offBaseCtx.drawImage(mockupImg, 0, 0, canvas.width, canvas.height)
-            offBaseCtx.globalCompositeOperation = 'source-in'
-            offBaseCtx.fillStyle = baseGarmentColor
-            offBaseCtx.fillRect(0, 0, canvas.width, canvas.height)
+      if (baseGarmentColor && !isBaseColorHidden && currentMockupImage && garmentImg) {
+        const offBaseCanvas = document.createElement('canvas')
+        offBaseCanvas.width = canvas.width
+        offBaseCanvas.height = canvas.height
+        const offBaseCtx = offBaseCanvas.getContext('2d')
+        if (offBaseCtx) {
+          offBaseCtx.drawImage(garmentImg, 0, 0, canvas.width, canvas.height)
+          offBaseCtx.globalCompositeOperation = 'source-in'
+          offBaseCtx.fillStyle = baseGarmentColor
+          offBaseCtx.fillRect(0, 0, canvas.width, canvas.height)
 
-            if (partsToDraw.length > 0) {
-              let loadedMasks = 0
-              partsToDraw.forEach((part) => {
-                const maskImg = new Image()
-                maskImg.crossOrigin = 'anonymous'
-                maskImg.onload = () => {
-                  offBaseCtx.save()
-                  offBaseCtx.globalCompositeOperation = 'destination-out'
-                  offBaseCtx.drawImage(maskImg, 0, 0, canvas.width, canvas.height)
-                  offBaseCtx.restore()
-                  loadedMasks++
-                  if (loadedMasks === partsToDraw.length) {
-                    ctx.save()
-                    ctx.globalCompositeOperation = 'multiply'
-                    ctx.drawImage(offBaseCanvas, 0, 0)
-                    ctx.restore()
-                    renderActiveParts()
-                  }
+          if (partsToDraw.length > 0) {
+            let loadedMasks = 0
+            partsToDraw.forEach((part) => {
+              const maskImg = new Image()
+              maskImg.crossOrigin = 'anonymous'
+              maskImg.onload = () => {
+                offBaseCtx.save()
+                offBaseCtx.globalCompositeOperation = 'destination-out'
+                offBaseCtx.drawImage(maskImg, 0, 0, canvas.width, canvas.height)
+                offBaseCtx.restore()
+                loadedMasks++
+                if (loadedMasks === partsToDraw.length) {
+                  ctx.save()
+                  ctx.globalCompositeOperation = 'multiply'
+                  ctx.drawImage(offBaseCanvas, 0, 0)
+                  ctx.restore()
+                  renderActiveParts()
                 }
-                maskImg.onerror = () => {
-                  loadedMasks++
-                  if (loadedMasks === partsToDraw.length) {
-                    ctx.save()
-                    ctx.globalCompositeOperation = 'multiply'
-                    ctx.drawImage(offBaseCanvas, 0, 0)
-                    ctx.restore()
-                    renderActiveParts()
-                  }
+              }
+              maskImg.onerror = () => {
+                loadedMasks++
+                if (loadedMasks === partsToDraw.length) {
+                  ctx.save()
+                  ctx.globalCompositeOperation = 'multiply'
+                  ctx.drawImage(offBaseCanvas, 0, 0)
+                  ctx.restore()
+                  renderActiveParts()
                 }
-                maskImg.src = part.maskImg!
-              })
-              return
-            } else {
-              ctx.save()
-              ctx.globalCompositeOperation = 'multiply'
-              ctx.drawImage(offBaseCanvas, 0, 0)
-              ctx.restore()
-            }
+              }
+              maskImg.src = part.maskImg!
+            })
+            return
+          } else {
+            ctx.save()
+            ctx.globalCompositeOperation = 'multiply'
+            ctx.drawImage(offBaseCanvas, 0, 0)
+            ctx.restore()
           }
-          renderActiveParts()
         }
-        mockupImg.onerror = () => {
-          renderActiveParts()
-        }
-        mockupImg.src = currentMockupImage
+        renderActiveParts()
       } else {
         renderActiveParts()
       }
@@ -2504,12 +2588,20 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       const customImg = new Image()
       customImg.crossOrigin = 'anonymous'
       customImg.onload = () => {
+        ctx.save()
+        if (lighting.brightness !== 0 || lighting.contrast !== 0 || lighting.saturation !== 0) {
+          ctx.filter = `brightness(${1 + lighting.brightness / 100}) contrast(${1 + lighting.contrast / 100}) saturate(${1 + lighting.saturation / 100})`
+        }
         ctx.drawImage(customImg, 0, 0, canvas.width, canvas.height)
-        drawColorPartsAndContinue()
+        ctx.restore()
+        drawColorPartsAndContinue(customImg)
+      }
+      customImg.onerror = () => {
+        drawColorPartsAndContinue(null)
       }
       customImg.src = currentMockupImage
     } else {
-      drawColorPartsAndContinue()
+      drawColorPartsAndContinue(null)
     }
   }
 
