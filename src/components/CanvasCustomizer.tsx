@@ -2270,7 +2270,6 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       }
 
       // Helper 3D affine matrix calculation matching CSS transform (perspective, rotateX, rotateY, rotateZ, scale)
-      // Rotasi CSS dihitung dari sumbu Z -> Y -> X secara matematis presisi tanpa distorsi pembalikan
       const getAffine3D = (rotXDeg: number, rotYDeg: number, rotZDeg: number, scaleX: number, scaleY: number) => {
         const rx = ((rotXDeg || 0) * Math.PI) / 180
         const ry = ((rotYDeg || 0) * Math.PI) / 180
@@ -2293,6 +2292,150 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         }
       }
 
+      // Helper merender tekstur bordir 3D komputer realistis (alur benang tatami 55°, kilau satin -35°, dan pantulan silinder)
+      const renderStyledGraphicCanvas = (
+        img: HTMLImageElement,
+        w: number,
+        h: number,
+        technique: 'bordir' | 'sablon',
+        isProjectedSleeve?: boolean,
+        isViewerRight?: boolean
+      ): HTMLCanvasElement => {
+        const itemCanvas = document.createElement('canvas')
+        itemCanvas.width = Math.max(1, Math.round(w))
+        itemCanvas.height = Math.max(1, Math.round(h))
+        const iCtx = itemCanvas.getContext('2d')
+        if (!iCtx) return itemCanvas
+
+        const iw = itemCanvas.width
+        const ih = itemCanvas.height
+
+        // 1. Gambar desain dasar asli
+        iCtx.drawImage(img, 0, 0, iw, ih)
+
+        const fontScale = canvas.width / stageW
+
+        if (technique === 'bordir') {
+          // 2. Alur Serat Benang Bordir Komputer Rapat (Sudut 55° Tatami / Satin Stitches)
+          const threadCanvas = document.createElement('canvas')
+          threadCanvas.width = iw
+          threadCanvas.height = ih
+          const tCtx = threadCanvas.getContext('2d')
+          if (tCtx) {
+            const stitchStep = Math.max(2, Math.round(2.6 * (fontScale / 3)))
+            const diag = Math.sqrt(iw * iw + ih * ih) * 1.5
+
+            tCtx.save()
+            tCtx.translate(iw / 2, ih / 2)
+            tCtx.rotate((55 * Math.PI) / 180)
+
+            for (let x = -diag; x < diag; x += stitchStep * 2) {
+              // Sorotan kilau benang timbul
+              tCtx.fillStyle = 'rgba(255, 255, 255, 0.45)'
+              tCtx.fillRect(x, -diag, stitchStep * 0.55, diag * 2)
+              // Alur bayangan sela jahitan benang
+              tCtx.fillStyle = 'rgba(0, 0, 0, 0.40)'
+              tCtx.fillRect(x + stitchStep, -diag, stitchStep * 0.55, diag * 2)
+            }
+            tCtx.restore()
+
+            // Masking khusus siluet logo
+            tCtx.globalCompositeOperation = 'destination-in'
+            tCtx.drawImage(img, 0, 0, iw, ih)
+
+            // Campurkan tekstur benang dengan blend mode overlay
+            iCtx.save()
+            iCtx.globalCompositeOperation = 'overlay'
+            iCtx.drawImage(threadCanvas, 0, 0)
+            iCtx.restore()
+          }
+
+          // 3. Efek Kilau Satin Benang Silang (-35° Satin Sheen)
+          const sheenCanvas = document.createElement('canvas')
+          sheenCanvas.width = iw
+          sheenCanvas.height = ih
+          const sCtx = sheenCanvas.getContext('2d')
+          if (sCtx) {
+            const sheenStep = Math.max(3, Math.round(5.0 * (fontScale / 3)))
+            const diag = Math.sqrt(iw * iw + ih * ih) * 1.5
+
+            sCtx.save()
+            sCtx.translate(iw / 2, ih / 2)
+            sCtx.rotate((-35 * Math.PI) / 180)
+
+            for (let x = -diag; x < diag; x += sheenStep) {
+              sCtx.fillStyle = 'rgba(255, 255, 255, 0.38)'
+              sCtx.fillRect(x, -diag, sheenStep * 0.35, diag * 2)
+            }
+            sCtx.restore()
+
+            sCtx.globalCompositeOperation = 'destination-in'
+            sCtx.drawImage(img, 0, 0, iw, ih)
+
+            iCtx.save()
+            iCtx.globalAlpha = 0.55
+            iCtx.globalCompositeOperation = 'soft-light'
+            iCtx.drawImage(sheenCanvas, 0, 0)
+            iCtx.restore()
+          }
+        } else if (technique === 'sablon') {
+          // Kilau Halus Sablon Plastisol / DTF (135° screen sheen)
+          const sablonCanvas = document.createElement('canvas')
+          sablonCanvas.width = iw
+          sablonCanvas.height = ih
+          const sbCtx = sablonCanvas.getContext('2d')
+          if (sbCtx) {
+            const grad = sbCtx.createLinearGradient(0, 0, iw, ih)
+            grad.addColorStop(0, 'rgba(255, 255, 255, 0.35)')
+            grad.addColorStop(0.65, 'rgba(255, 255, 255, 0)')
+            sbCtx.fillStyle = grad
+            sbCtx.fillRect(0, 0, iw, ih)
+
+            sbCtx.globalCompositeOperation = 'destination-in'
+            sbCtx.drawImage(img, 0, 0, iw, ih)
+
+            iCtx.save()
+            iCtx.globalAlpha = 0.25
+            iCtx.globalCompositeOperation = 'screen'
+            iCtx.drawImage(sablonCanvas, 0, 0)
+            iCtx.restore()
+          }
+        }
+
+        // 4. Pantulan Lengkungan Silinder Lengan 3D (Jika tampak menyamping di lengan)
+        if (isProjectedSleeve) {
+          const sleeveCanvas = document.createElement('canvas')
+          sleeveCanvas.width = iw
+          sleeveCanvas.height = ih
+          const slCtx = sleeveCanvas.getContext('2d')
+          if (slCtx) {
+            const grad = slCtx.createLinearGradient(
+              isViewerRight ? 0 : iw,
+              0,
+              isViewerRight ? iw : 0,
+              0
+            )
+            grad.addColorStop(0.3, 'rgba(255, 255, 255, 0)')
+            grad.addColorStop(0.65, 'rgba(255, 255, 255, 0.6)')
+            grad.addColorStop(0.85, 'rgba(255, 255, 255, 0)')
+
+            slCtx.fillStyle = grad
+            slCtx.fillRect(0, 0, iw, ih)
+
+            slCtx.globalCompositeOperation = 'destination-in'
+            slCtx.drawImage(img, 0, 0, iw, ih)
+
+            iCtx.save()
+            iCtx.globalAlpha = 0.2
+            iCtx.globalCompositeOperation = 'screen'
+            iCtx.drawImage(sleeveCanvas, 0, 0)
+            iCtx.restore()
+          }
+        }
+
+        return itemCanvas
+      }
+
       const allParts = activeMockup?.colorParts || []
       const partsToDraw = [...currentSideColorParts].reverse().filter((p) => {
         if (!p.maskImg) return false
@@ -2304,7 +2447,6 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
       const visibleProjected = sleeveProjectedGraphics
 
       // 2. Preload seluruh aset gambar secara paralel sebelum mulai menggambar di canvas
-      // Menghilangkan bug race condition & akumulasi matriks transform terdistorsi!
       const [
         garmentImg,
         partMaskImgs,
@@ -2404,10 +2546,14 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
 
       // Skala bounding box grafis dasar: 140px di layar panggung studio (stageW)
       const baseGraphicBox = (140 / stageW) * canvas.width
+      const fontScale = canvas.width / stageW
+      const s1 = Math.max(1, Math.round(1 * (fontScale / 3)))
+      const s2 = Math.max(2, Math.round(3 * (fontScale / 3)))
+      const s3 = Math.max(3, Math.round(5 * (fontScale / 3)))
+      const b1 = Math.max(1, Math.round(1 * (fontScale / 3)))
 
       // A. Gambar Desain Tampak Sisi Aktif (Direct View / Depan / Belakang / Samping)
       visibleCurrentGraphics.forEach((g, idx) => {
-        // Gunakan viewPositions jika pengguna pernah menggeser khusus di tampak ini, atau koordinat default g.x/g.y
         const effX = g.viewPositions?.[currentSide]?.x !== undefined ? g.viewPositions[currentSide]!.x : g.x
         const effY = g.viewPositions?.[currentSide]?.y !== undefined ? g.viewPositions[currentSide]!.y : g.y
         const posX = (effX / 100) * canvas.width
@@ -2435,16 +2581,23 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         }
 
         if (g.type === 'text') {
-          const fontScale = canvas.width / stageW
           const actualFontSize = (g.fontSize || 22) * fontScale
           targetCtx.font = `bold ${actualFontSize}px ${g.fontFamily || 'Montserrat'}, sans-serif`
           targetCtx.textAlign = 'center'
           targetCtx.textBaseline = 'middle'
-          targetCtx.fillStyle = g.textColor || '#ffffff'
-          targetCtx.strokeStyle = '#000000'
-          targetCtx.lineWidth = Math.max(1, actualFontSize * 0.08)
-          targetCtx.strokeText(g.content, 0, 0)
-          targetCtx.fillText(g.content, 0, 0)
+
+          if (g.technique === 'bordir') {
+            targetCtx.filter = `drop-shadow(0 ${s1}px ${s1}px rgba(0,0,0,0.7)) drop-shadow(${s1}px ${s2}px ${s3}px rgba(0,0,0,0.5)) drop-shadow(-${b1}px -${b1}px 0px rgba(255,255,255,0.85)) contrast(1.1) saturate(1.18)`
+            targetCtx.fillStyle = g.textColor || '#ffffff'
+            targetCtx.strokeStyle = '#000000'
+            targetCtx.lineWidth = Math.max(1, actualFontSize * 0.08)
+            targetCtx.strokeText(g.content, 0, 0)
+            targetCtx.fillText(g.content, 0, 0)
+          } else {
+            targetCtx.filter = `drop-shadow(0 ${s1}px ${s2}px rgba(0,0,0,0.35))`
+            targetCtx.fillStyle = g.textColor || '#ffffff'
+            targetCtx.fillText(g.content, 0, 0)
+          }
         } else {
           const img = currentGraphicImgs[idx]
           if (img) {
@@ -2457,12 +2610,15 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
               w = baseGraphicBox * aspect
             }
 
+            // Terapkan efek timbul relief dan bayangan bordir 3D identik 1:1 dengan CSS di Canvas Studio
             if (g.technique === 'bordir') {
-              targetCtx.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.6)) contrast(1.1) saturate(1.15)'
+              targetCtx.filter = `drop-shadow(0 ${s1}px ${s1}px rgba(0,0,0,0.7)) drop-shadow(${s1}px ${s2}px ${s3}px rgba(0,0,0,0.5)) drop-shadow(-${b1}px -${b1}px 0px rgba(255,255,255,0.85)) contrast(1.1) saturate(1.18)`
             } else {
-              targetCtx.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+              targetCtx.filter = `drop-shadow(0 ${s1}px ${s2}px rgba(0,0,0,0.35))`
             }
-            targetCtx.drawImage(img, -w / 2, -h / 2, w, h)
+
+            const styledCanvas = renderStyledGraphicCanvas(img, w, h, g.technique || 'bordir', false)
+            targetCtx.drawImage(styledCanvas, -w / 2, -h / 2, w, h)
           }
         }
         targetCtx.restore()
@@ -2486,16 +2642,23 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
         }
 
         if (proj.graphic.type === 'text') {
-          const fontScale = canvas.width / stageW
           const actualFontSize = (proj.graphic.fontSize || 22) * fontScale
           targetCtx.font = `bold ${actualFontSize}px ${proj.graphic.fontFamily || 'Montserrat'}, sans-serif`
           targetCtx.textAlign = 'center'
           targetCtx.textBaseline = 'middle'
-          targetCtx.fillStyle = proj.graphic.textColor || '#ffffff'
-          targetCtx.strokeStyle = '#000000'
-          targetCtx.lineWidth = Math.max(1, actualFontSize * 0.08)
-          targetCtx.strokeText(proj.graphic.content, 0, 0)
-          targetCtx.fillText(proj.graphic.content, 0, 0)
+
+          if (proj.graphic.technique === 'bordir') {
+            targetCtx.filter = `drop-shadow(0 ${s1}px ${s1}px rgba(0,0,0,0.65)) drop-shadow(${s1}px ${s2}px ${s3}px rgba(0,0,0,0.4)) drop-shadow(-${b1}px -${b1}px 0px rgba(255,255,255,0.85)) contrast(1.1) saturate(1.15)`
+            targetCtx.fillStyle = proj.graphic.textColor || '#ffffff'
+            targetCtx.strokeStyle = '#000000'
+            targetCtx.lineWidth = Math.max(1, actualFontSize * 0.08)
+            targetCtx.strokeText(proj.graphic.content, 0, 0)
+            targetCtx.fillText(proj.graphic.content, 0, 0)
+          } else {
+            targetCtx.filter = `drop-shadow(0 ${s1}px ${s2}px rgba(0,0,0,0.3))`
+            targetCtx.fillStyle = proj.graphic.textColor || '#ffffff'
+            targetCtx.fillText(proj.graphic.content, 0, 0)
+          }
         } else {
           const img = projectedGraphicImgs[idx]
           if (img) {
@@ -2509,11 +2672,20 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             }
 
             if (proj.graphic.technique === 'bordir') {
-              targetCtx.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.6)) contrast(1.1) saturate(1.15)'
+              targetCtx.filter = `drop-shadow(0 ${s1}px ${s1}px rgba(0,0,0,0.65)) drop-shadow(${s1}px ${s2}px ${s3}px rgba(0,0,0,0.4)) drop-shadow(-${b1}px -${b1}px 0px rgba(255,255,255,0.85)) contrast(1.1) saturate(1.15)`
             } else {
-              targetCtx.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+              targetCtx.filter = `drop-shadow(0 ${s1}px ${s2}px rgba(0,0,0,0.3))`
             }
-            targetCtx.drawImage(img, -w / 2, -h / 2, w, h)
+
+            const styledCanvas = renderStyledGraphicCanvas(
+              img,
+              w,
+              h,
+              proj.graphic.technique || 'bordir',
+              true,
+              proj.isViewerRight
+            )
+            targetCtx.drawImage(styledCanvas, -w / 2, -h / 2, w, h)
           }
         }
         targetCtx.restore()
