@@ -101,10 +101,17 @@ export interface MockupTemplate {
   category: string // 'Kaos' | 'Kemeja' | 'PDH' | 'Rompi' | 'Polo' | 'Jaket' | dll
   basePrice: number
   description?: string
+
+  // === GAMBAR KANVAS (untuk editor Studio Canvas — flat/datar, tanpa hanger) ===
   frontImg?: string // DataURL or Image URL
   backImg?: string
   leftImg?: string
   rightImg?: string
+
+  // === GAMBAR HANGER / SHOWROOM (untuk tampilan Rak Gantungan 3D — realistis dengan hanger) ===
+  hangerFrontImg?: string // PNG transparan tampak depan seragam + hanger (untuk showroom)
+  hangerSideImg?: string  // PNG transparan tampak samping seragam + hanger (untuk showroom)
+
   enableClippingMask?: boolean // metode clipping mask otomatis
   defaultBaseColor?: string // Warna dasar keseluruhan seragam (di bawah semua layer)
   colorParts?: ColorablePart[] // Area / bagian baju yang bisa diganti warnanya secara instan

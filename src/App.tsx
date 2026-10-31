@@ -30,7 +30,16 @@ import {
   Clock,
   CheckCircle,
   Layers,
+  KeyRound,
+  Lock,
 } from 'lucide-react'
+
+// ==========================================
+// MODE CONSTANTS
+// ==========================================
+// Laman Pengunjung: wardrobe → canvas → order → portfolio
+// Laman Admin:      mockups (dashboard editor)
+// ==========================================
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('wardrobe')
@@ -45,6 +54,26 @@ export function App() {
 
   // Target spesifik bagian yang ingin diedit di dashboard masker (Kerah, Saku, dll)
   const [mockupEditTarget, setMockupEditTarget] = useState<{ partId?: string; side?: ViewSide } | null>(null)
+
+  // Admin Mode toggle (pisahkan laman pengunjung dengan laman editor admin)
+  const [isAdminMode, setIsAdminMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('zy_admin_mode') === 'true'
+    } catch { return false }
+  })
+
+  const toggleAdminMode = () => {
+    const next = !isAdminMode
+    setIsAdminMode(next)
+    try { localStorage.setItem('zy_admin_mode', String(next)) } catch {}
+    // Jika masuk admin mode, langsung ke dashboard mockup
+    if (next) {
+      setActiveTab('mockups')
+    } else {
+      // Kembali ke pengunjung, arahkan ke wardrobe
+      setActiveTab('wardrobe')
+    }
+  }
 
   // Modals state
   const [isSizeChartOpen, setIsSizeChartOpen] = useState(false)
@@ -115,15 +144,30 @@ export function App() {
     setIsInvoiceOpen(true)
   }
 
+  const isVisitorTab = activeTab === 'wardrobe' || activeTab === 'canvas' || activeTab === 'order' || activeTab === 'portfolio'
+
+  // Navbar is hidden on the clean wardrobe landing for visitors,
+  // but always shown in admin mode and on other visitor pages
+  const showNavbar = isAdminMode || (activeTab !== 'wardrobe')
+
   return (
     <div className="min-h-screen bg-[#f8fafc] flex flex-col font-sans text-slate-800">
-      {/* Top Navbar (only rendered in Studio, Dashboard, Order, Portfolio; hidden on the initial 3D showroom landing for maximum clarity) */}
-      {activeTab !== 'wardrobe' && (
+      {/* Top Navbar (hidden on clean wardrobe landing for visitor mode) */}
+      {showNavbar && (
         <Navbar
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={(tab) => {
+            // Jika pengunjung mencoba masuk ke tab admin, aktifkan admin mode
+            if (tab === 'mockups' && !isAdminMode) {
+              setIsAdminMode(true)
+              try { localStorage.setItem('zy_admin_mode', 'true') } catch {}
+            }
+            setActiveTab(tab)
+          }}
           onOpenSizeChart={() => setIsSizeChartOpen(true)}
           totalPcs={37}
+          isAdminMode={isAdminMode}
+          onToggleAdminMode={toggleAdminMode}
         />
       )}
 
@@ -137,8 +181,12 @@ export function App() {
             : 'max-w-7xl px-3 sm:px-6 py-8'
         }`}
       >
-        {/* Dynamic View rendering based on activeTab */}
-        {/* 0. 3D Wardrobe Rail Showcase (Pilihan 2: Halaman Utama Koleksi Gantungan Baju 3D) */}
+
+        {/* ============================================================= */}
+        {/* LAMAN PENGUNJUNG: Wardrobe → Canvas → Order → Portfolio        */}
+        {/* ============================================================= */}
+
+        {/* 0. 3D Wardrobe Rail Showcase (Landing Page) */}
         {activeTab === 'wardrobe' && (
           <div className="animate-in fade-in duration-300">
             <WardrobeShowcase
@@ -156,17 +204,30 @@ export function App() {
                 setActiveTab('canvas')
                 window.scrollTo({ top: 0, behavior: 'smooth' })
               }}
-              onOpenDashboard={() => {
+              onOpenDashboard={isAdminMode ? () => {
                 setActiveTab('mockups')
                 window.scrollTo({ top: 0, behavior: 'smooth' })
-              }}
+              } : undefined}
             />
+
+            {/* Floating Admin Toggle (pojok kiri bawah — kunci kecil) */}
+            <button
+              onClick={toggleAdminMode}
+              title={isAdminMode ? 'Sedang Mode Admin — Klik untuk kembali ke Mode Pengunjung' : 'Masuk ke Mode Admin / Editor'}
+              className={`fixed bottom-4 left-4 z-50 w-10 h-10 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 active:scale-95 cursor-pointer border ${
+                isAdminMode
+                  ? 'bg-[#ff5e00] text-white border-orange-600 shadow-orange-500/30'
+                  : 'bg-white/90 text-slate-400 hover:text-slate-600 border-slate-200'
+              }`}
+            >
+              {isAdminMode ? <KeyRound className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+            </button>
           </div>
         )}
 
+        {/* 1. Canvas Studio (Pengunjung & Admin) */}
         {activeTab === 'canvas' && (
           <div className="animate-in fade-in duration-300">
-            {/* Interactive Canvas Customizer */}
             <CanvasCustomizer
               activeMockup={activeMockup}
               graphics={graphics}
@@ -192,47 +253,9 @@ export function App() {
           </div>
         )}
 
-        {/* Mockup Editor Dashboard */}
-        {activeTab === 'mockups' && (
-          <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
-              <div>
-                <div className="flex items-center gap-2 text-[#ff5e00] font-extrabold text-xs uppercase tracking-wider mb-1">
-                  <Layers className="w-4 h-4 text-[#ff5e00]" />
-                  DASHBOARD MOCKUP ZY CLOTHES
-                </div>
-                <h1 className="text-2xl sm:text-3xl font-black text-black tracking-tight font-display">
-                  Kelola Mockup Foto Seragam
-                </h1>
-                <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl leading-relaxed">
-                  Buat dan unggah foto asli/realistis seragam Anda dari 4 sudut pandang (Depan, Belakang, Sisi Kiri, Sisi Kanan). Atur harga dasar dan diskon grosir per model.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2.5 shrink-0">
-                <button
-                  onClick={() => setActiveTab('canvas')}
-                  className="px-5 py-2.5 bg-black hover:bg-slate-800 text-white font-extrabold rounded-2xl text-xs transition-all cursor-pointer flex items-center gap-2"
-                >
-                  ← Buka Kanvas Desain
-                </button>
-              </div>
-            </div>
-
-            <MockupDashboard
-              mockups={mockups}
-              activeMockupId={activeMockupId}
-              onMockupsChange={handleMockupsChange}
-              onSelectAndOpenCanvas={handleSelectAndOpenCanvas}
-              initialEditTarget={mockupEditTarget}
-              onClearInitialEditTarget={() => setMockupEditTarget(null)}
-            />
-          </div>
-        )}
-
+        {/* 2. Order Form (Pengunjung) */}
         {activeTab === 'order' && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            {/* Order Form Header */}
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <span className="text-xs font-bold text-[#ff5e00] uppercase tracking-wider">
@@ -253,7 +276,6 @@ export function App() {
               </button>
             </div>
 
-            {/* Order Form Component */}
             <OrderForm
               activeMockup={activeMockup}
               selectedGarment={selectedGarment}
@@ -266,14 +288,66 @@ export function App() {
           </div>
         )}
 
+        {/* 3. Portfolio (Pengunjung) */}
         {activeTab === 'portfolio' && (
           <div className="space-y-6 animate-in fade-in duration-300">
             <Portfolio onLoadToCanvas={handleLoadFromPortfolio} />
           </div>
         )}
 
-        {/* Value Proposition Badges (hidden on minimalist wardrobe landing) */}
-        {activeTab !== 'wardrobe' && (
+        {/* ============================================================= */}
+        {/* LAMAN ADMIN: Mockup Editor Dashboard                           */}
+        {/* ============================================================= */}
+
+        {activeTab === 'mockups' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Admin Header Banner */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
+              <div>
+                <div className="flex items-center gap-2 text-[#ff5e00] font-extrabold text-xs uppercase tracking-wider mb-1">
+                  <Layers className="w-4 h-4 text-[#ff5e00]" />
+                  DASHBOARD ADMIN — EDITOR MOCKUP
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-black text-black tracking-tight font-display">
+                  Kelola Mockup Foto Seragam
+                </h1>
+                <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl leading-relaxed">
+                  Upload foto seragam untuk <strong>Canvas Studio</strong> (4 sisi: Depan, Belakang, Kiri, Kanan — tanpa hanger) dan untuk <strong>Showroom Hanger</strong> (Depan & Samping — dengan hanger). Atur harga dasar dan diskon grosir per model.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 shrink-0">
+                <button
+                  onClick={() => {
+                    setActiveTab('wardrobe')
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                  }}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-xs transition-all cursor-pointer flex items-center gap-2 border border-slate-200"
+                >
+                  ← Lihat Showroom
+                </button>
+                <button
+                  onClick={() => setActiveTab('canvas')}
+                  className="px-5 py-2.5 bg-black hover:bg-slate-800 text-white font-extrabold rounded-2xl text-xs transition-all cursor-pointer flex items-center gap-2"
+                >
+                  Buka Kanvas Desain →
+                </button>
+              </div>
+            </div>
+
+            <MockupDashboard
+              mockups={mockups}
+              activeMockupId={activeMockupId}
+              onMockupsChange={handleMockupsChange}
+              onSelectAndOpenCanvas={handleSelectAndOpenCanvas}
+              initialEditTarget={mockupEditTarget}
+              onClearInitialEditTarget={() => setMockupEditTarget(null)}
+            />
+          </div>
+        )}
+
+        {/* Value Proposition Badges (hidden on wardrobe landing and admin pages) */}
+        {isVisitorTab && activeTab !== 'wardrobe' && (
           <section className="mt-16 pt-12 border-t border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-6">
             <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs flex items-start gap-3.5">
               <div className="w-10 h-10 bg-orange-50 text-[#ff5e00] rounded-2xl flex items-center justify-center shrink-0">
@@ -326,8 +400,8 @@ export function App() {
         )}
       </main>
 
-      {/* Footer (hidden on minimalist wardrobe landing) */}
-      {activeTab !== 'wardrobe' && (
+      {/* Footer (hidden on wardrobe landing and admin pages) */}
+      {isVisitorTab && activeTab !== 'wardrobe' && (
         <footer className="bg-black text-white mt-20 pt-14 pb-8 border-t border-slate-900">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">

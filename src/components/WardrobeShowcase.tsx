@@ -123,10 +123,11 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
         price: m.basePrice || 165000,
         garmentType: 'pdh',
         mockupId: m.id,
-        frontImg: m.frontImg || undefined,
-        sideImg: m.leftImg || m.rightImg || undefined,
+        // Prioritaskan gambar hanger khusus showroom, fallback ke gambar canvas
+        frontImg: m.hangerFrontImg || m.frontImg || undefined,
+        sideImg: m.hangerSideImg || m.leftImg || m.rightImg || undefined,
         backImg: m.backImg || undefined,
-        hasHangerInImage: true, // User's PNGs will already include the hanger
+        hasHangerInImage: Boolean(m.hangerFrontImg || m.hangerSideImg),
         defaultColors: {
           body: (m.defaultBaseColor && m.defaultBaseColor !== '#1e3a8a') ? m.defaultBaseColor : '#ffffff',
           collar: '#ffffff',
