@@ -243,7 +243,9 @@
     "discount12": 5000,
     "discount50": 10000,
     "discount100": 15000,
-    "createdAt": 1792933465404
+    "createdAt": 1792933465404,
+    "hangerFrontImg": "/showrooms/pdh_front_hanger.png",
+    "hangerSideImg": "/showrooms/pdh_side_hanger.png"
   },
   {
     "id": "demo_pdh_sample",
@@ -261,6 +263,8 @@
     "createdAt": 1792897713567,
     "colorParts": [],
     "printZones": [],
-    "defaultBaseColor": "#ffffff"
+    "defaultBaseColor": "#ffffff",
+    "hangerFrontImg": "/showrooms/pdh_front_hanger.png",
+    "hangerSideImg": "/showrooms/pdh_side_hanger.png"
   }
 ]

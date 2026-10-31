@@ -44,7 +44,7 @@ interface WardrobeShowcaseProps {
 }
 
 /**
- * Realistic Wooden Hanger fallback for mockups that do not yet have a hanger in their PNG
+ * Realistic Wooden Hanger fallback for items that do not yet have their own hanger PNG
  */
 const FallbackWoodenHanger: React.FC = () => {
   return (
@@ -113,6 +113,9 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
 
     // 1. User uploaded / custom mockups from database (e.g. PDH)
     mockups.forEach((m, idx) => {
+      const front = m.hangerFrontImg || m.frontImg || '/showrooms/pdh_front_hanger.png'
+      const side = m.hangerSideImg || m.leftImg || m.rightImg || '/showrooms/pdh_side_hanger.png'
+
       items.push({
         id: `mockup_${m.id}`,
         name: m.name,
@@ -123,11 +126,10 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
         price: m.basePrice || 165000,
         garmentType: 'pdh',
         mockupId: m.id,
-        // Prioritaskan gambar hanger khusus showroom, fallback ke gambar canvas
-        frontImg: m.hangerFrontImg || m.frontImg || undefined,
-        sideImg: m.hangerSideImg || m.leftImg || m.rightImg || undefined,
+        frontImg: front,
+        sideImg: side,
         backImg: m.backImg || undefined,
-        hasHangerInImage: Boolean(m.hangerFrontImg || m.hangerSideImg),
+        hasHangerInImage: true,
         defaultColors: {
           body: (m.defaultBaseColor && m.defaultBaseColor !== '#1e3a8a') ? m.defaultBaseColor : '#ffffff',
           collar: '#ffffff',
@@ -150,6 +152,9 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
         description: 'Standar seragam instansi, kampus, dan ormas dengan jahitan rantai kokoh dan saku bordir siap pakai.',
         price: 165000,
         garmentType: 'pdh',
+        frontImg: '/showrooms/pdh_front_hanger.png',
+        sideImg: '/showrooms/pdh_side_hanger.png',
+        hasHangerInImage: true,
         defaultColors: {
           body: '#1e293b',
           collar: '#1e293b',
@@ -169,7 +174,7 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
         price: 195000,
         garmentType: 'jaket',
         defaultColors: {
-          body: '#9a3412', // Terracotta warm brown (Nike showroom reference)
+          body: '#9a3412',
           collar: '#7c2d12',
           sleeves: '#9a3412',
           pocket: '#9a3412',
@@ -187,7 +192,7 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
         price: 175000,
         garmentType: 'hoodie',
         defaultColors: {
-          body: '#93c5fd', // Light Baby Blue (Nike showroom reference)
+          body: '#93c5fd',
           collar: '#60a5fa',
           sleeves: '#93c5fd',
           pocket: '#93c5fd',
@@ -209,7 +214,7 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
           collar: '#0f172a',
           sleeves: '#0f172a',
           pocket: '#0f172a',
-          accent: '#84cc16', // Neon Volt (Nike showroom reference)
+          accent: '#84cc16',
         },
         tagBadge: 'Sport Tech',
       },
@@ -268,13 +273,30 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
 
     // Avoid duplicates if mockups already cover some items
     curated.forEach((c) => {
-      if (!items.some((it) => it.name.toLowerCase() === c.name.toLowerCase())) {
+      const alreadyHas = items.some(
+        (it) => it.name.toLowerCase() === c.name.toLowerCase() || (it.category === c.category && it.mockupId)
+      )
+      if (!alreadyHas) {
         items.push(c)
       }
     })
 
     return items
   }, [mockups])
+
+  // Preload front & side showroom images for instantaneous 0ms swap on cursor hover
+  useEffect(() => {
+    wardrobeItems.forEach((item) => {
+      if (item.frontImg) {
+        const imgF = new Image()
+        imgF.src = item.frontImg
+      }
+      if (item.sideImg) {
+        const imgS = new Image()
+        imgS.src = item.sideImg
+      }
+    })
+  }, [wardrobeItems])
 
   // Active highlighted garment index on the rail
   const [activeIndex, setActiveIndex] = useState<number>(() => {
@@ -285,7 +307,7 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
     return 0
   })
 
-  // Preview angle for active garment ('front' | 'side')
+  // Preview angle toggle for active garment ('front' | 'side')
   const [previewAngle, setPreviewAngle] = useState<'front' | 'side'>('front')
 
   // Reset angle to front when activeIndex changes
@@ -350,37 +372,37 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
     onOpenCanvas()
   }
 
-  // Calculate rail positions (Nike digital showroom shuffle geometry)
+  // Rail geometry: natural sliding without 3D rotation distortion
   const totalItems = wardrobeItems.length
-  const slotWidth = 74 // base width per sideways hanger on rail (px)
-  const gapSpread = 96 // lateral space opened up when active item faces front (px)
+  const slotWidth = 74 // spacing between hanging clothes on rail (px)
+  const gapSpread = 100 // lateral space opened when active item faces front (px)
 
   return (
     <div className="w-full min-h-[90vh] flex flex-col justify-between items-center select-none animate-in fade-in duration-500">
       {/* CSS KEYFRAMES FOR REALISTIC AIR-DRAFT FLOATING & SUSPENSION */}
       <style>{`
-        @keyframes hangerFloatA {
+        @keyframes hangerSwayA {
           0%, 100% {
-            transform: translateY(0px) rotate(0deg);
+            transform: rotate(0deg);
           }
           50% {
-            transform: translateY(-5px) rotate(0.35deg);
+            transform: rotate(0.7deg);
           }
         }
-        @keyframes hangerFloatB {
+        @keyframes hangerSwayB {
           0%, 100% {
-            transform: translateY(-4px) rotate(-0.3deg);
+            transform: rotate(-0.6deg);
           }
           50% {
-            transform: translateY(3px) rotate(0.3deg);
+            transform: rotate(0.5deg);
           }
         }
-        @keyframes activeGarmentFloat {
+        @keyframes activeGarmentBreathe {
           0%, 100% {
-            transform: translateY(0px);
+            transform: scale(1);
           }
           50% {
-            transform: translateY(-6px);
+            transform: scale(1.012);
           }
         }
         @keyframes wallShadowPulse {
@@ -438,7 +460,7 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
         </div>
       </div>
 
-      {/* 2. MAIN 3D SHOWROOM STAGE (NIKE DIGITAL SHOWROOM ENVIRONMENT) */}
+      {/* 2. MAIN SHOWROOM STAGE */}
       <div
         className="w-full max-w-[1580px] relative px-2 sm:px-6 my-auto"
         onMouseDown={handleMouseDown}
@@ -447,7 +469,7 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
         onMouseLeave={handleMouseUp}
       >
         <div
-          className="relative w-full rounded-3xl border border-slate-200/90 shadow-2xl overflow-hidden py-10 min-h-[560px] sm:min-h-[600px] flex flex-col justify-between"
+          className="relative w-full rounded-3xl border border-slate-200/90 shadow-2xl overflow-hidden py-10 min-h-[580px] sm:min-h-[620px] flex flex-col justify-between"
           style={{
             background:
               'radial-gradient(ellipse at 50% 30%, #ffffff 0%, #f8fafc 40%, #f1f5f9 70%, #e2e8f0 100%)',
@@ -475,53 +497,15 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
           <div className="absolute bottom-0 inset-x-0 h-24 bg-gradient-to-t from-slate-300/35 via-slate-200/15 to-transparent pointer-events-none" />
 
           {/* ======================================================== */}
-          {/* THE METALLIC CLOTHES RAIL (BATANG GANTUNGAN BESI CHROME) */}
+          {/* THE INTEGRATED CLOSET STAGE (CHROME ROD + HANGING GARMENTS) */}
           {/* ======================================================== */}
-          <div className="relative w-full my-3 flex items-center justify-center z-20">
-            {/* Left Wall Mounting Bracket with Industrial Flange & Screws */}
-            <div className="absolute left-3 sm:left-10 top-1/2 -translate-y-1/2 flex items-center z-30 pointer-events-none">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-500 via-slate-700 to-slate-900 border border-slate-600 shadow-md flex items-center justify-center relative">
-                <div className="w-1.5 h-1.5 rounded-full bg-slate-300 shadow-inner absolute top-1" />
-                <div className="w-1.5 h-1.5 rounded-full bg-slate-300 shadow-inner absolute bottom-1" />
-                <div className="w-4 h-3 bg-gradient-to-r from-slate-800 to-slate-600 rounded-r-sm shadow" />
-              </div>
-            </div>
-
-            {/* The Horizontal Chrome Cylindrical Rod */}
-            <div
-              className="w-[94%] sm:w-[92%] h-3.5 sm:h-4 rounded-full relative z-20"
-              style={{
-                background:
-                  'linear-gradient(180deg, #ffffff 0%, #e2e8f0 20%, #94a3b8 50%, #475569 80%, #1e293b 100%)',
-                boxShadow:
-                  '0 2px 4px rgba(0,0,0,0.28), 0 14px 24px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.95)',
-              }}
-            >
-              {/* High-gloss specular highlight line */}
-              <div className="absolute inset-x-2 top-0.5 h-0.5 bg-white/80 rounded-full" />
-              <div className="absolute inset-x-4 bottom-0.5 h-0.5 bg-black/25 rounded-full" />
-            </div>
-
-            {/* Right Wall Mounting Bracket with Industrial Flange & Screws */}
-            <div className="absolute right-3 sm:right-10 top-1/2 -translate-y-1/2 flex items-center z-30 pointer-events-none">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-bl from-slate-500 via-slate-700 to-slate-900 border border-slate-600 shadow-md flex items-center justify-center relative">
-                <div className="w-1.5 h-1.5 rounded-full bg-slate-300 shadow-inner absolute top-1" />
-                <div className="w-1.5 h-1.5 rounded-full bg-slate-300 shadow-inner absolute bottom-1" />
-                <div className="w-4 h-3 bg-gradient-to-l from-slate-800 to-slate-600 rounded-l-sm shadow" />
-              </div>
-            </div>
-
-            {/* Soft linear shadow cast by the rail across the rear wall */}
-            <div className="absolute w-[94%] sm:w-[92%] h-5 top-7 bg-slate-900/18 blur-md rounded-full pointer-events-none" />
-          </div>
-
-          {/* ======================================================== */}
-          {/* THE HANGING GARMENTS & REALISTIC REAR WALL SHADOWS LAYER */}
-          {/* ======================================================== */}
-          <div className="relative w-full flex items-center justify-center min-h-[390px] my-auto overflow-hidden">
-            <div className="relative flex items-center justify-center w-full max-w-6xl h-[390px]">
+          <div className="relative w-full min-h-[460px] sm:min-h-[500px] my-auto flex items-center justify-center overflow-hidden">
+            <div className="relative flex items-center justify-center w-full max-w-6xl h-[460px] sm:h-[500px]">
               
-              {/* LAYER A: DYNAMIC REAR WALL CAST SHADOWS */}
+              {/* LAYER A: SOFT REAR WALL SHADOW CAST BY THE CHROME RAIL */}
+              <div className="absolute w-[94%] sm:w-[92%] h-4 top-8 bg-slate-900/18 blur-md rounded-full pointer-events-none z-0" />
+
+              {/* LAYER B: DYNAMIC REAR WALL CAST SHADOWS UNDER EACH GARMENT */}
               <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
                 {wardrobeItems.map((item, idx) => {
                   const isCurrent = idx === activeIndex
@@ -544,19 +528,19 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
                   return (
                     <div
                       key={`wall-shadow-${item.id}`}
-                      className="absolute transition-all duration-500 ease-out pointer-events-none"
+                      className="absolute transition-all duration-400 ease-out pointer-events-none"
                       style={{
                         left: `calc(50% + ${shadowX}px)`,
-                        top: isCurrent ? '44px' : '40px',
+                        top: isCurrent ? '46px' : '42px',
                         transform: 'translateX(-50%)',
-                        width: isCurrent ? '240px' : '34px',
-                        height: isCurrent ? '310px' : '290px',
-                        borderRadius: isCurrent ? '42px 42px 64px 64px' : '18px',
+                        width: isCurrent ? '240px' : '40px',
+                        height: isCurrent ? '330px' : '310px',
+                        borderRadius: isCurrent ? '40px 40px 64px 64px' : '20px',
                         background: isCurrent
-                          ? 'radial-gradient(ellipse at 50% 35%, rgba(15, 23, 42, 0.44) 0%, rgba(30, 41, 59, 0.28) 45%, rgba(51, 65, 85, 0.12) 75%, transparent 100%)'
-                          : 'radial-gradient(ellipse at 50% 25%, rgba(15, 23, 42, 0.32) 0%, rgba(30, 41, 59, 0.18) 50%, transparent 100%)',
-                        filter: isCurrent ? 'blur(28px)' : 'blur(16px)',
-                        opacity: isCurrent ? 0.95 : 0.72,
+                          ? 'radial-gradient(ellipse at 50% 35%, rgba(15, 23, 42, 0.42) 0%, rgba(30, 41, 59, 0.26) 45%, rgba(51, 65, 85, 0.10) 75%, transparent 100%)'
+                          : 'radial-gradient(ellipse at 50% 25%, rgba(15, 23, 42, 0.30) 0%, rgba(30, 41, 59, 0.16) 50%, transparent 100%)',
+                        filter: isCurrent ? 'blur(26px)' : 'blur(15px)',
+                        opacity: isCurrent ? 0.95 : 0.75,
                         animation: isCurrent ? 'wallShadowPulse 4.2s ease-in-out infinite' : undefined,
                       }}
                     />
@@ -564,7 +548,43 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
                 })}
               </div>
 
-              {/* LAYER B: THE PHYSICAL HANGING GARMENTS (CAROUSEL & SHUFFLE) */}
+              {/* LAYER C: THE METALLIC CHROME CLOTHES RAIL (CHROME CYLINDER & MOUNTING FLANGES) */}
+              <div className="absolute top-5 inset-x-0 flex items-center justify-center z-25 pointer-events-none">
+                {/* Left Wall Mounting Bracket with Industrial Flange & Screws */}
+                <div className="absolute left-3 sm:left-10 top-1/2 -translate-y-1/2 flex items-center z-30">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-500 via-slate-700 to-slate-900 border border-slate-600 shadow-md flex items-center justify-center relative">
+                    <div className="w-1.5 h-1.5 rounded-full bg-slate-300 shadow-inner absolute top-1" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-slate-300 shadow-inner absolute bottom-1" />
+                    <div className="w-4 h-3 bg-gradient-to-r from-slate-800 to-slate-600 rounded-r-sm shadow" />
+                  </div>
+                </div>
+
+                {/* The Horizontal Chrome Cylindrical Rod */}
+                <div
+                  className="w-[94%] sm:w-[92%] h-3.5 sm:h-4 rounded-full relative z-25"
+                  style={{
+                    background:
+                      'linear-gradient(180deg, #ffffff 0%, #e2e8f0 20%, #94a3b8 50%, #475569 80%, #1e293b 100%)',
+                    boxShadow:
+                      '0 2px 4px rgba(0,0,0,0.28), 0 14px 24px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.95)',
+                  }}
+                >
+                  {/* High-gloss specular highlight line */}
+                  <div className="absolute inset-x-2 top-0.5 h-0.5 bg-white/80 rounded-full" />
+                  <div className="absolute inset-x-4 bottom-0.5 h-0.5 bg-black/25 rounded-full" />
+                </div>
+
+                {/* Right Wall Mounting Bracket with Industrial Flange & Screws */}
+                <div className="absolute right-3 sm:right-10 top-1/2 -translate-y-1/2 flex items-center z-30">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-bl from-slate-500 via-slate-700 to-slate-900 border border-slate-600 shadow-md flex items-center justify-center relative">
+                    <div className="w-1.5 h-1.5 rounded-full bg-slate-300 shadow-inner absolute top-1" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-slate-300 shadow-inner absolute bottom-1" />
+                    <div className="w-4 h-3 bg-gradient-to-l from-slate-800 to-slate-600 rounded-l-sm shadow" />
+                  </div>
+                </div>
+              </div>
+
+              {/* LAYER D: THE PHYSICAL HANGING GARMENTS (INSTANT CLEAN SWAP, NO ROTATE) */}
               {wardrobeItems.map((item, idx) => {
                 const isCurrent = idx === activeIndex
                 const dist = idx - activeIndex
@@ -573,39 +593,35 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
                 const centerIdx = (totalItems - 1) / 2
                 const baseX = (idx - centerIdx) * slotWidth
                 let shiftX = 0
-                let rotateY = 0
-                let scale = 0.85
+                let scale = 0.92
                 let zIndex = 20 - absDist
                 let opacity = 1
 
                 if (isCurrent) {
                   shiftX = 0
-                  rotateY = 0
-                  scale = 1.16
+                  scale = 1.10
                   zIndex = 40
                   opacity = 1
                 } else if (dist < 0) {
                   shiftX = -gapSpread
-                  rotateY = Math.min(78, 68 + absDist * 2)
-                  scale = Math.max(0.74, 0.86 - absDist * 0.03)
-                  opacity = Math.max(0.6, 1 - absDist * 0.09)
+                  scale = Math.max(0.82, 0.92 - absDist * 0.02)
+                  opacity = Math.max(0.72, 1 - absDist * 0.06)
                   zIndex = 20 + idx
                 } else {
                   shiftX = gapSpread
-                  rotateY = -Math.min(78, 68 + absDist * 2)
-                  scale = Math.max(0.74, 0.86 - absDist * 0.03)
-                  opacity = Math.max(0.6, 1 - absDist * 0.09)
+                  scale = Math.max(0.82, 0.92 - absDist * 0.02)
+                  opacity = Math.max(0.72, 1 - absDist * 0.06)
                   zIndex = 20 + (totalItems - idx)
                 }
 
                 const currentX = baseX + shiftX
 
-                // Floating keyframe animation assignment
+                // Floating suspension animation (swaying pivot anchored to the chrome rod)
                 const floatAnimation = isCurrent
-                  ? 'activeGarmentFloat 4.2s ease-in-out infinite'
+                  ? 'activeGarmentBreathe 4.2s ease-in-out infinite'
                   : idx % 2 === 0
-                  ? 'hangerFloatA 4.4s ease-in-out infinite'
-                  : 'hangerFloatB 4.8s ease-in-out infinite'
+                  ? 'hangerSwayA 4.8s ease-in-out infinite'
+                  : 'hangerSwayB 5.2s ease-in-out infinite'
 
                 const floatDelay = `${(idx * 0.45) % 3.6}s`
 
@@ -616,6 +632,7 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
                   <div
                     key={item.id}
                     onMouseEnter={() => setActiveIndex(idx)}
+                    onTouchStart={() => setActiveIndex(idx)}
                     onClick={() => {
                       if (isCurrent) {
                         handleSelectAndCustomize(item)
@@ -624,13 +641,13 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
                       }
                     }}
                     style={{
-                      transform: `translateX(${currentX}px) perspective(1100px) rotateY(${rotateY}deg) scale(${scale})`,
+                      transform: `translateX(${currentX}px) scale(${scale})`,
                       zIndex,
                       opacity,
                       transformOrigin: 'top center',
-                      transition: 'all 0.55s cubic-bezier(0.16, 1, 0.3, 1)',
+                      transition: 'all 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
                     }}
-                    className="absolute top-0 flex flex-col items-center cursor-pointer group"
+                    className="absolute top-1 flex flex-col items-center cursor-pointer group"
                   >
                     {/* FLOATING SUSPENSION WRAPPER */}
                     <div
@@ -647,32 +664,32 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
                       {/* FALLBACK HANGER: Only rendered if the garment image doesn't already have a hanger */}
                       {!hasHangerInImage && <FallbackWoodenHanger />}
 
-                      {/* THE GARMENT BODY */}
+                      {/* THE GARMENT BODY (NO 3D ROTATION - DIRECT CLEAN IMAGE SWAP) */}
                       <div
-                        className={`relative w-48 sm:w-56 h-68 sm:h-76 transition-transform duration-300 ${
-                          hasHangerInImage ? '-mt-2.5' : ''
-                        } ${isCurrent ? 'group-hover:scale-102' : ''}`}
+                        className={`relative flex items-center justify-center transition-all duration-300 ${
+                          hasHangerInImage ? '-mt-3.5' : ''
+                        } ${
+                          isCurrent
+                            ? 'w-56 sm:w-64 h-80 sm:h-92 group-hover:scale-102'
+                            : 'w-24 sm:w-28 h-80 sm:h-92'
+                        }`}
                       >
                         {isCurrent ? (
                           // ==========================================
-                          // FRONT VIEW (ACTIVE SPOTLIGHT)
+                          // ACTIVE: TAMPAK DEPAN REALISTIS
                           // ==========================================
                           previewAngle === 'side' && item.sideImg ? (
-                            <div className="w-full h-full relative flex items-center justify-center animate-in fade-in zoom-in-95 duration-200">
-                              <img
-                                src={item.sideImg}
-                                alt={`${item.name} Samping`}
-                                className="w-full h-full object-contain pointer-events-none select-none filter contrast-[1.03] saturate-[1.05] drop-shadow-[0_16px_28px_rgba(0,0,0,0.22)]"
-                              />
-                            </div>
+                            <img
+                              src={item.sideImg}
+                              alt={`${item.name} Samping`}
+                              className="w-full h-full object-contain pointer-events-none select-none drop-shadow-[0_16px_28px_rgba(0,0,0,0.22)] animate-in fade-in duration-200"
+                            />
                           ) : item.frontImg ? (
-                            <div className="w-full h-full relative flex items-center justify-center animate-in fade-in duration-300">
-                              <img
-                                src={item.frontImg}
-                                alt={item.name}
-                                className="w-full h-full object-contain pointer-events-none select-none filter contrast-[1.03] saturate-[1.05] drop-shadow-[0_16px_28px_rgba(0,0,0,0.22)]"
-                              />
-                            </div>
+                            <img
+                              src={item.frontImg}
+                              alt={item.name}
+                              className="w-full h-full object-contain pointer-events-none select-none drop-shadow-[0_16px_28px_rgba(0,0,0,0.22)] animate-in fade-in duration-200"
+                            />
                           ) : (
                             <MockupSVG
                               type={item.garmentType}
@@ -683,39 +700,24 @@ export const WardrobeShowcase: React.FC<WardrobeShowcaseProps> = ({
                           )
                         ) : (
                           // ==========================================
-                          // SIDEWAYS VIEW (HANGING ON THE RAIL)
+                          // INACTIVE: TAMPAK SAMPING REALISTIS (LANGSUNG TAMPIL, TANPA ROTASI)
                           // ==========================================
                           item.sideImg ? (
-                            <div className="w-full h-full relative flex items-center justify-center">
-                              <img
-                                src={item.sideImg}
-                                alt={`${item.name} Samping`}
-                                style={{
-                                  transform: dist < 0 ? 'scaleX(1)' : 'scaleX(-1)',
-                                }}
-                                className="w-full h-full object-contain pointer-events-none select-none filter contrast-[1.02] brightness-[0.98]"
-                              />
-                              <div className="absolute inset-0 bg-gradient-to-r from-black/15 via-transparent to-black/20 pointer-events-none rounded-xl" />
-                            </div>
+                            <img
+                              src={item.sideImg}
+                              alt={`${item.name} Samping`}
+                              className="w-full h-full object-contain pointer-events-none select-none drop-shadow-[0_8px_16px_rgba(0,0,0,0.14)] animate-in fade-in duration-200"
+                            />
                           ) : item.frontImg ? (
-                            <div className="w-full h-full relative flex items-center justify-center overflow-hidden">
-                              <img
-                                src={item.frontImg}
-                                alt={item.name}
-                                style={{
-                                  transform:
-                                    dist < 0
-                                      ? 'scaleX(0.44) skewY(-2.5deg)'
-                                      : 'scaleX(0.44) skewY(2.5deg)',
-                                }}
-                                className="w-full h-full object-contain pointer-events-none select-none filter brightness-[0.92] contrast-[1.05]"
-                              />
-                              <div className="absolute inset-0 bg-gradient-to-r from-black/25 via-transparent to-black/35 pointer-events-none" />
-                            </div>
+                            <img
+                              src={item.frontImg}
+                              alt={item.name}
+                              className="w-full h-full object-contain pointer-events-none select-none opacity-85"
+                            />
                           ) : (
                             <MockupSVG
                               type={item.garmentType}
-                              side={dist < 0 ? 'left' : 'right'}
+                              side="left"
                               colors={item.defaultColors}
                               className="w-full h-full object-contain pointer-events-none select-none"
                             />
