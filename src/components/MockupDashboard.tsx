@@ -367,6 +367,10 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
   const backupFileInputRef = useRef<HTMLInputElement>(null)
   const [backupStatusMessage, setBackupStatusMessage] = useState<string | null>(null)
 
+  // File input ref for uploading showroom hanger photos (front and side with hanger)
+  const hangerFileInputRef = useRef<HTMLInputElement>(null)
+  const [hangerUploadTarget, setHangerUploadTarget] = useState<'front' | 'side'>('front')
+
   // Angle currently selected in the large interactive stage
   const [selectedSide, setSelectedSide] = useState<ViewSide>('front')
 
@@ -1823,6 +1827,8 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
       backImg: editFormData.backImg,
       leftImg: editFormData.leftImg,
       rightImg: editFormData.rightImg,
+      hangerFrontImg: editFormData.hangerFrontImg,
+      hangerSideImg: editFormData.hangerSideImg,
       enableClippingMask: editFormData.enableClippingMask ?? true,
       defaultBaseColor: editFormData.defaultBaseColor || '#ffffff',
       colorParts: validColorParts,
@@ -1904,6 +1910,61 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
     }
     reader.readAsDataURL(file)
     e.target.value = ''
+  }
+
+  const triggerUploadHanger = (target: 'front' | 'side') => {
+    setHangerUploadTarget(target)
+    hangerFileInputRef.current?.click()
+  }
+
+  const handleHangerFileUploaded = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const rawDataUrl = event.target?.result as string
+      const img = new Image()
+      img.onload = () => {
+        const MAX_DIM = 1600
+        let w = img.naturalWidth || img.width
+        let h = img.naturalHeight || img.height
+        if (w > MAX_DIM || h > MAX_DIM) {
+          if (w > h) {
+            h = Math.round((h * MAX_DIM) / w)
+            w = MAX_DIM
+          } else {
+            w = Math.round((w * MAX_DIM) / h)
+            h = MAX_DIM
+          }
+        }
+        const off = document.createElement('canvas')
+        off.width = w
+        off.height = h
+        const offCtx = off.getContext('2d')
+        let finalDataUrl = rawDataUrl
+        if (offCtx) {
+          offCtx.drawImage(img, 0, 0, w, h)
+          finalDataUrl = off.toDataURL('image/png')
+        }
+        const key = hangerUploadTarget === 'front' ? 'hangerFrontImg' : 'hangerSideImg'
+        setEditFormData((prev) => ({
+          ...prev,
+          [key]: finalDataUrl,
+        }))
+      }
+      img.src = rawDataUrl
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  const removeHangerPhoto = (target: 'front' | 'side') => {
+    const key = target === 'front' ? 'hangerFrontImg' : 'hangerSideImg'
+    setEditFormData((prev) => ({
+      ...prev,
+      [key]: undefined,
+    }))
   }
 
   const removePhotoSide = (side: ViewSide) => {
@@ -2133,6 +2194,15 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
         type="file"
         accept="image/*"
         onChange={handleFileUploaded}
+        className="hidden"
+      />
+
+      {/* Hidden File Input for Showroom Hanger Photo */}
+      <input
+        ref={hangerFileInputRef}
+        type="file"
+        accept="image/png,image/*"
+        onChange={handleHangerFileUploaded}
         className="hidden"
       />
 
@@ -4841,6 +4911,116 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                     />
                   </div>
 
+                  {/* FOTO UNTUK RAK GANTUNGAN SHOWROOM 3D (DENGAN HANGER) */}
+                  <div className="p-3.5 rounded-xl bg-orange-50/80 border border-orange-200 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">✨</span>
+                        <div>
+                          <span className="font-extrabold text-slate-900 text-xs block">
+                            Foto untuk Rak Gantungan Showroom 3D
+                          </span>
+                          <span className="text-[10px] text-slate-500 block">
+                            Foto seragam tampak depan dan samping yang tergantung di hanger (PNG transparan).
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[9px] font-bold text-[#ff5e00] bg-orange-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        Showroom
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      {/* Tampak Depan (+ Hanger) */}
+                      <div className="bg-white p-2.5 rounded-xl border border-orange-200/80 flex flex-col items-center">
+                        <span className="text-[11px] font-bold text-slate-700 mb-1.5 self-start">
+                          Tampak Depan (+ Hanger)
+                        </span>
+                        {editFormData.hangerFrontImg ? (
+                          <div className="relative w-full h-28 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center group">
+                            <img
+                              src={editFormData.hangerFrontImg}
+                              alt="Showroom Depan"
+                              className="w-full h-full object-contain p-1"
+                            />
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => triggerUploadHanger('front')}
+                                className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-900 rounded text-[10px] font-bold cursor-pointer"
+                              >
+                                Ganti
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeHangerPhoto('front')}
+                                className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold cursor-pointer"
+                              >
+                                Hapus
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => triggerUploadHanger('front')}
+                            className="w-full h-28 border-2 border-dashed border-orange-300 hover:border-orange-500 rounded-lg bg-orange-50/50 hover:bg-orange-50 flex flex-col items-center justify-center p-2 text-center transition-colors cursor-pointer"
+                          >
+                            <Upload className="w-5 h-5 text-[#ff5e00] mb-1" />
+                            <span className="text-[11px] font-bold text-slate-800">Upload Depan</span>
+                            <span className="text-[9px] text-slate-500 mt-0.5">PNG + Hanger</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Tampak Samping (+ Hanger) */}
+                      <div className="bg-white p-2.5 rounded-xl border border-orange-200/80 flex flex-col items-center">
+                        <span className="text-[11px] font-bold text-slate-700 mb-1.5 self-start">
+                          Tampak Samping (+ Hanger)
+                        </span>
+                        {editFormData.hangerSideImg ? (
+                          <div className="relative w-full h-28 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center group">
+                            <img
+                              src={editFormData.hangerSideImg}
+                              alt="Showroom Samping"
+                              className="w-full h-full object-contain p-1"
+                            />
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => triggerUploadHanger('side')}
+                                className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-900 rounded text-[10px] font-bold cursor-pointer"
+                              >
+                                Ganti
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeHangerPhoto('side')}
+                                className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold cursor-pointer"
+                              >
+                                Hapus
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => triggerUploadHanger('side')}
+                            className="w-full h-28 border-2 border-dashed border-orange-300 hover:border-orange-500 rounded-lg bg-orange-50/50 hover:bg-orange-50 flex flex-col items-center justify-center p-2 text-center transition-colors cursor-pointer"
+                          >
+                            <Upload className="w-5 h-5 text-[#ff5e00] mb-1" />
+                            <span className="text-[11px] font-bold text-slate-800">Upload Samping</span>
+                            <span className="text-[9px] text-slate-500 mt-0.5">PNG + Hanger</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-slate-500 italic">
+                      * Foto ini digunakan khusus untuk Rak Gantungan Showroom 3D. Jika kosong, sistem otomatis memakai foto dari Studio Canvas.
+                    </p>
+                  </div>
+
                   {/* Toggle Clipping Mask */}
                   <label className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
                     <div>
@@ -5050,6 +5230,11 @@ export const MockupDashboard: React.FC<MockupDashboardProps> = ({
                             {item.colorParts.length} Bagian Warna
                           </span>
                         )}
+                        {item.hangerFrontImg || item.hangerSideImg ? (
+                          <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded flex items-center gap-1">
+                            ✨ Hanger Showroom Aktif
+                          </span>
+                        ) : null}
                       </div>
                       <h4 className="font-extrabold text-sm text-slate-900 line-clamp-1">
                         {item.name}
