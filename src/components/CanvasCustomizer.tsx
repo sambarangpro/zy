@@ -55,7 +55,6 @@ import {
   Search,
   Edit3,
   Loader2,
-  Sparkles,
 } from 'lucide-react'
 import {
   FABRIC_COLOR_DATABASE,
@@ -2844,11 +2843,12 @@ export const CanvasCustomizer: React.FC<CanvasCustomizerProps> = ({
             <button
               type="button"
               onClick={onOpenWardrobe}
-              title="Buka Rak Gantungan Baju 3D untuk memilih seragam"
-              className="hidden md:flex items-center gap-1.5 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 px-3 py-1.5 rounded-xl border border-orange-200 text-[#ff5e00] font-black text-xs transition-all cursor-pointer shadow-2xs hover:scale-105 active:scale-95"
+              title="Kembali ke Rak Gantungan 3D untuk memilih model seragam lain"
+              className="flex items-center gap-1.5 bg-slate-900 hover:bg-black text-white px-3 py-1.5 rounded-xl border border-slate-800 font-extrabold text-xs transition-all cursor-pointer shadow-xs hover:scale-105 active:scale-95"
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Rak Baju 3D</span>
+              <ArrowLeft className="w-3.5 h-3.5 text-[#ff5e00]" />
+              <span className="hidden sm:inline">Pilih Seragam Lain</span>
+              <span className="sm:hidden">Rak 3D</span>
             </button>
           )}
         </div>
